@@ -1,0 +1,162 @@
+# Master Build Plan
+
+## Tracker conventions
+
+Status values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `DONE`, `DEFERRED`. This is a brownfield refactor of `app/client`, the P0-01-canonical `app/context_engine`, `app/vendor/lightrag`, container/environment files, and root scripts. At D0, all application tasks began `NOT_STARTED`; an existing file or passing pilot test is evidence, not completion proof. Post-D0 status changes require task-owned evidence that names the tested boundary and remaining gaps.
+
+Each phase is a vertical slice. Complete its migrations, API/SSE contract, service behavior, tests, acceptance evidence, and operational notes before starting a dependent phase.
+
+Every task must begin from `brownfield-refactor-register.md`: inventory current call sites and persistence/build dependencies, choose `retain-and-reverify`, `modify`, `replace`, `add`, or `remove-from-phase-1`, then prove the named boundary. Do not rebuild an existing seam until its disposition is recorded, and do not preserve a deferred seam behind a flag or unreachable route.
+
+This tracker is limited to the Phase 1 production build. `P0` through `P12` are work packages inside release Phase 1, not later release phases. Deferred features are not dependencies, release gates, or permitted scaffolding: the Phase 2 observability layer and Phase 3 wiki layer are recorded separately under `future/`.
+
+## Phase tracker
+
+| ID | Phase/outcome | Status | Depends on | Exit gate |
+| --- | --- | --- | --- | --- |
+| P0 | Contract and repository spine | IN_PROGRESS | - | governance, vocabulary, ADRs, API/data/SSE conventions, CI skeleton approved |
+| P1 | Trusted app foundation | NOT_STARTED | P0 | migrated Postgres, seeded admin, cookie auth, owner/admin guards, health and safe errors pass |
+| P2 | Trusted runtime configuration | NOT_STARTED | P1 | encrypted credentials, model profiles, parser/synthesis defaults, admin contract tests pass |
+| P3 | Knowledge Domain runtime | NOT_STARTED | P2 | per-domain runtime boundary, lifecycle operations, leases/generations, readiness proven |
+| P4 | Source preparation | NOT_STARTED | P3 | upload/storage/parser adapters produce canonical blocks and support retry/cancel/delete |
+| P5 | LightRAG indexing eligibility | NOT_STARTED | P4 | vendored fixture proves idempotent submit, readiness, delete, provenance markers, eligibility |
+| P6 | Scoped Evidence retrieval | NOT_STARTED | P5 | single-domain authorized retrieval maps only valid local blocks to safe Evidence |
+| P7 | Durable grounded streaming chat | NOT_STARTED | P6 | conversation ownership, intent gate, bounded RAG, SSE, idempotent replay, redaction pass |
+| P8 | Operational safety and Phase 1 gate | NOT_STARTED | P1-P7 | transactional audit writes, allowlisted logs, request/trace correlation, health, privacy scans, and resilience evidence pass |
+| P9 | Thin Next.js frontend | NOT_STARTED | P1-P8 | login/chat/documents/settings and the reserved graph state use only versioned APIs and pass parity/accessibility checks |
+| P10 | Deployable application stack | NOT_STARTED | P8-P9 | runnable Compose stack, explicit migrations/bootstrap, worker lifecycle, smoke path, and operator runbook pass |
+| P11 | Governed context assembly | NOT_STARTED | P6-P7 | opaque refs for sources/evidence/templates, private bounded assembly, replay fingerprint and invalidation pass |
+| P12 | Production release and recovery | NOT_STARTED | P0-P11 | immutable artifacts, deployed-path streaming, migration/rollback, security/load/backup/restore and runbooks pass |
+
+## Detailed task register
+
+### P0 - Contract and repository spine
+
+| Task | Status | Depends on | Deliverable |
+| --- | --- | --- | --- |
+| P0-01 | DONE | - | inventory the lifted tree; choose and enforce one canonical package/migration/container/script layout while preserving valid lockfiles |
+| P0-02 | DONE | P0-01 | adopt vocabulary, authority precedence, coding-agent rules and stop conditions |
+| P0-03 | DONE | P0-02 | define canonical error envelope, ID/time conventions and API `/api/v1` policy |
+| P0-04 | DONE | P0-03 | define data ownership, privacy classification, adapter ports and state-machine conventions |
+| P0-05 | DONE | P0-01 | CI for lint, typecheck, tests, OpenAPI snapshots, frontend build and Docker integration |
+| P0-06 | IN_PROGRESS | P0-03 | generate OpenAPI/JSON Schema and typed client from the HTTP, DTO and evidence catalogs |
+| P0-07 | DONE | P0-01,P0-04 | inventory and transitively remove Phase 2/3 runtime, build, registration, persistence and test seams; preserve positive operational-safety behavior |
+
+Post-D0 evidence is explicit: P0-04 is proven by `docs/_scratch/p0-04-foundation-conventions.md` and the documentation gate: authoritative ownership, four privacy classes/sinks, nine outbound ports, and seven transition rules are pinned while lifted protocols/state assignments remain evidence only for P1/P3-P8. P0-03 is proven by `docs/_scratch/p0-03-api-conventions.md`: production and generation share one non-configurable `/api/v1` registrar, request IDs use the canonical server-owned header and error correlation, the closed error union is generated, and naive/aware timestamps normalize to RFC 3339 UTC. Feature error adoption, cache policy, ETags, idempotency, and race behavior remain with P0-06/P1/P3-P7. P0-02 is adversarially enforced by `scripts/check-doc-phase-scope.sh` and its fixture suite, which pin mirrored authority precedence, canonical product vocabulary, the Workspace prohibition, coding-agent read/dependency/evidence rules, and all six explicit-decision stop conditions. `docs/_scratch/p0-01-layout-inventory.md` proves the bounded P0-01 layout task and records the partial P0-03 error-envelope slice plus P0-05’s historical red baseline and subsequent green local-loop checkpoint. `docs/_scratch/p0-06-generated-contract-inventory.md` records the proof-first OpenAPI/TypeScript reproducibility gate that completes P0-05’s bounded CI deliverable while leaving catalog parity, broad generated-client adoption, and canonical SSE migration open under P0-06/P7/P9. `docs/_scratch/p0-07-deferred-surface-inventory.md` records the historical baseline and completed active-tree closure; `app/tests/test_phase_one_production_scope.py` pins the physical route tree, source/build manifests, generated OpenAPI and compiled-module boundary; `app/tests/test_phase_one_route_scope.py` proves public-registration removal and retains health/readiness assertions. `app/tests/test_phase_one_observability_scope.py` proves the audit/diagnostic read service, read-event vocabulary, and diagnostic-only metadata keys are absent while private transactional audit recording remains functional. `app/tests/test_composer_refs_phase_one.py` proves that composer discovery defaults and explicit kinds are limited to source/evidence/template, generic unsupported tokens/refs fail closed and add no prompt content, and filtered/unfiltered query limits preserve the intended boundary. `app/tests/test_phase_one_schema_scope.py` now proves the active package, ORM metadata, accepted-ref columns, constraints, and audit vocabulary contain no Wiki implementation. The lifted Alembic history is missing, so fresh-install and populated-compatibility migration proof remain blocked under P12-01; active ORM cleanup is not represented as a destructive upgrade. `scripts/check-doc-phase-scope.sh` plus `scripts/tests/check-doc-phase-scope.sh` provide the live and adversarial documentation gates. `scripts/generate_openapi.py`, `app/contracts/openapi.json`, and `app/client/src/lib/api/generated/openapi.ts` start P0-06. The root gate now regenerates and byte-compares OpenAPI and TypeScript, adversarial fixtures reject stale artifacts, production and generation share route registration, health success/readiness-failure responses use closed generated components and approved status/error values, and all current browser JSON request bodies backed by generated components are pinned through their capability adapters. Closed shared identity, configuration, domain, operation, source, document, conversation, turn, composer-ref, Evidence, and anchor response DTOs are generated without placeholder routes. Registered path templates/parameters use exact authoritative camelCase names and matched operations are compared directly with the catalog. All 39 registered operations are cataloged; the zero-extra/seven-missing semantic route delta is characterization-gated, and all registered responses are assigned to their vertical adoption owner. The four uncataloged lifted shortcuts and their browser/test seams were removed transitively, with read-only or deliberate unavailable states retained until the owning opaque routes land. Most registered operations have not adopted the authoritative response components and all canonical SSE schemas remain ungenerated/unadopted, so P0-06 stays in progress. Missing identity, document/evidence, resume/cancel, and canonical-stream behavior remains dependency-owned by P1/P4/P6/P7/P9 rather than being scaffolded in P0; final route/response convergence is a cross-phase contract gate.
+
+### P1-P2 - Identity and trusted configuration
+
+| Task | Status | Depends on | Deliverable |
+| --- | --- | --- | --- |
+| P1-01 | NOT_STARTED | P0 | FastAPI app factory, settings, PostgreSQL engine/session and Alembic baseline |
+| P1-02 | NOT_STARTED | P1-01 | users/auth_sessions schema, Argon2, admin seed and opaque cookie sessions |
+| P1-03 | NOT_STARTED | P1-02 | current-user/admin dependencies, ownership helpers and denial audit hook |
+| P1-04 | NOT_STARTED | P1-01 | request IDs, safe errors/logging, live/ready endpoints |
+| P1-05 | NOT_STARTED | P1-02,P1-03 | Origin/Host and CSRF policy, session rotation/revocation/TTL, login throttling and ingress auth tests |
+| P1-06 | NOT_STARTED | P1-01 | append-only audit schema, transactional AuditService and protected-mutation helper |
+| P2-01 | NOT_STARTED | P1 | provider_configs, model_profiles, runtime_settings migrations and services |
+| P2-02 | NOT_STARTED | P2-01 | credential encryption/rotation and safe DTO projection |
+| P2-03 | NOT_STARTED | P2-01 | synthesis/embedding validation, immutable dimension rules and defaults |
+
+### P3-P6 - Domain, content, indexing, retrieval
+
+| Task | Status | Depends on | Deliverable |
+| --- | --- | --- | --- |
+| P3-01 | NOT_STARTED | P2 | domains/domain_operations schema and admin APIs |
+| P3-02 | NOT_STARTED | P3-01 | runtime controller port plus local/Docker implementations |
+| P3-03 | NOT_STARTED | P3-02 | lease, generation, conflict, readiness and async delete behavior |
+| P4-01 | NOT_STARTED | P3 | source_documents/preparation_operations schema, opaque public document refs and secure storage adapter |
+| P4-02 | NOT_STARTED | P4-01 | upload validation, domain deduplication and parser-kind freeze |
+| P4-03 | NOT_STARTED | P4-02 | Docling/Reducto adapters and canonical blocks/images transaction |
+| P4-04 | NOT_STARTED | P4-03 | outline, operation, retry/cancel and delete APIs |
+| P5-01 | NOT_STARTED | P4 | index state/generation fields and worker claim loop |
+| P5-02 | NOT_STARTED | P5-01 | versioned canonical-block renderer and vendored LightRAG adapter |
+| P5-03 | NOT_STARTED | P5-02 | submit/poll/retry/cancel/delete and query-eligibility service |
+| P6-01 | NOT_STARTED | P5 | scoped retrieval port and raw-hit provenance mapper |
+| P6-02 | NOT_STARTED | P6-01 | authorized safe Evidence DTO, ordering, excerpt limits and failure mapping |
+
+### P7-P8 - Chat and operational safety
+
+| Task | Status | Depends on | Deliverable |
+| --- | --- | --- | --- |
+| P7-01 | NOT_STARTED | P6 | conversations, turns and opaque public evidence-ref migrations plus owner CRUD |
+| P7-02 | NOT_STARTED | P7-01 | server intent gate and direct/domain route invariants |
+| P7-03 | NOT_STARTED | P7-02 | bounded plan/retrieve/repair/synthesize orchestration |
+| P7-04 | NOT_STARTED | P7-03 | sealed versioned SSE live/resume/replay pipeline, terminal persistence, idempotent attach/replay, and grounded-refusal/evidence-only terminal projections |
+| P7-05 | NOT_STARTED | P7-04 | source/domain delete redaction hooks and public omission tests |
+| P8-01 | NOT_STARTED | P1-06,P7 | transactional audit-write allowlist coverage, denial events and privacy/adversarial audit tests |
+| P8-02 | NOT_STARTED | P8-01 | safe JSON logs, request/trace correlation and bounded-cardinality service metrics |
+| P8-03 | NOT_STARTED | P8-02 | liveness/readiness, privacy scans and resilience/load evidence with no observability read API or UI |
+
+### P9-P11 - User interface, deployable runtime, and governed context workflows
+
+| Task | Status | Depends on | Deliverable |
+| --- | --- | --- | --- |
+| P9-01 | NOT_STARTED | P1,P8 | inventory every `components/**` and `_shared/ui/**` file/call site in `docs/_scratch/p9-01-ui-inventory.md`; disposition Button/Input/StatusPill to canonical `src/ui`, SettingsRow to Settings, and shell composition to `src/features/shell`; define `app/client/tests/structure/ui-ownership.test.ts`, `app/client/tests/parity/manifests/<target>.json`, `app/client/tests/parity/fixtures/<target>.html`, `app/client/tests/parity/react/<target>.test.tsx`, and `app/client/tests/e2e/`; migrate without a competing physical kit |
+| P9-02 | NOT_STARTED | P7 | generated HTTP/SSE client plus `/chat` conversation discovery, transcript/composer, turn-scoped Evidence/Refs/Source workbench, and canonical live/resume/replay reducer states |
+| P9-03 | NOT_STARTED | P4-P6 | documents/outline/preview and graph route through approved contracts |
+| P9-04 | BLOCKED | P2-P3,P8,P9-01 | approve the Settings Domain accordion interaction amendment across behavior/component/state/accessibility contracts, then implement `/settings?section=domains`; no deferred operator or publication UI |
+| P9-05 | NOT_STARTED | P9-01 | import-direction, thin-route, server/browser boundary and contract/barrel CI validators |
+| P10-01 | NOT_STARTED | P8,P9 | Compose services and production-like server configuration for PostgreSQL, migration, API, worker and frontend |
+| P10-02 | NOT_STARTED | P10-01 | explicit migration/bootstrap plus BFF/API/SSE core-path smoke stack |
+| P10-03 | NOT_STARTED | P10-02 | startup/shutdown, worker claim recovery and deployment operator runbook |
+| P11-01 | NOT_STARTED | P6 | prompt_templates/composer_ref_tokens/accepted-ref schema and seeds for source/evidence/template refs |
+| P11-02 | NOT_STARTED | P11-01 | discovery, opaque-token validation, domain compatibility and expiry |
+| P11-03 | NOT_STARTED | P11-02,P7 | private context assembly, turn fingerprint, replay/conflict and redaction |
+| P11-04 | BLOCKED | P7-04,P9-02,P11-03 | require product-owner evidence of repeated Evidence reattachment need, comprehension of explicit accept/dismiss behavior, and no pressure to weaken the sealed-chat baseline; only after approval, amend HTTP, DTO, interaction-state, component, and accessibility contracts and implement compose-epoch, focus, touch, announcement, recovery, narrow-layout, and cross-tab rules |
+
+### P12 - Production release and recovery
+
+| Task | Status | Depends on | Deliverable |
+| --- | --- | --- | --- |
+| P12-01 | BLOCKED | P0-P11 | fresh-install proof plus the approved populated-compatibility path from `architecture/legacy-persistence-retirement.md` against PostgreSQL 16 |
+| P12-02 | NOT_STARTED | P0-P11 | full backend/frontend/adapter/Docker suite and contract snapshot convergence |
+| P12-03 | NOT_STARTED | P8-P11 | authz, secret/content leakage, deletion/redaction and adversarial retrieval review |
+| P12-04 | NOT_STARTED | P12-01 | backup/restore, image rollback, failed-worker recovery and incident drills |
+| P12-05 | NOT_STARTED | P7,P9,P12-02 | deployed-ingress incremental SSE, reconnect/replay, graceful shutdown and stream-drain proof |
+| P12-06 | NOT_STARTED | P0,P12-02 | immutable artifact manifest with pinned runtimes, locks, schema and contract versions, SBOM and provenance |
+| P12-07 | NOT_STARTED | P12-02,P12-03 | accessibility, browser E2E, capacity, provider-failure and minimum operational-safety evidence |
+| P12-08 | NOT_STARTED | P12-03,P12-04,P12-05,P12-06,P12-07 | production acceptance record, runbooks, recovery objectives and release decision |
+
+## Post-Phase 1 release sequence
+
+| Release phase | Planned branch | Scope | Relationship to this tracker |
+| --- | --- | --- | --- |
+| Phase 2 | `feature/observability-layer` | Logs, Usage, Server status, audit/diagnostic browsing, live log delivery, analytics, retention/export UX | future brief only; no `P*` task or Phase 1 gate |
+| Phase 3 | `feature/wiki-layer` | governed pages, revisions, contributions, review/publication, wiki context refs and UI | future brief only; no `P*` task or Phase 1 gate |
+
+See `future/README.md`, `future/observability-layer.md`, and `future/wiki-layer.md`. Activating a future phase requires a new approved contract and an updated build tracker on its named feature branch.
+
+## Documentation and application gates
+
+- **D0 — documentation authority:** the phase manifest, root guidance, PRD/contracts/schema, architecture/frontend/quality docs, all three plans, complete DRIFT-01..33 register, and deterministic phase checker agree. D0 authorizes application planning only and never marks P0-P12 complete.
+- **B0 — brownfield repository boundary:** canonical package/migration/container/script paths build; the root verification loop runs; Phase 2/3 code is absent from Phase 1 registration, routes, generated contracts, schema target, navigation and production bundle; transactional audit writes, allowlisted logs, correlation, health/readiness, bounded metrics, privacy checks and runbooks still have positive tests.
+- Later B-gates are package exit gates in the phase tracker. Existing code earns credit only after the matching real-boundary proof is attached.
+
+## Populated-database compatibility barrier
+
+The Phase 1 schema is a clean-install target, not authority for destructive contraction. Before P12-01 can leave `BLOCKED`, the release must choose one path:
+
+1. **Unsupported populated legacy upgrade:** a read-only migration preflight reconciles `pg_catalog`, `information_schema`, Alembic current/history, ORM metadata, and every application-owned table, column, enum, sequence, index, constraint, trigger, function, view, and dependency against a versioned system-schema and approved-extension allowlist. It accepts only an empty database or the exact current target catalog/Alembic head and refuses legacy, partial, renamed, unknown-object, unknown-history, behind, and ahead states before migration writes. Startup separately accepts the exact current target catalog/head with valid populated Phase 1 data and refuses behind, ahead, or unknown state before product writes. Fixtures prove empty-install and populated-current-target success plus every named refusal.
+2. **Supported populated upgrade:** reconcile live catalogs, full migration history, ORM metadata, and the documented closure across every table, column, enum, sequence, index, constraint, trigger, function, view, and dependency; block on anything unaccounted for; fence writes/claims; drain work; census and take a transactionally consistent protected backup/export; disposition every dependent object; quarantine rollback-compatibly; rehearse prior-version rollback and isolated restore; prove per-object counts, stable checksums, FK/orphan/constraint integrity, audit count/hash continuity, and affected-conversation replay/read behavior before later contraction.
+
+Both paths require secret-safe operator errors; a declared backup scope and consistency point; an approved KMS/key-management source; separate artifact/key custody; least-privileged audited backup/restore roles; key rotation and revocation across retention; retention/deletion rules; verified cleanup of temporary export/restore material; exact PostgreSQL and application restore versions; an owned rollback decision and go/no-go cutoff; and proof that required keys remain recoverable. Any unknown object/history, unaccounted dependency, missing key, or failed restore keeps migration blocked.
+
+## Frontend-factory evidence staging
+
+D0 creates only `DESIGN.md`, `frontend/AGENTS.md`, and parity/catalog rules. P9-01 owns the four unblocked starter targets and migration enforcement. The Settings Domain accordion remains `BLOCKED_CONTRACT` until P9-04 approval. Script-free synthetic HTML may prove static appearance only; React owns semantics/focus/accessibility. P12 browser acceptance for `/settings?section=domains` must use the production Next build, same-origin BFF and FastAPI with server-produced DTOs, without intercepted or mocked product responses.
+
+The sole member-chat capability list is `docs/prd.md#closed-phase-1-chat-capability-manifest`. P7/P9/P11 tasks and tests link to it and do not redefine it. Evidence suggestions cannot block sealed SSE, grounded-terminal, and Evidence/Refs/Source workbench acceptance.
+
+## Cross-phase gates
+
+- No phase may invent a browser-visible field absent from the approved contract.
+- No Phase 1 task may scaffold a route, DTO, table, event, component, fixture, or disabled flag belonging only to a future brief.
+- A migration must land with its model/service tests and rollback/restore note.
+- Every external call needs timeout, safe error mapping, and an idempotency/retry decision.
+- Every delete path must identify retrieval fencing, chat redaction, governed-ref invalidation, remote cleanup, local cleanup, audit, and failure recovery.
+- Every UI surface must prove backend authority and Local Studio visual/accessibility parity.
+- Every completed feature must map its applicable `interaction-behavior-prd.md` cases to unit, contract, browser, and PostgreSQL concurrency evidence.
+- Every streaming surface must prove identical live/replay reduction, duplicate/sequence handling and real-ingress non-buffering.
+- Root verification must cover contracts, structure, backend, frontend, migrations, privacy scans and deployed-path integration from pinned inputs.
+- Stop if the pinned LightRAG contract cannot prove provenance, idempotent submit, readiness, or deletion.

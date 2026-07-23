@@ -1,0 +1,25 @@
+{
+  "status": "success",
+  "message": "Query executed successfully",
+  "data": {
+    "entities": [],
+    "relationships": [],
+    "chunks": [
+      {
+        "content": "Retrieved context.",
+        "file_path": "manual.pdf",
+        "chunk_id": "chunk-1",
+        "reference_id": "1"
+      }
+    ],
+    "references": [
+      {
+        "reference_id": "1",
+        "file_path": "manual.pdf"
+      }
+    ]
+  },
+  "metadata": {
+    "query_mode": "mix"
+  }
+}

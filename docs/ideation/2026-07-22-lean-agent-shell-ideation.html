@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ideation: Lean Agent Shell for Context Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0f1216;
+    --surface: #171b22;
+    --surface-2: #1e2430;
+    --border: #2a3344;
+    --text: #e8edf5;
+    --muted: #9aa8bc;
+    --accent: #3d8bfd;
+    --accent-dim: #1e3a5f;
+    --good: #3ecf8e;
+    --warn: #e6b84d;
+    --bad: #e06c75;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+    --sans: "IBM Plex Sans", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    background: radial-gradient(1200px 600px at 10% -10%, #1a2740 0%, transparent 55%),
+                radial-gradient(900px 500px at 100% 0%, #152018 0%, transparent 45%),
+                var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+  header.meta {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.25rem;
+    margin-bottom: 2rem;
+  }
+  header.meta h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0 0 0.75rem;
+  }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.35rem 1rem;
+    font-size: 0.92rem;
+    color: var(--muted);
+  }
+  .meta-grid dt { color: var(--muted); font-weight: 500; }
+  .meta-grid dd { margin: 0; color: var(--text); }
+  h2 {
+    font-size: 1.15rem;
+    margin: 2.25rem 0 0.75rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+  }
+  h2:first-of-type { border-top: 0; }
+  p, li { color: var(--text); }
+  .muted { color: var(--muted); }
+  .axes { list-style: none; padding: 0; margin: 0.5rem 0 0; }
+  .axes li {
+    display: flex; gap: 0.75rem; align-items: baseline;
+    padding: 0.4rem 0; border-bottom: 1px dashed var(--border);
+    font-size: 0.95rem;
+  }
+  .axes code {
+    font-family: var(--mono); font-size: 0.8rem;
+    color: var(--accent); background: var(--accent-dim);
+    padding: 0.1rem 0.4rem; border-radius: 4px; white-space: nowrap;
+  }
+  .jump {
+    display: flex; flex-wrap: wrap; gap: 0.5rem;
+    margin: 0.75rem 0 1.25rem;
+  }
+  .jump a {
+    color: var(--text); text-decoration: none;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 999px; padding: 0.3rem 0.75rem; font-size: 0.82rem;
+  }
+  .jump a:hover { border-color: var(--accent); color: var(--accent); }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1.35rem;
+    margin: 1.25rem 0;
+  }
+  .card h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1.1rem;
+    letter-spacing: -0.01em;
+  }
+  .rank {
+    font-family: var(--mono); font-size: 0.75rem;
+    color: var(--accent); font-weight: 500;
+    display: inline-block; margin-bottom: 0.35rem;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.65rem 0 0.85rem; }
+  .chip {
+    font-family: var(--mono); font-size: 0.72rem;
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 0.15rem 0.45rem; color: var(--muted);
+  }
+  .chip.axis { color: #b7d0ff; border-color: #3a4f73; }
+  .chip.conf-h { color: var(--good); border-color: #2a6b4a; }
+  .chip.conf-m { color: var(--warn); border-color: #6b5a2a; }
+  .chip.cx { color: #c9b8e8; border-color: #4a3f63; }
+  .basis {
+    font-size: 0.88rem; color: var(--muted);
+    border-left: 3px solid var(--accent-dim);
+    padding: 0.35rem 0 0.35rem 0.75rem; margin: 0.75rem 0;
+  }
+  .basis strong { color: var(--text); font-weight: 600; }
+  .diagram {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+    margin: 1rem 0;
+    overflow-x: auto;
+  }
+  .diagram svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+  .diagram figcaption {
+    font-size: 0.78rem; color: var(--muted);
+    text-align: center; margin-top: 0.65rem;
+  }
+  table.reject {
+    width: 100%; border-collapse: collapse; font-size: 0.88rem;
+    margin-top: 0.75rem;
+  }
+  table.reject th, table.reject td {
+    text-align: left; padding: 0.55rem 0.65rem;
+    border-bottom: 1px solid var(--border); vertical-align: top;
+  }
+  table.reject th { color: var(--muted); font-weight: 500; }
+  footer.composition-signal {
+    margin-top: 3rem; padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.8rem; color: var(--muted);
+  }
+  code { font-family: var(--mono); font-size: 0.85em; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+  <aside role="note" style="border:1px solid var(--warn);padding:0.75rem 1rem;margin-bottom:1rem;border-radius:6px"><strong>Historical ideation — non-normative.</strong> This artifact records exploration only. Current product authority is the root PRD, contracts, and approved plans; later-release ideas here do not authorize Phase 1 behavior.</aside>
+  <header class="meta">
+    <h1>Lean Agent Shell — alternate designs for Context Engine</h1>
+    <dl class="meta-grid">
+      <dt>Date</dt><dd><time datetime="2026-07-22">2026-07-22</time></dd>
+      <dt>Topic</dt><dd>lean-agent-shell</dd>
+      <dt>Focus</dt><dd>Alternate system shape as a lean agent shell that keeps current base functionality (governed multi-domain RAG, Evidence, SSE turns, authz) and makes chat history first-class — without Local Studio fat-agent sprawl.</dd>
+      <dt>Mode</dt><dd>repo-grounded</dd>
+    </dl>
+  </header>
+
+  <h2 id="grounding">Grounding Context</h2>
+  <p><strong>Codebase context.</strong> Context Engine is a docs-first governed RAG workstation (FastAPI + Next BFF + PostgreSQL). The real spine is already <code>conversations</code> / <code>conversation_turns</code>, <code>TurnOrchestrator</code>, Evidence mapping, and composer refs — not a plugin runtime. <code>app/server/tools/</code> is a domain runtime controller, not agent tools. Specs reject Pi tools, filesystem automation, and browser-selected runtimes. As-built gaps: P7 chat orchestration unfinished, pilot SSE vs contract drift, three-region workbench incomplete.</p>
+  <p><strong>External context.</strong> High-value prior art converges on bounded plan–retrieve–answer (Azure agentic retrieval), sparse/fixed graphs over open ReAct, and strict separation of thread history vs corpus RAG memory namespaces. Market “knowledge layers for agents” package retrieval-as-tool with citations; CE’s opportunity is those benefits without a generic tool registry. Analogies that held: query planner, email thread + case file, compiler pipeline.</p>
+  <p class="muted">Past learnings: none — <code>docs/solutions/</code> absent. Run scratch: <code>/tmp/compound-engineering/ce-ideate/7e9410ac</code>.</p>
+
+  <h2 id="axes">Topic Axes</h2>
+  <ul class="axes">
+    <li><code>orchestration-shell</code> Turn orchestration / lean agent-shell topology</li>
+    <li><code>chat-history-memory</code> Conversation history &amp; memory namespaces</li>
+    <li><code>retrieval-grounding</code> Retrieval / Evidence grounding boundary</li>
+    <li><code>trust-anti-sprawl</code> Trust boundary / anti-agent-sprawl</li>
+    <li><code>workbench-ux</code> Product shell / chat workbench UX</li>
+  </ul>
+
+  <h2 id="ranked">Ranked Ideas</h2>
+  <nav class="jump" aria-label="Idea jump list">
+    <a href="#i1">1. Sealed Turn Pipeline Shell</a>
+    <a href="#i2">2. Case-File Carry-Forward</a>
+    <a href="#i3">3. Case-File Workbench</a>
+    <a href="#i4">4. Closed Capability Manifest</a>
+    <a href="#i5">5. Inspectable Grounded Outcomes</a>
+    <a href="#i6">6. Visible Continuity Budget</a>
+    <a href="#i7">7. Single-Shot Grounded Repair</a>
+  </nav>
+
+  <article class="card" id="i1">
+    <div class="rank">#1</div>
+    <h3>Sealed Turn Pipeline Shell</h3>
+    <div class="chips">
+      <span class="chip axis">orchestration-shell</span>
+      <span class="chip conf-h">Conf High</span>
+      <span class="chip cx">Cx Medium</span>
+    </div>
+    <p>Treat the lean “agent shell” as a <strong>fixed, server-owned turn pipeline viewport</strong> — not a tool host. The product surface projects the contracted SSE graph (<code>turn.accepted → route.selected → retrieval.started → evidence.delta* → answer.delta* → turn.completed</code>) with one live/resume/replay reducer. <code>TurnOrchestrator</code> plus idempotent terminal replay <em>is</em> the agent; there is no tool registry, approval queue, or separate agent-runtime process.</p>
+    <div class="basis"><strong>Basis</strong> direct: production-adaptation “a separate agent runtime is not required”; PRD bounded plan/retrieval/repair; SSE legal sequences; components one-reducer rule. external: Azure plan–retrieve–answer; compiler-pipeline / ATC clearance-strip analogies.</div>
+    <p><strong>Rationale.</strong> Gives engineering and product a shared name for “agent-like” without inviting Local Studio sprawl, and makes finishing P7 SSE contract parity the shell’s acceptance gate.</p>
+    <p><strong>Downsides.</strong> Feels less “agentic” to stakeholders who expect tool loops; requires killing pilot <code>stage/token/done</code> emissions and finishing frontend reducer work.</p>
+    <figure class="diagram">
+      <svg viewBox="0 0 720 160" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sealed turn pipeline">
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9aa8bc"/></marker>
+        </defs>
+        <rect x="8" y="40" width="100" height="48" rx="8" fill="#1e3a5f" stroke="#3d8bfd"/>
+        <text x="58" y="68" text-anchor="middle" fill="#e8edf5" font-size="12" font-family="IBM Plex Sans,sans-serif">accepted</text>
+        <line x1="108" y1="64" x2="128" y2="64" stroke="#9aa8bc" marker-end="url(#arrow)"/>
+        <rect x="128" y="40" width="88" height="48" rx="8" fill="#171b22" stroke="#2a3344"/>
+        <text x="172" y="68" text-anchor="middle" fill="#e8edf5" font-size="12" font-family="IBM Plex Sans,sans-serif">route</text>
+        <line x1="216" y1="64" x2="236" y2="64" stroke="#9aa8bc" marker-end="url(#arrow)"/>
+        <rect x="236" y="40" width="100" height="48" rx="8" fill="#171b22" stroke="#2a3344"/>
+        <text x="286" y="68" text-anchor="middle" fill="#e8edf5" font-size="12" font-family="IBM Plex Sans,sans-serif">retrieve</text>
+        <line x1="336" y1="64" x2="356" y2="64" stroke="#9aa8bc" marker-end="url(#arrow)"/>
+        <rect x="356" y="40" width="100" height="48" rx="8" fill="#171b22" stroke="#2a3344"/>
+        <text x="406" y="68" text-anchor="middle" fill="#e8edf5" font-size="12" font-family="IBM Plex Sans,sans-serif">evidence</text>
+        <line x1="456" y1="64" x2="476" y2="64" stroke="#9aa8bc" marker-end="url(#arrow)"/>
+        <rect x="476" y="40" width="100" height="48" rx="8" fill="#171b22" stroke="#2a3344"/>
+        <text x="526" y="68" text-anchor="middle" fill="#e8edf5" font-size="12" font-family="IBM Plex Sans,sans-serif">answer</text>
+        <line x1="576" y1="64" x2="596" y2="64" stroke="#9aa8bc" marker-end="url(#arrow)"/>
+        <rect x="596" y="40" width="110" height="48" rx="8" fill="#152018" stroke="#3ecf8e"/>
+        <text x="651" y="68" text-anchor="middle" fill="#e8edf5" font-size="12" font-family="IBM Plex Sans,sans-serif">completed</text>
+        <text x="360" y="130" text-anchor="middle" fill="#9aa8bc" font-size="11" font-family="IBM Plex Sans,sans-serif">No open tool loop · history + Evidence persist · replay from sealed terminal</text>
+      </svg>
+      <figcaption>Lean shell = sealed clearance strip, not a tool marketplace.</figcaption>
+    </figure>
+  </article>
+
+  <article class="card" id="i2">
+    <div class="rank">#2</div>
+    <h3>Case-File Carry-Forward</h3>
+    <div class="chips">
+      <span class="chip axis">chat-history-memory</span>
+      <span class="chip conf-h">Conf High</span>
+      <span class="chip cx">Cx Medium</span>
+    </div>
+    <p>Make chat history <strong>actionable working memory</strong> without an agent memory store: prior turns contribute re-resolvable slots (accepted Evidence/wiki/template refs, last domain selection metadata) via <code>composer-refs:discover</code> / <code>_discover_evidence</code>. Follow-ups inherit governed chips with TTL and one-use rules — not stuffed prior assistant answers or a second vector memory competing with domain RAG.</p>
+    <div class="basis"><strong>Basis</strong> direct: prior synthesis uses user questions only; composer-ref discovery against completed turns; never persist assembled prompts; redaction preserves user question. external: LangChain thread history ≠ corpus memory namespaces; film continuity binder analogy.</div>
+    <p><strong>Rationale.</strong> Best answer to “incorporate chat history” inside CE invariants: the thread becomes a case file members can re-cite, compounding Evidence already paid for.</p>
+    <p><strong>Downsides.</strong> UX must make carry-forward explicit (chips) so members know what is attached; expiry still rejects stale tokens (M-09).</p>
+  </article>
+
+  <article class="card" id="i3">
+    <div class="rank">#3</div>
+    <h3>Case-File Workbench</h3>
+    <div class="chips">
+      <span class="chip axis">workbench-ux</span>
+      <span class="chip conf-h">Conf High</span>
+      <span class="chip cx">Cx Medium</span>
+    </div>
+    <p>Lock the human-facing shell as a <strong>case file</strong>, not an agent IDE: discovery rail = conversation docket; center = chronological turn ledger (history primary); inspector = working papers (Evidence / Refs / Source / Wiki) for the selected turn. Adapt Local Studio shell geometry only; strip model picker, terminal, tool approval.</p>
+    <div class="basis"><strong>Basis</strong> direct: normative three-region chat-and-evidence-workbench; ui-parity forbids agent-only controls; as-built still timeline + single Evidence aside; F-009/F-012 drift must be resolved once.</div>
+    <p><strong>Rationale.</strong> History is only first-class if discoverable and inspectable; this is the product shape that makes ideas #1 and #2 legible to members.</p>
+    <p><strong>Downsides.</strong> Requires one authoritative layout decision and finishing incomplete three-region UI — not a backend-only win.</p>
+    <figure class="diagram">
+      <svg viewBox="0 0 720 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Three-region case-file workbench">
+        <rect x="10" y="20" width="140" height="160" rx="10" fill="#171b22" stroke="#2a3344"/>
+        <text x="80" y="48" text-anchor="middle" fill="#9aa8bc" font-size="11" font-family="IBM Plex Sans,sans-serif">Discovery</text>
+        <text x="80" y="72" text-anchor="middle" fill="#e8edf5" font-size="12" font-family="IBM Plex Sans,sans-serif">conversations</text>
+        <rect x="165" y="20" width="320" height="160" rx="10" fill="#1e3a5f" stroke="#3d8bfd"/>
+        <text x="325" y="48" text-anchor="middle" fill="#9aa8bc" font-size="11" font-family="IBM Plex Sans,sans-serif">Turn ledger (primary)</text>
+        <text x="325" y="80" text-anchor="middle" fill="#e8edf5" font-size="13" font-family="IBM Plex Sans,sans-serif">transcript + composer</text>
+        <text x="325" y="108" text-anchor="middle" fill="#b7d0ff" font-size="11" font-family="IBM Plex Sans,sans-serif">pipeline cues · history</text>
+        <rect x="500" y="20" width="210" height="160" rx="10" fill="#171b22" stroke="#2a3344"/>
+        <text x="605" y="48" text-anchor="middle" fill="#9aa8bc" font-size="11" font-family="IBM Plex Sans,sans-serif">Working papers</text>
+        <text x="605" y="80" text-anchor="middle" fill="#e8edf5" font-size="12" font-family="IBM Plex Sans,sans-serif">Evidence · Refs</text>
+        <text x="605" y="104" text-anchor="middle" fill="#e8edf5" font-size="12" font-family="IBM Plex Sans,sans-serif">Source · Wiki</text>
+        <text x="605" y="140" text-anchor="middle" fill="#9aa8bc" font-size="10" font-family="IBM Plex Sans,sans-serif">bound to selectedTurn</text>
+      </svg>
+      <figcaption>Opinion letter (transcript) vs working papers (inspector).</figcaption>
+    </figure>
+  </article>
+
+  <article class="card" id="i4">
+    <div class="rank">#4</div>
+    <h3>Closed Capability Manifest</h3>
+    <div class="chips">
+      <span class="chip axis">trust-anti-sprawl</span>
+      <span class="chip conf-h">Conf High</span>
+      <span class="chip cx">Cx Low</span>
+    </div>
+    <p>Define the lean shell as a <strong>closed verb set</strong>: classify, retrieve, synthesize, replay, cancel, redact (optionally project_evidence / grounded_refuse as retrieval subtypes). Any proposed “agent feature” must name which verb it extends; UI that implies an open tool palette stays forbidden. BFF airlock rules stay mandatory.</p>
+    <div class="basis"><strong>Basis</strong> direct: AGENTS out-of-scope plugins/tools; ui-parity agent-control ban; production-adaptation reject matrix; turn lifecycle counters. external: IBM agent-sprawl risks; cleanroom airlock analogy.</div>
+    <p><strong>Rationale.</strong> Turns “we’re not an agent platform” from prose into a merge gate — the cheapest structural defense while still allowing agent-shell language.</p>
+    <p><strong>Downsides.</strong> Manifest must be maintained; pressure to add “just one tool” will reappear as “just one verb.”</p>
+  </article>
+
+  <article class="card" id="i5">
+    <div class="rank">#5</div>
+    <h3>Inspectable Grounded Outcomes</h3>
+    <div class="chips">
+      <span class="chip axis">retrieval-grounding</span>
+      <span class="chip conf-h">Conf High</span>
+      <span class="chip cx">Cx Medium</span>
+    </div>
+    <p>Design the shell around <strong>non-prose success paths</strong>: <code>no_grounded_context</code> and <code>evidence_only</code> are first-class terminals with inspector projections (what was searched / what exhibits landed), not empty assistant bubbles. Domain answers never fall back to general model knowledge.</p>
+    <div class="basis"><strong>Basis</strong> direct: contracted stopReasons; evidence service returns empty → no synthesis; interaction cases for grounded refusal; pharmacy formulary / closed-stack call-slip analogies.</div>
+    <p><strong>Rationale.</strong> Lean agency = retrieval discipline. Trust grows when refusal is legible.</p>
+    <p><strong>Downsides.</strong> Copy and empty-states need design care so refusal doesn’t feel like outage.</p>
+  </article>
+
+  <article class="card" id="i6">
+    <div class="rank">#6</div>
+    <h3>Visible Continuity Budget</h3>
+    <div class="chips">
+      <span class="chip axis">chat-history-memory</span>
+      <span class="chip conf-m">Conf Med</span>
+      <span class="chip cx">Cx Medium</span>
+    </div>
+    <p>Expose the server’s history window as product truth: which prior user questions are in-scope for synthesis (<code>MAX_PRIOR_USER_QUESTIONS = 4</code>), which fell off, and how composer refs consume assembly budget — without persisting assembled prompts.</p>
+    <div class="basis"><strong>Basis</strong> direct: hard-coded prior-question cap and assembly caps in chat_turns/prompt_assembly. Verifier note: public budget DTO today covers op counters, not prior-Q scope — this idea requires a contract addition.</div>
+    <p><strong>Rationale.</strong> Fixes the #1 history friction (“it forgot”) without inventing agent memory.</p>
+    <p><strong>Downsides.</strong> Needs approved DTO/SSE fields; weak until contracts move.</p>
+  </article>
+
+  <article class="card" id="i7">
+    <div class="rank">#7</div>
+    <h3>Single-Shot Grounded Repair</h3>
+    <div class="chips">
+      <span class="chip axis">retrieval-grounding</span>
+      <span class="chip conf-m">Conf Med</span>
+      <span class="chip cx">Cx Medium</span>
+    </div>
+    <p>Before terminal <code>no_grounded_context</code>, allow exactly one server-owned repair (rephrase / alternate retrieval intent) tracked by <code>repair_attempt_count</code>, then refuse. Still no general-knowledge fallback and no open ReAct loop.</p>
+    <div class="basis"><strong>Basis</strong> direct: PRD names bounded repair; schema/SSE reserve repair counters. Verifier note: code currently writes <code>0</code>; P7-03 NOT_STARTED — forward-looking within PRD, not as-built.</div>
+    <p><strong>Rationale.</strong> Raises grounded hit rate while keeping the sealed pipeline lean.</p>
+    <p><strong>Downsides.</strong> Needs a contracted repair algorithm; easy to balloon into multi-hop agency if bounds slip.</p>
+  </article>
+
+  <h2 id="rejection">Rejection Summary</h2>
+  <table class="reject">
+    <thead><tr><th>Cut</th><th>Reason</th></tr></thead>
+    <tbody>
+      <tr><td>Domain Thread Anchor</td><td>Basis refuted — contracts treat domain as per-next-turn; conversations have no domain_id / fork-on-switch.</td></tr>
+      <tr><td>Compiler / Clearance / Cue-Sheet / Turn Ledger variants</td><td>Duplicates of #1 Sealed Turn Pipeline Shell (folded).</td></tr>
+      <tr><td>Conversation-Only Memory / Thread Memory Ladder / Continuity Binder / Adjournment Envelope</td><td>Overlaps #2/#6; stronger carries are Case-File Carry-Forward + Continuity Budget.</td></tr>
+      <tr><td>Negative Capability / Airlock / Closed Evidence Tools / History-Bound Leases</td><td>Folded into #4 Closed Capability Manifest.</td></tr>
+      <tr><td>Transcript-Inline Evidence / Transcript-First / Working-Papers / Cue-Sheet Board</td><td>Folded into #3 Case-File Workbench.</td></tr>
+      <tr><td>Composer-Frozen Retrieval Intent / Formulary / Call-Slip (standalone)</td><td>Useful metaphors; subsumed by #5 outcomes + sealed pipeline, or better as brainstorm variants.</td></tr>
+      <tr><td>Idempotent Replay Automation (standalone)</td><td>Already covered as mechanism inside #1; not a distinct product direction.</td></tr>
+      <tr><td>Evidence-Only Terminal Mode (standalone)</td><td>Merged into #5 Inspectable Grounded Outcomes.</td></tr>
+    </tbody>
+  </table>
+  <p class="muted">Raw ~38 candidates across 5 frames; ~13 unique after dedupe; 7 survivors after verification (Domain Thread Anchor refuted; Continuity Budget and Repair kept with Med confidence).</p>
+
+  <footer class="composition-signal">
+    Composed 2026-07-22 by ce-ideate from focus “lean agent shell + base RAG + chat history” · run <code>7e9410ac</code> · workspace <code>localTest_ce_local_studio</code>
+  </footer>
+</div>
+</body>
+</html>

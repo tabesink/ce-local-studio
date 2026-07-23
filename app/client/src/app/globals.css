@@ -1,0 +1,70 @@
+@import "tailwindcss";
+@import "../_shared/styles/local-studio-tokens.css";
+
+/* App-specific extensions over the shared Local Studio token system. */
+
+:root {
+  --font-geist-sans: Geist, system-ui, sans-serif;
+}
+
+/* Density preference: compact is the default workbench scale. */
+:root[data-density="comfortable"] {
+  --ui-scale: 1.05;
+  --row-h: 32px;
+  --row-h-sm: 28px;
+  --ui-control-h: 32px;
+}
+
+/* Foundation aliases kept for existing components (Button, Input, focus ring). */
+:root,
+:root[data-theme="zai-dark"],
+:root[data-theme="zai-light"] {
+  --background: var(--ui-bg);
+  --foreground: var(--ui-fg);
+  --card: var(--ui-surface);
+  --muted: var(--ui-surface);
+  --muted-foreground: var(--ui-muted);
+  --popover: var(--color-popover);
+  --primary: var(--ui-accent);
+  --primary-foreground: var(--color-primary-foreground);
+  --secondary: var(--ui-surface-2);
+  --destructive: var(--ui-danger);
+  --input: var(--ui-separator);
+  --ring: color-mix(in srgb, var(--link) 40%, transparent);
+}
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+}
+
+body {
+  font-size: var(--app-font-size, var(--fs-base));
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: var(--active);
+}
+
+/* Theme-aware brand mark: show the variant matching the active theme.
+   Dark is the default (html ships with data-theme="zai-dark"). */
+.logo-light {
+  display: none;
+}
+
+:root[data-theme="zai-light"] .logo-dark {
+  display: none;
+}
+
+:root[data-theme="zai-light"] .logo-light {
+  display: inline-block;
+}

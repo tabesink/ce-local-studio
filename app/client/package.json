@@ -1,0 +1,36 @@
+{
+  "name": "context-engine-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p 3000",
+    "typecheck": "tsc --noEmit",
+    "generate:api": "openapi-typescript ../contracts/openapi.json -o src/lib/api/generated/openapi.ts",
+    "test": "node --experimental-strip-types --test tests/*.mjs",
+    "test:foundation": "node --test tests/foundation.test.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed"
+  },
+  "dependencies": {
+    "lucide-react": "0.561.0",
+    "next": "16.2.10",
+    "pdfjs-dist": "4.10.38",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "overrides": {
+    "postcss": "^8.5.10"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@tailwindcss/postcss": "4.1.18",
+    "@types/node": "20.19.27",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "openapi-typescript": "7.13.0",
+    "tailwindcss": "4.1.18",
+    "typescript": "5.9.3"
+  }
+}

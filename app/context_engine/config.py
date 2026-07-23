@@ -1,0 +1,74 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+
+
+def _env(name: str, default: str | None = None) -> str | None:
+    value = os.getenv(name)
+    if value is None or value == "":
+        return default
+    return value
+
+
+def _env_int(name: str, default: int) -> int:
+    value = _env(name)
+    if value is None:
+        return default
+    return int(value)
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = _env(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+@dataclass(frozen=True)
+class Settings:
+    database_url: str = field(
+        default_factory=lambda: _env(
+            "CONTEXT_ENGINE_DATABASE_URL",
+            "postgresql+psycopg://context_engine@localhost/context_engine",
+        )
+        or "postgresql+psycopg://context_engine@localhost/context_engine"
+    )
+    admin_username: str | None = field(default_factory=lambda: _env("CE_ADMIN_USERNAME"))
+    admin_password: str | None = field(default_factory=lambda: _env("CE_ADMIN_PASSWORD"), repr=False)
+    config_encryption_key: str | None = field(default_factory=lambda: _env("CONFIG_ENCRYPTION_KEY"), repr=False)
+    testing: bool = field(default_factory=lambda: _env_bool("CONTEXT_ENGINE_TESTING", False))
+    session_cookie_name: str = "ce_session"
+    session_cookie_secure: bool = field(default_factory=lambda: _env_bool("CE_SESSION_COOKIE_SECURE", True))
+    session_cookie_samesite: str = field(default_factory=lambda: _env("CE_SESSION_COOKIE_SAMESITE", "lax") or "lax")
+    session_ttl_seconds: int = field(default_factory=lambda: _env_int("CE_SESSION_TTL_SECONDS", 60 * 60 * 8))
+    domain_runtime_root: str = field(default_factory=lambda: _env("CE_DOMAIN_RUNTIME_ROOT", ".data/domain-runtimes") or ".data/domain-runtimes")
+    domain_runtime_controller_kind: str = field(default_factory=lambda: _env("CE_DOMAIN_RUNTIME_CONTROLLER_KIND", "docker") or "docker")
+    domain_controller_command: str | None = field(default_factory=lambda: _env("CE_DOMAIN_CONTROLLER_COMMAND"))
+    domain_controller_timeout_seconds: int = field(default_factory=lambda: _env_int("CE_DOMAIN_CONTROLLER_TIMEOUT_SECONDS", 30))
+    domain_delete_worker_id: str = field(default_factory=lambda: _env("CE_DOMAIN_DELETE_WORKER_ID", "domain-delete-worker") or "domain-delete-worker")
+    domain_delete_lease_seconds: int = field(default_factory=lambda: _env_int("CE_DOMAIN_DELETE_LEASE_SECONDS", 60))
+    source_storage_root: str = field(default_factory=lambda: _env("CE_SOURCE_STORAGE_ROOT", ".data/source-storage") or ".data/source-storage")
+    domain_storage_limit_bytes: int = field(default_factory=lambda: _env_int("CE_DOMAIN_STORAGE_LIMIT_BYTES", 5 * 1024 * 1024 * 1024))
+    source_prep_worker_id: str = field(default_factory=lambda: _env("CE_SOURCE_PREP_WORKER_ID", "source-prep-worker") or "source-prep-worker")
+    source_prep_lease_seconds: int = field(default_factory=lambda: _env_int("CE_SOURCE_PREP_LEASE_SECONDS", 60))
+    source_index_worker_id: str = field(default_factory=lambda: _env("CE_SOURCE_INDEX_WORKER_ID", "source-index-worker") or "source-index-worker")
+    source_index_lease_seconds: int = field(default_factory=lambda: _env_int("CE_SOURCE_INDEX_LEASE_SECONDS", 60))
+    lightrag_client_kind: str = field(default_factory=lambda: _env("CE_LIGHTRAG_CLIENT_KIND", "native") or "native")
+    worker_idle_seconds: int = field(default_factory=lambda: _env_int("CE_WORKER_IDLE_SECONDS", 2))
+
+    def __post_init__(self) -> None:
+        samesite = self.session_cookie_samesite.strip().lower()
+        if samesite not in {"lax", "strict", "none"}:
+            raise ValueError("session_cookie_samesite must be one of 'lax', 'strict', or 'none'.")
+        if samesite == "none" and not self.session_cookie_secure:
+            # Browsers reject SameSite=None cookies without Secure; failing fast
+            # beats silently shipping a session cookie the browser will drop.
+            raise ValueError("session_cookie_samesite='none' requires session_cookie_secure=True.")
+        object.__setattr__(self, "session_cookie_samesite", samesite)
+        if self.domain_storage_limit_bytes <= 0:
+            raise ValueError("domain_storage_limit_bytes must be positive.")
+
+    @classmethod
+    def from_env(cls) -> "Settings":
+        return cls()

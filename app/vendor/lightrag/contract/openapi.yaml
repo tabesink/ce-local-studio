@@ -1,0 +1,137 @@
+openapi: 3.1.0
+info:
+  title: Context Engine LightRAG Boundary
+  version: 0.1.0
+  description: HTTP-only boundary expected by context_engine for an external LightRAG service.
+paths:
+  /documents/upload:
+    post:
+      summary: Upload a document for indexing.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Document accepted.
+  /documents/track_status/{track_id}:
+    get:
+      summary: Return document processing status by tracking ID.
+      parameters:
+        - name: track_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Track status.
+  /documents/ingest_chunks:
+    post:
+      summary: Ingest pre-built Context Engine source chunks.
+      description: >
+        Custom Context Engine extension. Chunks contain text and metadata only;
+        binary assets and embeddings remain outside this payload.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [domain, chunks]
+              properties:
+                domain:
+                  type: string
+                chunks:
+                  type: array
+                  items:
+                    type: object
+                    required: [text, metadata]
+                    properties:
+                      text:
+                        type: string
+                      metadata:
+                        type: object
+                        required: [document_id, chunk_id]
+                        properties:
+                          document_id:
+                            type: string
+                          section_id:
+                            type: string
+                            nullable: true
+                          chunk_id:
+                            type: string
+                          page_start:
+                            type: integer
+                            nullable: true
+                          page_end:
+                            type: integer
+                            nullable: true
+                          asset_ids:
+                            type: array
+                            items:
+                              type: string
+      responses:
+        "200":
+          description: Source chunks accepted.
+  /query/data:
+    post:
+      summary: Return structured retrieval data without answer generation.
+      responses:
+        "200":
+          description: Structured LightRAG query data.
+  /graphs:
+    get:
+      summary: Return a knowledge graph for a label.
+      parameters:
+        - name: label
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: max_depth
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 3
+        - name: max_nodes
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1000
+      responses:
+        "200":
+          description: Graph data.
+  /graph/label/list:
+    get:
+      summary: Return all graph labels.
+      responses:
+        "200":
+          description: Graph labels.
+  /graph/label/popular:
+    get:
+      summary: Return popular graph labels.
+      responses:
+        "200":
+          description: Popular labels.
+  /graph/label/search:
+    get:
+      summary: Search graph labels.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Matching labels.

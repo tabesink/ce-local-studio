@@ -1,0 +1,380 @@
+/* Local Studio token system — ported from
+   .references/local-studio/frontend/src/app/styles/globals/tokens.css
+
+   Single source of truth for the visual language. Components read CSS
+   variables only; no hardcoded colors, radii, or row heights belong in
+   component files. Dark (`zai-dark`) is the default; the matching
+   `zai-light` system is included for parity. */
+
+:root {
+  /* Master knobs — type / radius / weight derive from these via calc(). */
+  --ui-scale: 1;
+  --leading: 1.5;
+  --leading-tight: 1.25;
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-strong: 600;
+  --radius-base: 7px;
+  --border-width: 1px;
+  --space-base: 4px;
+
+  /* Fonts — Geist / Geist Mono when provided by the host app. */
+  --font-geist-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-geist-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Accent stop used by the info tone. */
+  --color-sky-300: oklch(82.8% 0.111 230.318);
+  --color-sky-400: oklch(74.6% 0.16 232.661);
+  --color-sky-500: oklch(68.5% 0.169 237.323);
+  --color-neutral-500: oklch(55.6% 0 0);
+  --color-neutral-800: oklch(26.9% 0 0);
+
+  color-scheme: dark;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   zai-light — neutral canvas, near-white surfaces, black brand.
+   ────────────────────────────────────────────────────────────────────────── */
+.theme-zai-light,
+:root[data-theme="zai-light"] {
+  color-scheme: light;
+
+  --color-background: #f4f5f5;
+  --color-background-win-alt: #e9ebec;
+
+  --color-brand: #000;
+  --color-accent: #ebf4ff;
+
+  --color-border: #0d0d0d1a;
+  --color-border-hover: #0d0d0d24;
+  --color-hover: #0d0d0d0b;
+  --color-selected: #0d0d0d12;
+
+  --color-header: #fbfbfb;
+  --color-panel: #fbfbfb;
+  --color-sidebar: #eceeee;
+  --color-surface: #0d0d0d08;
+  --color-surface-hover: #0d0d0d0d;
+
+  --color-card: #fbfbfb;
+  --color-popover: #fbfbfb;
+  --color-input: #fbfbfb;
+  --color-input-border: var(--color-border);
+
+  --color-tab: #eceeee;
+  --color-tab-active: #fbfbfb;
+
+  --color-menu: #fbfbfb;
+  --color-menu-hover: #eceeee;
+
+  --color-primary: #000;
+  --color-primary-foreground: #fff;
+  --color-secondary: #e6e6e6;
+
+  --color-foreground: var(--color-neutral-800);
+  --color-foreground-subtle: color-mix(in oklab, var(--color-neutral-800) 60%, transparent);
+  --color-foreground-subtlest: color-mix(in oklab, var(--color-neutral-800) 40%, transparent);
+  --color-foreground-inverse: #fff;
+
+  --color-success: #1e8a3e;
+  --color-success-foreground: #fff;
+  --color-destructive: #e03131;
+  --color-destructive-foreground: #fff;
+  --color-warning: #e07b00;
+  --color-warning-foreground: #fff;
+
+  /* Usage charts — light sky/teal/violet/red/amber/cyan */
+  --color-usage-chart-1: #6b8db5;
+  --color-usage-chart-2: #2f8f5f;
+  --color-usage-chart-3: #8672b9;
+  --color-usage-chart-4: #d35656;
+  --color-usage-chart-5: #c8792f;
+  --color-usage-chart-6: #2d8e91;
+
+  /* Node taxonomy — engine badges (vLLM=command, SGLang=file, llama.cpp=skill, MLX=subagent). */
+  --color-file-node: #1a70b81a;
+  --color-file-node-hover: #1a70b829;
+  --color-file-node-foreground: #1a70b8;
+  --color-skill-node: #7453b01a;
+  --color-skill-node-hover: #7453b029;
+  --color-skill-node-foreground: #7453b0;
+  --color-command-node: #5662701a;
+  --color-command-node-hover: #56627029;
+  --color-command-node-foreground: #566270;
+  --color-subagent-node: #6f7a2f1a;
+  --color-subagent-node-hover: #6f7a2f29;
+  --color-subagent-node-foreground: #6f7a2f;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   zai-dark — near-black canvas, layered charcoal surfaces, white brand.
+   This is the live default (set on <html data-theme="zai-dark">).
+   ────────────────────────────────────────────────────────────────────────── */
+:root,
+.theme-zai-dark,
+.dark,
+:root[data-theme="zai-dark"] {
+  --color-background: #0f0f0f;
+  --color-background-win-alt: #202020;
+
+  --color-brand: #fff;
+  --color-accent: #1c2734;
+
+  --color-border: #ffffff14;
+  --color-border-hover: #ffffff24;
+  --color-hover: #ffffff0f;
+  --color-selected: #ffffff17;
+
+  --color-header: #101010;
+  --color-panel: #111111;
+  --color-sidebar: #191919;
+  --color-surface: #ffffff0c;
+  --color-surface-hover: #ffffff14;
+
+  --color-card: #202020;
+  --color-popover: #222222;
+  --color-input: #242424;
+  --color-input-border: var(--color-border);
+
+  --color-tab: #191919;
+  --color-tab-active: #101010;
+
+  --color-menu: #222222;
+  --color-menu-hover: #2b2b2b;
+
+  --color-primary: #fff;
+  --color-primary-foreground: #000;
+  --color-secondary: #2b2b2b;
+
+  --color-foreground: #e7e7e7;
+  --color-foreground-subtle: color-mix(in oklab, #e7e7e7 58%, transparent);
+  --color-foreground-subtlest: color-mix(in oklab, #e7e7e7 34%, transparent);
+  --color-foreground-inverse: #000;
+
+  --color-success: #46bf72;
+  --color-success-foreground: #000;
+  --color-destructive: #ff5c5c;
+  --color-destructive-foreground: #000;
+  --color-warning: #d48a4c;
+  --color-warning-foreground: #000;
+
+  /* Usage charts */
+  --color-usage-chart-1: #7ea1c8;
+  --color-usage-chart-2: #4aa06f;
+  --color-usage-chart-3: #8d7fc6;
+  --color-usage-chart-4: #e16b6b;
+  --color-usage-chart-5: #d48a4c;
+  --color-usage-chart-6: #65aaa9;
+
+  /* Node taxonomy — engine badges (vLLM=command, SGLang=file, llama.cpp=skill, MLX=subagent). */
+  --color-file-node: #7ea1c824;
+  --color-file-node-hover: #7ea1c833;
+  --color-file-node-foreground: #a7bfd8;
+  --color-skill-node: #a689da29;
+  --color-skill-node-hover: #a689da38;
+  --color-skill-node-foreground: #bda5e6;
+  --color-command-node: #9aa6b424;
+  --color-command-node-hover: #9aa6b433;
+  --color-command-node-foreground: #b5c0cc;
+  --color-subagent-node: #b7bd7529;
+  --color-subagent-node-hover: #b7bd7538;
+  --color-subagent-node-foreground: #c8cd90;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Legacy local-studio token names — repointed onto the system so existing
+   component class recipes re-skin without changes.
+   ────────────────────────────────────────────────────────────────────────── */
+:root,
+.theme-zai-dark,
+.dark,
+:root[data-theme="zai-dark"],
+.theme-zai-light,
+:root[data-theme="zai-light"] {
+  --bg: var(--color-background);
+  --fg: var(--color-foreground);
+  --dim: var(--color-foreground-subtle);
+  --surface: var(--color-card);
+  --surface-2: var(--color-secondary);
+  --surface-3: var(--color-input);
+  --rail: var(--color-sidebar);
+  --agent-bg: var(--color-background);
+  --sidebar-bg: var(--color-sidebar);
+
+  --border: var(--color-border);
+  --separator: var(--color-border);
+  --hover: var(--color-hover);
+  --active: var(--color-selected);
+  --composer: var(--color-card);
+  --composer-footer: var(--color-card);
+
+  /* Accents — grayscale brand + the sanctioned sky-blue link accent */
+  --accent: var(--color-brand);
+  --hl1: var(--color-foreground-subtle);
+  --hl2: var(--color-foreground-subtlest);
+  --hl3: var(--color-neutral-500);
+  --err: var(--color-destructive);
+  --ok: var(--color-success);
+  --warn: var(--color-warning);
+  --link: #7ea1c8;
+}
+
+.theme-zai-light,
+:root[data-theme="zai-light"] {
+  --link: #6b8db5;
+  --composer-shadow: 0 12px 36px rgba(0, 0, 0, 0.06);
+}
+
+:root,
+.theme-zai-dark,
+.dark,
+:root[data-theme="zai-dark"] {
+  --composer-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
+}
+
+:root {
+  /* Density / dimensions (Codex desktop geometry) */
+  --sidebar-w: 224px;
+  --sidebar-w-collapsed: 48px;
+  --row-h: 28px;
+  --row-h-sm: 24px;
+  --row-radius: var(--rad-md);
+  --composer-w: clamp(25vw, 46rem, 50vw);
+  --thread-w: 900px;
+  --composer-radius: 18px;
+
+  /* Typography roles */
+  --text-nav: var(--fs-xl);
+  --text-section: var(--fs-base);
+  --section-tracking: 0.16em;
+
+  --app-height: 100vh;
+
+  /* Type ramp — fixed steps × --ui-scale. */
+  --fs-2xs: calc(9px * var(--ui-scale));
+  --fs-xs: calc(10px * var(--ui-scale));
+  --fs-sm: calc(11px * var(--ui-scale));
+  --fs-md: calc(12px * var(--ui-scale));
+  --fs-base: calc(13px * var(--ui-scale));
+  --fs-lg: calc(14px * var(--ui-scale));
+  --fs-xl: calc(16px * var(--ui-scale));
+  --fs-2xl: calc(18px * var(--ui-scale));
+  --fs-3xl: calc(20px * var(--ui-scale));
+  --fs-4xl: calc(24px * var(--ui-scale));
+  --fs-display: calc(34px * var(--ui-scale));
+
+  /* Radius ramp — proportional to --radius-base. */
+  --rad-2xs: calc(var(--radius-base) * 0.25);
+  --rad-xs: calc(var(--radius-base) * 0.5);
+  --rad-sm: calc(var(--radius-base) * 0.75);
+  --rad-md: calc(var(--radius-base) * 0.75);
+  --rad-lg: var(--radius-base);
+  --rad-xl: calc(var(--radius-base) * 1.5);
+  --rad-2xl: calc(var(--radius-base) * 2);
+  --rad-3xl: calc(var(--radius-base) * 3);
+  --rad-full: 9999px;
+
+  /* UI adapter tokens — shared components read through this layer. */
+  --ui-bg: var(--bg);
+  --ui-fg: var(--fg);
+  --ui-muted: var(--dim);
+  --ui-surface: var(--surface);
+  --ui-surface-2: var(--surface-2);
+  --ui-surface-3: var(--surface-3);
+  --ui-border: var(--border);
+  --ui-separator: var(--separator);
+  --ui-hover: var(--hover);
+  --ui-active: var(--active);
+  --ui-accent: var(--accent);
+  --ui-info: var(--color-sky-500);
+  --ui-success: var(--color-success);
+  --ui-warning: var(--color-warning);
+  --ui-danger: var(--color-destructive);
+  --ui-radius: var(--row-radius);
+  --ui-radius-sm: var(--rad-sm);
+  --ui-radius-lg: var(--rad-lg);
+  --ui-control-h: 28px;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --app-height: 100dvh;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --composer-w: clamp(25vw, 46rem, 50vw);
+    --thread-w: 900px;
+  }
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--ui-bg);
+  color: var(--ui-fg);
+  font-family: var(--font-geist-sans);
+  font-size: 16px;
+  line-height: var(--leading);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+hr,
+.dark hr {
+  border-color: var(--separator);
+}
+
+/* Fitting-model highlight sweep (reference: styles/globals/animations.css). */
+@keyframes model-row-shine {
+  0%,
+  58% {
+    opacity: 0;
+    transform: translateX(-115%);
+  }
+  68% {
+    opacity: 0.45;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(115%);
+  }
+}
+
+.model-row-shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.model-row-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    transparent 36%,
+    color-mix(in srgb, var(--ui-success) 14%, transparent) 50%,
+    transparent 64%,
+    transparent 100%
+  );
+  transform: translateX(-115%);
+  animation: model-row-shine 5.8s ease-in-out infinite;
+}
+
+.model-row-shine > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .model-row-shine::after {
+    animation: none;
+    opacity: 0;
+  }
+}

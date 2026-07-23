@@ -1,0 +1,192 @@
+CONTEXT ENGINE DATABASE SCHEMA - REBUILD SOURCE OF TRUTH
+========================================================
+
+Target: PostgreSQL 16, managed by Alembic. IDs are opaque strings (normally UUID text;
+domains use an opaque <=64-character id). Timestamps are service-generated UTC values.
+This is the Phase 1 logical reconstruction schema. Reproduce the CHECK/UNIQUE/INDEX/FK
+behavior listed here. Reviewed models or migrations for deferred features are evidence for
+future work and do not expand this Phase 1 source of truth.
+
+IDENTITY AND CONFIGURATION
+--------------------------
+
+users
+  id PK varchar(36)
+  username varchar(320) NOT NULL UNIQUE INDEX
+  password_hash text NOT NULL
+  role varchar(32) NOT NULL CHECK IN ('member','administrator')
+  is_disabled boolean NOT NULL DEFAULT false
+  created_at, updated_at, password_changed_at timestamp NOT NULL
+
+auth_sessions
+  id PK varchar(36)
+  user_id FK users.id ON DELETE CASCADE NOT NULL INDEX
+  token_hash varchar(64) NOT NULL UNIQUE INDEX
+  expires_at timestamp NOT NULL INDEX
+  revoked_at, last_used_at timestamp NULL; created_at timestamp NOT NULL
+
+provider_configs
+  provider_kind PK varchar(32) CHECK IN ('openai','bedrock','ollama','reducto')
+  display_name varchar(80) NOT NULL
+  requires_credentials boolean NOT NULL
+  credential_ciphertext text NULL
+  credential_updated_at timestamp NULL; created_at, updated_at timestamp NOT NULL
+
+model_profiles
+  id PK varchar(36); name varchar(120) NOT NULL
+  profile_kind varchar(32) CHECK IN ('synthesis','embedding')
+  provider_kind FK provider_configs.provider_kind CHECK IN ('openai','bedrock','ollama')
+  model_name varchar(200) NOT NULL; vector_dimensions integer NULL
+  CHECK embedding -> dimensions present and positive
+  CHECK synthesis -> dimensions absent
+  created_at, updated_at timestamp NOT NULL
+
+runtime_settings
+  id PK integer CHECK id=1
+  active_synthesis_profile_id FK model_profiles.id NULL
+  active_parser_kind varchar(32) CHECK IN ('docling','reducto')
+  created_at, updated_at timestamp NOT NULL
+
+DOMAIN AND SOURCE PIPELINE
+--------------------------
+
+domains
+  id PK varchar(64); display_name varchar(120) NOT NULL
+  state varchar(16) CHECK IN ('stopped','running','deleting')
+  embedding_profile_id FK model_profiles.id RESTRICT NOT NULL
+  runtime_instance_id varchar(36) NOT NULL
+  control_generation integer NOT NULL DEFAULT 1 CHECK >=1
+  created_at, updated_at timestamp NOT NULL
+
+domain_operations
+  id PK varchar(36); domain_id FK domains.id CASCADE NOT NULL
+  operation_type CHECK IN ('create','start','stop','delete')
+  status closed set queued/running/succeeded/failed/cancelled
+  control_generation_at_start integer NOT NULL
+  requested_by_user_id FK users.id SET NULL; request_id varchar(80) INDEX
+  safe message/error_code/error_message; lease_owner; lease_expires_at
+  started_at, finished_at, created_at, updated_at
+  INDEX domain_id+created_at DESC; enforce one active operation per domain/type as migrated
+
+source_documents
+  id PK varchar(36); public_ref varchar(64) NOT NULL UNIQUE INDEX
+  domain_id FK domains.id CASCADE NOT NULL
+  original_filename varchar(255); content_type varchar(160)
+  original_sha256 varchar(64); original_size_bytes integer CHECK >0
+  state CHECK IN ('pending','prepared','deleting')
+  parser_kind CHECK IN ('docling','reducto')
+  preparation_generation integer DEFAULT 1 CHECK >=1
+  index_state closed set not_requested/queued/processing/ready/failed/cancelled/deleting
+  index_generation integer DEFAULT 0 CHECK >=0
+  index_request_id varchar(96); index_content_hash varchar(64)
+  index_remote_document_id varchar(128)
+  safe index_error_code/index_error_message; index lease owner/expiry
+  index_accepted_at, index_ready_at, index_updated_at
+  created_by_user_id FK users.id SET NULL; created_at, updated_at
+  UNIQUE(domain_id, original_sha256)
+  INDEX(domain_id, created_at DESC); INDEX(domain_id, index_state)
+
+source_preparation_operations
+  id PK; source_document_id FK source_documents.id CASCADE
+  domain_id FK domains.id CASCADE; operation_type='prepare'
+  status closed operation set; preparation_generation_at_start CHECK >=1
+  requested_by_user_id FK users.id SET NULL; request_id INDEX
+  safe message/error fields; lease fields; started/finished/created/updated timestamps
+  indexes by domain/source creation; one active preparation per source/generation
+
+source_blocks
+  id PK; source_document_id FK source_documents.id CASCADE
+  domain_id FK domains.id CASCADE; source_order integer CHECK >=1
+  kind CHECK IN ('text','table','figure'); canonical_markdown text NOT NULL
+  heading_level NULL CHECK >=1; page_start/page_end NULL CHECK valid positive range
+  section_path text NULL; created_at
+  UNIQUE(source_document_id, source_order); INDEX(domain_id, source_document_id)
+
+source_images
+  id PK; source_document_id FK source_documents.id CASCADE
+  source_block_id FK source_blocks.id CASCADE
+  content_hash varchar(64); mime_type varchar(80); alt_text varchar(500) NULL
+  page_number NULL CHECK >=1; created_at
+  INDEX(source_document_id, source_block_id)
+
+CHAT, EVIDENCE, AND GOVERNED CONTEXT
+------------------------------------
+
+conversations
+  id PK; owner_user_id FK users.id CASCADE; title varchar(120) NULL
+  created_at, updated_at; INDEX(owner_user_id, updated_at DESC)
+
+conversation_turns
+  id PK; conversation_id FK conversations.id CASCADE
+  client_request_id varchar(80); trace_id varchar(80) NULL INDEX
+  domain_id varchar(64) NULL INDEX (private logical domain link retained for redaction)
+  route CHECK IN ('direct_llm','domain_rag')
+  status closed set running/completed/failed/cancelled/redacted
+  stop_reason closed set; user_message text NOT NULL; assistant_answer text NULL
+  safe_error_code varchar(64); safe_error_message varchar(500)
+  composer_ref_fingerprint varchar(64) NOT NULL
+  plan_step_count, retrieval_operation_count, repair_attempt_count integers CHECK >=0
+  created_at, updated_at, completed_at/redacted timestamps as migrated
+  UNIQUE(conversation_id, client_request_id)
+  CHECK direct_llm -> domain_id IS NULL; domain_rag -> domain_id IS NOT NULL
+  INDEX(conversation_id, created_at DESC); active/status indexes from migration
+
+conversation_turn_evidence_refs
+  id PK; public_ref varchar(64) NOT NULL UNIQUE INDEX
+  turn_id FK conversation_turns.id CASCADE
+  evidence_order integer CHECK >=1
+  private source_document_id/source_block_id retained for mapping/redaction
+  citation_label varchar(16) NULL; source_label varchar(255) NULL; excerpt text NULL
+  redacted_at timestamp NULL; created_at
+  UNIQUE(turn_id, evidence_order)
+  UNIQUE(turn_id, citation_label) WHERE redacted_at IS NULL
+  CHECK redacted -> citation_label/source_label/excerpt all NULL
+
+prompt_templates
+  id PK; name varchar(120); description varchar(500) NULL
+  body text private CHECK length <=2000
+  state CHECK IN ('approved','disabled'); created_at, updated_at
+
+composer_ref_tokens
+  id PK; token_hash varchar(64) UNIQUE
+  owner_user_id FK users.id CASCADE; ref_kind CHECK IN ('source','evidence','template')
+  target_id private; domain_id varchar(64) NULL
+  safe_label/safe_description; expires_at, created_at
+  INDEX(owner_user_id, expires_at)
+
+conversation_turn_composer_refs
+  id PK; public_ref varchar(64) NOT NULL UNIQUE INDEX
+  turn_id FK conversation_turns.id CASCADE; ref_order integer CHECK >=1
+  ref_kind CHECK IN ('source','evidence','template'); safe_label/safe_description
+  private nullable links: domain_id, source_document_id, source_block_id,
+    evidence_ref_id, prompt_template_id
+  redacted_at NULL; created_at
+  UNIQUE(turn_id, ref_order); CHECK redacted -> safe fields NULL
+
+AUDIT
+-----
+
+audit_events
+  id PK; event_name varchar(80) closed allowlist
+  actor_kind CHECK IN ('public','member','administrator','worker','system')
+  actor_user_id FK users.id SET NULL; target_kind varchar(40); target_id varchar(128)
+  request_id varchar(80); trace_id varchar(80)
+  outcome CHECK IN ('succeeded','failed','denied'); safe_error_code varchar(64)
+  metadata_json text NULL containing service-validated flat <=4096-byte JSON
+  created_at timestamp NOT NULL
+  indexes: created DESC, event+created, actor+created, target+created, request_id, trace_id
+  APPEND ONLY; no update/delete/export API in v1
+
+CRITICAL CROSS-TABLE INVARIANTS
+-------------------------------
+
+1. A source belongs to one domain; blocks/images cannot cross that boundary.
+2. A domain's embedding profile/dimensions never change after domain creation.
+3. Query eligibility requires authorized running domain + ready runtime + eligible sources.
+4. Direct turns have no domain/evidence; domain turns have exactly one domain.
+5. Turn idempotency compares message, effective domain, and composer-ref fingerprint.
+6. Source/domain deletion redacts whole affected turns before source rows disappear.
+7. Redacted evidence rows remain private for audit but public projections omit them.
+8. Protected state mutations and their audit row commit or roll back together.
+9. Never persist raw composer tokens, assembled prompts, raw LightRAG hits/provider
+    payloads, runtime URLs, storage paths, credentials, or stack traces in product tables.
