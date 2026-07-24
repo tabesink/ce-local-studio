@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
+import uuid
 
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import inspect, select, text
@@ -36,6 +38,8 @@ from context_engine.services.audit import AuditContext, commit_protected_mutatio
 
 TEST_CONFIG_ENCRYPTION_KEY = "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
 RUNTIME_SETTINGS_ID = 1
+
+T = TypeVar("T")
 
 PROVIDER_DEFAULTS: tuple[tuple[str, str, bool], ...] = (
     (PROVIDER_OPENAI, "OpenAI", True),
@@ -240,14 +244,14 @@ def _provider_or_error(db: Session, provider_kind: str) -> ProviderConfig:
 
 def _commit_runtime_mutation(
     db: Session,
-    mutate,
+    mutate: Callable[[], T],
     *,
     audit_context: AuditContext | None,
     event_name: str,
     target_kind: str | None = None,
     target_id: str | None = None,
     refresh: bool = True,
-):
+) -> T:
     if audit_context is None:
         result = mutate()
         db.commit()
@@ -365,9 +369,11 @@ def create_model_profile(
     _validate_model_profile(provider_kind, profile_kind, vector_dimensions)
     _validate_model_catalog(provider_kind, profile_kind, model_name, vector_dimensions)
     _provider_or_error(db, provider_kind)
+    profile_id = str(uuid.uuid4())
 
     def mutate() -> ModelProfile:
         profile = ModelProfile(
+            id=profile_id,
             name=name,
             profile_kind=profile_kind,
             provider_kind=provider_kind,
@@ -384,6 +390,7 @@ def create_model_profile(
         audit_context=audit_context,
         event_name=AUDIT_EVENT_RUNTIME_MODEL_PROFILE_CREATED,
         target_kind="model_profile",
+        target_id=profile_id,
     )
 
 

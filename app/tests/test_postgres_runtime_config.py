@@ -215,6 +215,8 @@ def test_p2_01_runtime_config_schema_and_services_on_postgresql_16() -> None:
                     )
                     assert created_audit is not None
                     assert created_audit.request_id == "req-p201"
+                    assert created_audit.target_kind == "model_profile"
+                    assert created_audit.target_id == created.id
 
                     with pytest.raises(RuntimeConfigError) as default_delete:
                         delete_model_profile(db, DEFAULT_SYNTHESIS_PROFILE_ID, audit_context=audit)
