@@ -14,7 +14,8 @@ Status: DONE
 
 - Embedding profile validation now rejects missing and non-positive
   `vector_dimensions` before catalog membership (`vector_dimensions_required` /
-  `vector_dimensions_invalid`); synthesis still forbids dimensions.
+  approved `validation_error` for non-positive values); synthesis still forbids
+  dimensions.
 - Domain reference detection for used embeddings uses the ORM `Domain` query
   instead of inspector/raw SQL, so update/delete fences and `inUse` projection
   work against the baseline `domains` table.
@@ -90,8 +91,8 @@ No schema migration landed. Service behavior is forward-compatible with head
   workflow.
 - P9 owns Settings UI adoption of closed DTO field names and stale-revision
   recovery copy.
-- Runtime-config service error codes such as `model_profile_in_use`,
-  `vector_dimensions_invalid`, and `provider_not_ready` remain outside the
-  closed HTTP `ErrorCode` catalog row; catalog closure is a contract residual,
-  not invented here.
+- Runtime-config service error codes such as `model_profile_in_use` and
+  `provider_not_ready` remain outside the closed HTTP `ErrorCode` catalog row;
+  catalog closure is a contract residual. Non-positive dimensions use the
+  approved `validation_error` code.
 - A-13 frozen operation execution inputs remain with P4/P5/P7.

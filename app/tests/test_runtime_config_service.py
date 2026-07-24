@@ -243,7 +243,7 @@ def test_validate_embedding_rejects_non_positive_vector_dimensions() -> None:
             audit_context=AuditContext(actor_kind="administrator"),
         )
     assert zero.value.status_code == 422
-    assert zero.value.code == "vector_dimensions_invalid"
+    assert zero.value.code == "validation_error"
     assert session.commit_count == 0
 
     with pytest.raises(RuntimeConfigError) as negative:
@@ -256,7 +256,7 @@ def test_validate_embedding_rejects_non_positive_vector_dimensions() -> None:
             vector_dimensions=-1,
             audit_context=AuditContext(actor_kind="administrator"),
         )
-    assert negative.value.code == "vector_dimensions_invalid"
+    assert negative.value.code == "validation_error"
     assert session.commit_count == 0
 
 

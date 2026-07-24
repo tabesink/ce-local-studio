@@ -409,7 +409,7 @@ def _validate_model_profile(provider_kind: str, profile_kind: str, vector_dimens
         if vector_dimensions <= 0:
             raise RuntimeConfigError(
                 422,
-                "vector_dimensions_invalid",
+                "validation_error",
                 "Embedding vector dimensions must be positive.",
             )
     if profile_kind == PROFILE_SYNTHESIS and vector_dimensions is not None:
