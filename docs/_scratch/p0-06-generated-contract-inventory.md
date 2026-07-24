@@ -1,7 +1,7 @@
 # P0-06 Generated Contract Reproducibility Checkpoint
 
 Date: 2026-07-23  
-Status: partial P0-06 evidence; P0-05 bounded CI deliverable complete.
+Status: P0-06 closure evidence; P0-05 bounded CI deliverable complete.
 
 ## Observed baseline
 
@@ -40,13 +40,10 @@ A review regression was also written before consolidating route assembly. It fai
 
 ## Registered-versus-authoritative delta
 
-The semantic route comparison normalizes path-placeholder spelling before comparing the registered OpenAPI document with `http-api-catalog.md`. At this checkpoint, all 39 registered operations match the catalog, no registered operation is absent from it, and seven catalog operations are not yet registered.
+The semantic route comparison normalizes path-placeholder spelling before comparing the registered OpenAPI document with `http-api-catalog.md`. At closure, the registered operations match the catalog, no registered operation is absent from it, and four catalog operations are not yet registered.
 
 Cataloged but not registered:
 
-- `GET /auth/csrf`
-- `GET /conversations/{conversationId}/turns/{turnId}/events`
-- `POST /conversations/{conversationId}/turns/{turnId}:cancel`
 - `GET /documents`
 - `GET /documents/{documentRef}`
 - `GET /documents/{documentRef}/content`
@@ -83,12 +80,12 @@ The 39 registered operations are classified by owning vertical slice. A matching
 | domains | 9 | defer: generated domain/operation components exist; lifecycle routes currently return the wrong projection and lack required concurrency/idempotency proof | P3 |
 | source administration | 10 | defer: admin DTOs and upload/delete operation semantics require P4/P5; uncataloged member listing/raw preview routes were removed and unavailable states remain until opaque document routes land | P4/P5/P9-03 |
 | scoped evidence retrieval | 1 | defer: the lifted two-field evidence projection is not the authoritative Evidence item/location contract | P6 |
-| conversations and turn start | 6 | defer: summaries/details lack closed adoption and streaming remains the retired pilot protocol | P7/P9-02 |
+| conversations and turns | 8 | partial adoption: canonical persisted SSE, resume/cancel, generated event schema/types, and reducer fixtures are proven; authoritative summary/detail response adoption remains | P7/P9-02 |
 | composer discovery | 1 | defer: authoritative component exists, but one-use token, ownership, expiry, and domain compatibility remain unproven | P11 |
 
 
 This checkpoint proves reproducibility and catalog inclusion of the current registered HTTP surface, closed health responses, and the shared authoritative response-component vocabulary; it does not prove that the remaining handlers emit those components. Most routes still lack closed response-model adoption, while registered path parameters now use the exact authoritative names and browser capability modules still contain handwritten response and event substitutes. Current JSON request-body substitutes have been removed where generated components exist.
 
-SSE is intentionally not snapshotted from the current code because doing so would canonize the explicitly retired pilot event protocol. P7-04/P9-02 must implement the versioned producer, persisted events, fixtures, parser, and canonical reducer before a generated SSE schema/snapshot gate can pass honestly.
+Canonical SSE is now snapshotted separately from HTTP OpenAPI as a versioned Draft 2020-12 discriminated-union schema, an SSE-only generation view, generated TypeScript, and validated raw transcripts. The producer, persisted ledger, resume/cancel routes, parser, cursor reducer, redaction projection, BFF streaming, and bounded reconnect behavior remain owned behavior of P7/P9 even though their contract-generation boundary is complete.
 
-P0-06 remains `IN_PROGRESS`, but its closure cannot require implementing later vertical behavior as a prerequisite for P1: the absent identity, document/evidence, resume, and cancel operations stay with P1/P4/P6/P7, and canonical SSE stays with P7-04/P9-02. P0-06 owns deterministic generation, catalog-delta enforcement, contract components available before their consuming slice, and removal of handwritten HTTP substitutes as each registered operation becomes authoritative. Final registered-route/response convergence is a cross-phase contract gate, not permission to scaffold future handlers in P0.
+P0-06 is `DONE`. Its closure does not claim later vertical behavior: identity response adoption and the four absent governed document/evidence operations remain with P1/P4/P6/P9, while route-specific authorization, ETags, idempotency, races, and response-component adoption remain with their owning slices. Final registered-route/response convergence is a cross-phase release gate, not permission to scaffold future handlers in P0.

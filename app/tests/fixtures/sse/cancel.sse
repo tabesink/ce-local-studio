@@ -1,0 +1,16 @@
+id: evt_cancel_1
+event: turn.accepted
+data: {"schemaVersion":"1.0","eventId":"evt_cancel_1","turnId":"turn_cancel","sequence":1,"type":"turn.accepted","occurredAt":"2026-07-24T12:10:00Z","payload":{"conversationId":"conversation_1","clientRequestId":"request_cancel_1","replay":false}}
+
+id: evt_cancel_2
+event: route.selected
+data: {"schemaVersion":"1.0","eventId":"evt_cancel_2","turnId":"turn_cancel","sequence":2,"type":"route.selected","occurredAt":"2026-07-24T12:10:01Z","payload":{"route":"domain_rag","domain":{"id":"domain_ops","displayName":"Operations"}}}
+
+id: evt_cancel_3
+event: retrieval.started
+data: {"schemaVersion":"1.0","eventId":"evt_cancel_3","turnId":"turn_cancel","sequence":3,"type":"retrieval.started","occurredAt":"2026-07-24T12:10:02Z","payload":{"attempt":1,"maxAttempts":1}}
+
+id: evt_cancel_4
+event: turn.cancelled
+data: {"schemaVersion":"1.0","eventId":"evt_cancel_4","turnId":"turn_cancel","sequence":4,"type":"turn.cancelled","occurredAt":"2026-07-24T12:10:03Z","payload":{"code":"turn_cancelled","message":"The answer was cancelled.","replay":false}}
+

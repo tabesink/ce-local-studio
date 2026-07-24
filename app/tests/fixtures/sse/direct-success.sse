@@ -1,0 +1,16 @@
+id: evt_direct_1
+event: turn.accepted
+data: {"schemaVersion":"1.0","eventId":"evt_direct_1","turnId":"turn_direct","sequence":1,"type":"turn.accepted","occurredAt":"2026-07-24T12:00:00Z","payload":{"conversationId":"conversation_1","clientRequestId":"request_direct_1","replay":false}}
+
+id: evt_direct_2
+event: route.selected
+data: {"schemaVersion":"1.0","eventId":"evt_direct_2","turnId":"turn_direct","sequence":2,"type":"route.selected","occurredAt":"2026-07-24T12:00:01Z","payload":{"route":"direct_llm"}}
+
+id: evt_direct_3
+event: answer.delta
+data: {"schemaVersion":"1.0","eventId":"evt_direct_3","turnId":"turn_direct","sequence":3,"type":"answer.delta","occurredAt":"2026-07-24T12:00:02Z","payload":{"text":"A direct answer."}}
+
+id: evt_direct_4
+event: turn.completed
+data: {"schemaVersion":"1.0","eventId":"evt_direct_4","turnId":"turn_direct","sequence":4,"type":"turn.completed","occurredAt":"2026-07-24T12:00:03Z","payload":{"route":"direct_llm","status":"completed","stopReason":"direct_llm","citations":[],"acceptedRefs":[],"budget":{"planStepCount":0,"retrievalOperationCount":0,"repairAttemptCount":0},"replay":false}}
+

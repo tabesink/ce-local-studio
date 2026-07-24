@@ -3,7 +3,7 @@
 
    listConversations()      GET  /api/v1/conversations
    createConversation()     POST /api/v1/conversations
-   getConversation(id)      GET  /api/v1/conversations/{id}
+   getConversation(id)      GET /api/v1/conversations/{id}
    renameConversation(id)   PATCH /api/v1/conversations/{id}
    deleteConversation(id)   DELETE /api/v1/conversations/{id}
    discoverComposerRefs()   POST /api/v1/composer-refs:discover
@@ -12,8 +12,12 @@
    Abort/queue/steer/compact and Pi runtime frames are not wired: no CE contract. */
 
 import { ceFetch } from "@/lib/api/client";
+import { ApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/generated/openapi";
-import { postSse, type SseEvent } from "@/lib/api/sse";
+import type { components as sseComponents } from "@/lib/api/generated/sse";
+import { getSse, postSse, type SseEvent } from "@/lib/api/sse";
+import { createCanonicalTurnConsumer } from "@/features/chat-shell/stream-protocol";
+import { runResumableTurnStream, type StreamTransportState } from "@/features/chat-shell/stream-reconnect";
 
 type ComposerRefDiscoverRequest = components["schemas"]["ComposerRefDiscoverRequest"];
 type ConversationTitleRequest = components["schemas"]["ConversationTitleRequest"];
@@ -42,7 +46,7 @@ export type ChatTurn = {
   clientRequestId: string;
   domainId: string | null;
   route: "direct_llm" | "domain_rag";
-  status: "running" | "completed" | "failed" | "redacted";
+  status: "running" | "completed" | "failed" | "cancelled" | "redacted";
   stopReason: string | null;
   userMessage: string;
   assistantAnswer: string | null;
@@ -73,24 +77,28 @@ export type ConversationDetail = {
   turns: ChatTurn[];
 };
 
-export type TurnStreamEvent =
-  | { event: "stage"; payload: { turnId: string; stage: string } }
-  | { event: "token"; payload: { turnId: string; text: string } }
-  | { event: "evidence"; payload: { turnId: string; evidence: ChatTurn["evidence"] } }
-  | {
-      event: "done";
-      payload: {
-        turnId: string;
-        route: ChatTurn["route"];
-        status: ChatTurn["status"];
-        stopReason: string | null;
-        citations: ChatTurn["citations"];
-        acceptedRefs: AcceptedRef[];
-        budget: ChatTurn["budget"];
-        replay: boolean;
-      };
-    }
-  | { event: "error"; payload: { turnId: string; code: string; message: string; replay: boolean } };
+export type TurnStreamEvent = sseComponents["schemas"]["TurnStreamEvent"];
+
+type TurnStreamInput = TurnStreamRequest & {
+  conversationId: string;
+  composerRefTokens: string[];
+  onEvent: (event: TurnStreamEvent) => void;
+  onTransportState?: (state: StreamTransportState) => void;
+};
+
+type TurnReplayInput = {
+  conversationId: string;
+  turnId: string;
+  onEvent: (event: TurnStreamEvent) => void;
+  after?: number;
+  onTransportState?: (state: StreamTransportState) => void;
+};
+
+export type { StreamTransportState } from "@/features/chat-shell/stream-reconnect";
+
+function streamProtocolError(message: string): ApiError {
+  return new ApiError({ status: 0, code: "stream_protocol_error", message, requestId: null, fields: {} });
+}
 
 export async function listConversations(): Promise<ConversationSummary[]> {
   const body = await ceFetch<{ conversations: ConversationSummary[] }>("/conversations");
@@ -131,21 +139,47 @@ export async function discoverComposerRefs(input: ComposerRefDiscoverRequest): P
   return body.refs;
 }
 
-type TurnStreamInput = TurnStreamRequest & {
-  conversationId: string;
-  composerRefTokens: string[];
-  onEvent: (event: TurnStreamEvent) => void;
-};
-
 export async function streamConversationTurn(input: TurnStreamInput): Promise<void> {
-  await postSse(
-    `/conversations/${input.conversationId}/turns:stream`,
-    {
-      clientRequestId: input.clientRequestId,
-      message: input.message,
-      domainId: input.domainId || undefined,
-      composerRefTokens: input.composerRefTokens,
-    },
-    (event: SseEvent) => input.onEvent(event as TurnStreamEvent),
-  );
+  const consumer = createCanonicalTurnConsumer(0, input.onEvent, streamProtocolError);
+  await runResumableTurnStream({
+    start: () => postSse(
+      `/conversations/${input.conversationId}/turns:stream`,
+      {
+        clientRequestId: input.clientRequestId,
+        message: input.message,
+        domainId: input.domainId || undefined,
+        composerRefTokens: input.composerRefTokens,
+      },
+      consumer.receive,
+    ),
+    resume: (after) => getSse(
+      `/conversations/${input.conversationId}/turns/${consumer.snapshot().turnId}/events?after=${after}`,
+      consumer.receive,
+    ),
+    snapshot: consumer.snapshot,
+    shouldRetry: (error) => !(error instanceof ApiError) || error.code !== "stream_protocol_error" || error.message.includes("sequence gap"),
+    onState: input.onTransportState,
+  });
+  consumer.finish();
+}
+
+export async function streamConversationTurnEvents(input: TurnReplayInput): Promise<void> {
+  const consumer = createCanonicalTurnConsumer(input.after ?? 0, input.onEvent, streamProtocolError);
+  const eventsPath = (after: number) =>
+    `/conversations/${input.conversationId}/turns/${input.turnId}/events?after=${after}`;
+  await runResumableTurnStream({
+    start: () => getSse(eventsPath(input.after ?? 0), consumer.receive),
+    resume: (after) => getSse(eventsPath(after), consumer.receive),
+    snapshot: consumer.snapshot,
+    shouldRetry: (error) => !(error instanceof ApiError) || error.code !== "stream_protocol_error" || error.message.includes("sequence gap"),
+    onState: input.onTransportState,
+  });
+  consumer.finish();
+}
+
+export async function cancelConversationTurn(conversationId: string, turnId: string): Promise<ChatTurn> {
+  const body = await ceFetch<{ turn: ChatTurn }>(`/conversations/${conversationId}/turns/${turnId}:cancel`, {
+    method: "POST",
+  });
+  return body.turn;
 }

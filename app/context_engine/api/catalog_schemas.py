@@ -235,10 +235,12 @@ AUTHORITATIVE_PUBLIC_DTOS = (
 )
 
 
-def authoritative_component_schemas() -> dict[str, object]:
+def authoritative_component_schemas(
+    *, ref_template: str = "#/components/schemas/{model}"
+) -> dict[str, object]:
     _, schema = models_json_schema(
         [(model, "serialization") for model in AUTHORITATIVE_PUBLIC_DTOS],
         by_alias=True,
-        ref_template="#/components/schemas/{model}",
+        ref_template=ref_template,
     )
     return schema["$defs"]

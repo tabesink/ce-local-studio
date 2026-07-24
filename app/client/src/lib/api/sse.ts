@@ -1,59 +1,55 @@
 import { ApiError, normalizeApiError } from "@/lib/api/errors";
 import { contextEngineApiPath } from "@/lib/api/client";
+import { InvalidSseEventError, SseParser, type SseEvent } from "@/lib/api/sse-parser";
 
-export type SseEvent = {
-  event: string;
-  payload: Record<string, unknown>;
-};
+export type { SseEvent } from "@/lib/api/sse-parser";
 
-export async function postSse(
-  path: string,
-  body: unknown,
-  onEvent: (event: SseEvent) => void,
-): Promise<void> {
-  const response = await fetch(contextEngineApiPath(path), {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      Accept: "text/event-stream",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+function invalidStream(error: InvalidSseEventError): ApiError {
+  return new ApiError({ status: 0, code: error.code, message: error.message, requestId: null, fields: {} });
+}
 
-  if (!response.ok) {
-    const contentType = response.headers.get("content-type") ?? "";
-    const payload = contentType.includes("application/json") ? await response.json().catch(() => null) : null;
-    throw normalizeApiError(response.status, payload);
-  }
-
-  const text = await response.text();
-  for (const block of text.trim().split("\n\n")) {
-    if (!block) continue;
-    const parsed = parseSseBlock(block);
-    if (parsed) onEvent(parsed);
+async function consumeSse(response: Response, onEvent: (event: SseEvent) => void): Promise<void> {
+  if (!response.body) throw invalidStream(new InvalidSseEventError("Stream response was unavailable."));
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const parser = new SseParser();
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      for (const event of parser.push(decoder.decode(value, { stream: !done }))) onEvent(event);
+      if (done) break;
+    }
+    parser.finish();
+  } catch (error) {
+    if (error instanceof InvalidSseEventError) throw invalidStream(error);
+    throw error;
   }
 }
 
-function parseSseBlock(block: string): SseEvent | null {
-  let event = "";
-  let data = "";
-  for (const line of block.split("\n")) {
-    if (line.startsWith("event: ")) event = line.slice("event: ".length);
-    if (line.startsWith("data: ")) data = line.slice("data: ".length);
+async function openSse(path: string, init: RequestInit, onEvent: (event: SseEvent) => void): Promise<void> {
+  const response = await fetch(contextEngineApiPath(path), {
+    ...init,
+    credentials: "include",
+    headers: { Accept: "text/event-stream", ...init.headers },
+  });
+  if (!response.ok) {
+    const contentType = response.headers.get("content-type") ?? "";
+    const payload = contentType.includes("application/json") ? await response.json().catch(() => null) : null;
+    const error = normalizeApiError(response.status, payload) as ApiError & { retryAfterMs?: number };
+    const retryAfter = response.headers.get("retry-after");
+    if (retryAfter) {
+      const seconds = Number(retryAfter);
+      const dateDelay = Date.parse(retryAfter) - Date.now();
+      error.retryAfterMs = Number.isFinite(seconds) ? Math.max(0, seconds * 1000) : Math.max(0, dateDelay);
+    }
+    throw error;
   }
-  if (!event || !data) return null;
-  try {
-    const payload = JSON.parse(data);
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-    return { event, payload: payload as Record<string, unknown> };
-  } catch {
-    throw new ApiError({
-      status: 0,
-      code: "invalid_sse_event",
-      message: "Stream response was invalid.",
-      requestId: null,
-      fields: {},
-    });
-  }
+  await consumeSse(response, onEvent);
+}
+
+export async function getSse(path: string, onEvent: (event: SseEvent) => void): Promise<void> {
+  await openSse(path, { method: "GET" }, onEvent);
+}
+export async function postSse(path: string, body: unknown, onEvent: (event: SseEvent) => void): Promise<void> {
+  await openSse(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, onEvent);
 }

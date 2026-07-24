@@ -41,13 +41,14 @@ describe("F-009 foundation", () => {
     assert.deepEqual(actualRoutes, expectedRoutes);
   });
 
-  it("wires the API proxy through Next.js middleware", () => {
-    assert.equal(existsSync(join(src, "middleware.ts")), true, "src/middleware.ts must exist");
-    assert.equal(existsSync(join(src, "proxy.ts")), false, "src/proxy.ts must not shadow middleware.ts");
+  it("proxies the API through a narrow App Router BFF", () => {
+    assert.equal(existsSync(join(src, "app/api/v1/[...path]/route.ts")), true);
+    const route = read("src/app/api/v1/[...path]/route.ts");
+    assert.match(route, /proxyContextEngineRequest/);
+    assert.match(route, /request\.signal\.aborted/);
     const middleware = read("src/middleware.ts");
-    assert.match(middleware, /export function middleware/);
-    assert.match(middleware, /"\/api\/v1\/:path\*"/);
-    assert.match(middleware, /CONTEXT_ENGINE_API_BASE/);
+    assert.equal(middleware.includes('"/api/v1/:path*"'), false);
+    assert.match(middleware, /"\/health\/:path\*"/);
   });
 
   it("logs out disabled or revoked sessions on any 401 response", () => {
@@ -106,6 +107,7 @@ describe("F-009 foundation", () => {
     const allowed = new Set([
       join("src", "lib", "api", "client.ts"),
       join("src", "lib", "api", "sse.ts"),
+      join("src", "lib", "server", "bff-proxy.ts"),
     ]);
     const offenders = sourceFiles()
       .filter((file) => !allowed.has(relative(root, file)))

@@ -3,17 +3,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { isApiError } from "@/lib/api/errors";
 import {
+  cancelConversationTurn,
   createConversation,
   discoverComposerRefs,
   getConversation,
   listConversations,
   streamConversationTurn,
+  streamConversationTurnEvents,
   type AcceptedRef,
   type ChatTurn,
   type ComposerRef,
   type ComposerRefKind,
   type ConversationSummary,
   type TurnStreamEvent,
+  type StreamTransportState,
 } from "@/features/chat-shell/api";
 import { listMemberDomains, type MemberDomain } from "@/features/domains/api";
 import type { AssistantBlock, ChatMessage, EvidenceRow } from "@/features/chat-shell/types";
@@ -85,6 +88,8 @@ export function useChatShell() {
   const [streamText, setStreamText] = useState("");
   const [streamStage, setStreamStage] = useState<string | null>(null);
   const [streamEvidence, setStreamEvidence] = useState<EvidenceRow[]>([]);
+  const [streamingTurnId, setStreamingTurnId] = useState<string | null>(null);
+  const [replayingTurnId, setReplayingTurnId] = useState<string | null>(null);
   /* Evidence Panel: turn-scoped view state. selectedTurnId null = follow the
      live/latest turn; panel auto-opens when the active turn yields evidence. */
   const [panelOpen, setPanelOpen] = useState(false);
@@ -95,6 +100,7 @@ export function useChatShell() {
   const [loading, setLoading] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [streaming, setStreaming] = useState(false);
+  const [streamTransportState, setStreamTransportState] = useState<StreamTransportState>("connected");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -117,6 +123,8 @@ export function useChatShell() {
   const loadConversation = useCallback(async (conversationId: string, options?: { turnId?: string | null }) => {
     setLoading(true);
     setError(null);
+    setStreamingTurnId(null);
+    setReplayingTurnId(null);
     try {
       const detail = await getConversation(conversationId);
       setConversation(detail.conversation);
@@ -150,6 +158,8 @@ export function useChatShell() {
       setStreamText("");
       setStreamEvidence([]);
       setPanelOpen(false);
+      setStreamingTurnId(null);
+      setReplayingTurnId(null);
       setSelectedTurnId(null);
       setSelectedEvidenceId(null);
       return created.id;
@@ -206,17 +216,50 @@ export function useChatShell() {
     setSelectedRefs((current) => current.filter((ref) => ref.refToken !== refToken));
   }, []);
 
-  const handleStreamEvent = useCallback((event: TurnStreamEvent) => {
-    if (event.event === "stage") setStreamStage(event.payload.stage);
-    if (event.event === "token") setStreamText((current) => `${current}${event.payload.text}`);
-    if (event.event === "evidence") {
-      setStreamEvidence(event.payload.evidence);
-      /* Auto-open the Evidence Panel when the in-flight turn yields evidence. */
-      if (event.payload.evidence.length > 0) setPanelOpen(true);
+  const applyTurnStreamEvent = useCallback((event: TurnStreamEvent) => {
+    if (event.type === "turn.accepted") {
+      setStreamingTurnId(event.turnId);
+      setStreamStage("Preparing answer");
     }
-    if (event.event === "done") setPendingRefs(event.payload.acceptedRefs);
-    if (event.event === "error") setError(event.payload.message);
+    if (event.type === "route.selected") {
+      setStreamStage(event.payload.route === "domain_rag" ? "Preparing grounded answer" : "Answering");
+    }
+    if (event.type === "retrieval.started") setStreamStage("Retrieving evidence");
+    if (event.type === "retrieval.completed") {
+      setStreamStage(event.payload.result === "evidence_found" ? "Answering from evidence" : "No grounded context");
+    }
+    if (event.type === "answer.delta") setStreamText((current) => `${current}${event.payload.text}`);
+    if (event.type === "evidence.delta") {
+      setStreamEvidence((current) => {
+        const known = new Set(current.map((item) => item.id));
+        return [...current, ...event.payload.items.filter((item) => !known.has(item.id))];
+      });
+      if (event.payload.items.length > 0) setPanelOpen(true);
+    }
+    if (event.type === "turn.completed") {
+      setPendingRefs(event.payload.acceptedRefs);
+      setStreamingTurnId(null);
+      setStreamStage(null);
+    }
+    if (event.type === "turn.failed" || event.type === "turn.cancelled") {
+      setError(event.payload.message);
+      setStreamingTurnId(null);
+      setStreamStage(null);
+    }
+    if (event.type === "turn.redacted") {
+      setStreamText("");
+      setStreamEvidence([]);
+      setPendingRefs([]);
+      setStreamingTurnId(null);
+      setPanelOpen(false);
+      setSelectedEvidenceId(null);
+    }
   }, []);
+
+  const handleLiveStreamEvent = useCallback(
+    (event: TurnStreamEvent) => applyTurnStreamEvent(event),
+    [applyTurnStreamEvent],
+  );
 
   const submit = useCallback(
     async (messageOverride?: string) => {
@@ -227,6 +270,8 @@ export function useChatShell() {
       if (!conversationId) return;
 
       setStreaming(true);
+      setStreamTransportState("connected");
+      setStreamingTurnId(null);
       setError(null);
       setStreamText("");
       setStreamStage(null);
@@ -241,27 +286,84 @@ export function useChatShell() {
       setSelectedRefs([]);
       setPickerOpen(false);
       try {
-        await streamConversationTurn({
-          conversationId,
-          clientRequestId: requestId(),
-          message,
-          domainId: domainId.trim() || undefined,
-          composerRefTokens: refs.map((ref) => ref.refToken),
-          onEvent: handleStreamEvent,
-        });
+        await streamConversationTurn(
+          {
+            conversationId,
+            clientRequestId: requestId(),
+            message,
+            domainId: domainId.trim() || undefined,
+            composerRefTokens: refs.map((ref) => ref.refToken),
+            onEvent: handleLiveStreamEvent,
+            onTransportState: setStreamTransportState,
+          },
+        );
         await loadConversation(conversationId);
       } catch (err) {
         setError(messageForError(err));
+        setStreamingTurnId(null);
+        setInput((current) => current || message);
       } finally {
         setStreaming(false);
         setStreamStage(null);
         setPendingMessage(null);
       }
     },
-    [conversation, domainId, handleStreamEvent, input, loadConversation, selectedRefs, startConversation, streaming],
+    [conversation, domainId, handleLiveStreamEvent, input, loadConversation, selectedRefs, startConversation, streaming],
   );
 
   const clearError = useCallback(() => setError(null), []);
+
+  const runningCancellableTurnId = useMemo(() => {
+    if (streamingTurnId) return streamingTurnId;
+    if (selectedTurnId) {
+      const selected = turns.find((row) => row.id === selectedTurnId);
+      if (selected?.status === "running") return selected.id;
+    }
+    const running = turns.find((row) => row.status === "running");
+    return running?.id ?? null;
+  }, [selectedTurnId, streamingTurnId, turns]);
+
+  const selectedReplayableTurnId = useMemo(() => {
+    if (!selectedTurnId) return null;
+    if (runningCancellableTurnId === selectedTurnId) return null;
+    const selected = turns.find((row) => row.id === selectedTurnId);
+    if (!selected) return null;
+    return selected.status === "running" ? null : selected.id;
+  }, [runningCancellableTurnId, selectedTurnId, turns]);
+
+  const cancelTurn = useCallback(async () => {
+    const turnId = runningCancellableTurnId;
+    if (!conversation || !turnId) return;
+
+    setError(null);
+    try {
+      await cancelConversationTurn(conversation.id, turnId);
+      await loadConversation(conversation.id, { turnId });
+      setStreamingTurnId(null);
+    } catch (err) {
+      setError(messageForError(err));
+    }
+  }, [conversation, loadConversation, runningCancellableTurnId]);
+
+  const replayTurn = useCallback(async () => {
+    const turnId = selectedReplayableTurnId;
+    if (!conversation || !turnId) return;
+
+    setError(null);
+    setReplayingTurnId(turnId);
+    try {
+      await streamConversationTurnEvents({
+        conversationId: conversation.id,
+        turnId,
+        onEvent: applyTurnStreamEvent,
+      });
+      await loadConversation(conversation.id, { turnId });
+    } catch (err) {
+      setError(messageForError(err));
+    } finally {
+      setReplayingTurnId(null);
+    }
+  }, [applyTurnStreamEvent, conversation, loadConversation, selectedReplayableTurnId]);
 
   /* Evidence Panel selection: click an assistant message to bind the panel to
      that turn; a turn with evidence opens the panel. */
@@ -333,6 +435,7 @@ export function useChatShell() {
     selectedRefs,
     streaming,
     streamStage,
+    streamTransportState,
     loading,
     discovering,
     error,
@@ -341,6 +444,10 @@ export function useChatShell() {
     panelEvidence,
     selectedTurnId,
     selectedEvidenceId,
+    streamingTurnId,
+    runningCancellableTurnId,
+    selectedReplayableTurnId,
+    replayingTurnId,
     setPanelOpen,
     selectTurn,
     selectEvidence,
@@ -355,6 +462,8 @@ export function useChatShell() {
     loadConversation,
     startConversation,
     submit,
+    cancelTurn,
+    replayTurn,
     clearError,
   };
 }

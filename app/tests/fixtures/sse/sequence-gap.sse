@@ -1,0 +1,8 @@
+id: evt_gap_1
+event: turn.accepted
+data: {"schemaVersion":"1.0","eventId":"evt_gap_1","turnId":"turn_gap","sequence":1,"type":"turn.accepted","occurredAt":"2026-07-24T12:40:00Z","payload":{"conversationId":"conversation_1","clientRequestId":"request_gap_1","replay":false}}
+
+id: evt_gap_3
+event: answer.delta
+data: {"schemaVersion":"1.0","eventId":"evt_gap_3","turnId":"turn_gap","sequence":3,"type":"answer.delta","occurredAt":"2026-07-24T12:40:02Z","payload":{"text":"Must not be applied."}}
+

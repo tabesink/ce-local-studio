@@ -1,0 +1,1157 @@
+{
+  "components": {
+    "schemas": {
+      "AcceptedRefDto": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "source",
+              "evidence",
+              "template"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "order": {
+            "minimum": 0,
+            "title": "Order",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "order",
+          "label",
+          "description"
+        ],
+        "title": "AcceptedRefDto",
+        "type": "object"
+      },
+      "AnswerDeltaEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "eventId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Eventid",
+            "type": "string"
+          },
+          "occurredAt": {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+            "title": "Occurredat",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/AnswerDeltaPayload"
+          },
+          "schemaVersion": {
+            "const": "1.0",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "turnId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Turnid",
+            "type": "string"
+          },
+          "type": {
+            "const": "answer.delta",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "eventId",
+          "turnId",
+          "sequence",
+          "occurredAt",
+          "type",
+          "payload"
+        ],
+        "title": "AnswerDeltaEvent",
+        "type": "object"
+      },
+      "AnswerDeltaPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "AnswerDeltaPayload",
+        "type": "object"
+      },
+      "CitationDto": {
+        "additionalProperties": false,
+        "properties": {
+          "citationLabel": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Citationlabel",
+            "type": "string"
+          },
+          "evidenceRefId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Evidencerefid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "evidenceRefId",
+          "citationLabel"
+        ],
+        "title": "CitationDto",
+        "type": "object"
+      },
+      "EvidenceAnchorDto": {
+        "additionalProperties": false,
+        "properties": {
+          "fallback": {
+            "enum": [
+              "region",
+              "section",
+              "page"
+            ],
+            "title": "Fallback",
+            "type": "string"
+          },
+          "pageNumber": {
+            "minimum": 1,
+            "title": "Pagenumber",
+            "type": "integer"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceRegionDto"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "sectionLabel": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Sectionlabel"
+          }
+        },
+        "required": [
+          "pageNumber",
+          "fallback"
+        ],
+        "title": "EvidenceAnchorDto",
+        "type": "object"
+      },
+      "EvidenceDeltaEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "eventId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Eventid",
+            "type": "string"
+          },
+          "occurredAt": {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+            "title": "Occurredat",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/EvidenceDeltaPayload"
+          },
+          "schemaVersion": {
+            "const": "1.0",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "turnId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Turnid",
+            "type": "string"
+          },
+          "type": {
+            "const": "evidence.delta",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "eventId",
+          "turnId",
+          "sequence",
+          "occurredAt",
+          "type",
+          "payload"
+        ],
+        "title": "EvidenceDeltaEvent",
+        "type": "object"
+      },
+      "EvidenceDeltaPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceItemDto"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EvidenceDeltaPayload",
+        "type": "object"
+      },
+      "EvidenceItemDto": {
+        "additionalProperties": false,
+        "properties": {
+          "anchor": {
+            "$ref": "#/components/schemas/EvidenceAnchorDto"
+          },
+          "citationLabel": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Citationlabel",
+            "type": "string"
+          },
+          "documentLabel": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Documentlabel",
+            "type": "string"
+          },
+          "documentRef": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Documentref",
+            "type": "string"
+          },
+          "excerpt": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Excerpt",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "text",
+              "table",
+              "figure"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "sourceLabel": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Sourcelabel",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "citationLabel",
+          "sourceLabel",
+          "excerpt",
+          "kind",
+          "documentRef",
+          "documentLabel",
+          "anchor"
+        ],
+        "title": "EvidenceItemDto",
+        "type": "object"
+      },
+      "EvidenceRegionDto": {
+        "additionalProperties": false,
+        "properties": {
+          "height": {
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "title": "Height",
+            "type": "number"
+          },
+          "width": {
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "title": "Width",
+            "type": "number"
+          },
+          "x": {
+            "maximum": 1,
+            "minimum": 0,
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "title": "EvidenceRegionDto",
+        "type": "object"
+      },
+      "RetrievalCompletedEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "eventId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Eventid",
+            "type": "string"
+          },
+          "occurredAt": {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+            "title": "Occurredat",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/RetrievalCompletedPayload"
+          },
+          "schemaVersion": {
+            "const": "1.0",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "turnId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Turnid",
+            "type": "string"
+          },
+          "type": {
+            "const": "retrieval.completed",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "eventId",
+          "turnId",
+          "sequence",
+          "occurredAt",
+          "type",
+          "payload"
+        ],
+        "title": "RetrievalCompletedEvent",
+        "type": "object"
+      },
+      "RetrievalCompletedPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "evidenceCount": {
+            "minimum": 0,
+            "title": "Evidencecount",
+            "type": "integer"
+          },
+          "result": {
+            "enum": [
+              "evidence_found",
+              "no_grounded_context"
+            ],
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result",
+          "evidenceCount"
+        ],
+        "title": "RetrievalCompletedPayload",
+        "type": "object"
+      },
+      "RetrievalStartedEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "eventId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Eventid",
+            "type": "string"
+          },
+          "occurredAt": {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+            "title": "Occurredat",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/RetrievalStartedPayload"
+          },
+          "schemaVersion": {
+            "const": "1.0",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "turnId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Turnid",
+            "type": "string"
+          },
+          "type": {
+            "const": "retrieval.started",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "eventId",
+          "turnId",
+          "sequence",
+          "occurredAt",
+          "type",
+          "payload"
+        ],
+        "title": "RetrievalStartedEvent",
+        "type": "object"
+      },
+      "RetrievalStartedPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt": {
+            "minimum": 1,
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "maxAttempts": {
+            "minimum": 1,
+            "title": "Maxattempts",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "attempt",
+          "maxAttempts"
+        ],
+        "title": "RetrievalStartedPayload",
+        "type": "object"
+      },
+      "RouteSelectedEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "eventId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Eventid",
+            "type": "string"
+          },
+          "occurredAt": {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+            "title": "Occurredat",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/RouteSelectedPayload"
+          },
+          "schemaVersion": {
+            "const": "1.0",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "turnId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Turnid",
+            "type": "string"
+          },
+          "type": {
+            "const": "route.selected",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "eventId",
+          "turnId",
+          "sequence",
+          "occurredAt",
+          "type",
+          "payload"
+        ],
+        "title": "RouteSelectedEvent",
+        "type": "object"
+      },
+      "RouteSelectedPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "domain": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SelectedDomain"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "route": {
+            "enum": [
+              "direct_llm",
+              "domain_rag"
+            ],
+            "title": "Route",
+            "type": "string"
+          }
+        },
+        "required": [
+          "route"
+        ],
+        "title": "RouteSelectedPayload",
+        "type": "object"
+      },
+      "SelectedDomain": {
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Displayname",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName"
+        ],
+        "title": "SelectedDomain",
+        "type": "object"
+      },
+      "TurnAcceptedEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "eventId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Eventid",
+            "type": "string"
+          },
+          "occurredAt": {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+            "title": "Occurredat",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/TurnAcceptedPayload"
+          },
+          "schemaVersion": {
+            "const": "1.0",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "turnId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Turnid",
+            "type": "string"
+          },
+          "type": {
+            "const": "turn.accepted",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "eventId",
+          "turnId",
+          "sequence",
+          "occurredAt",
+          "type",
+          "payload"
+        ],
+        "title": "TurnAcceptedEvent",
+        "type": "object"
+      },
+      "TurnAcceptedPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "clientRequestId": {
+            "maxLength": 80,
+            "minLength": 8,
+            "title": "Clientrequestid",
+            "type": "string"
+          },
+          "conversationId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Conversationid",
+            "type": "string"
+          },
+          "replay": {
+            "title": "Replay",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "conversationId",
+          "clientRequestId",
+          "replay"
+        ],
+        "title": "TurnAcceptedPayload",
+        "type": "object"
+      },
+      "TurnBudgetDto": {
+        "additionalProperties": false,
+        "properties": {
+          "planStepCount": {
+            "minimum": 0,
+            "title": "Planstepcount",
+            "type": "integer"
+          },
+          "repairAttemptCount": {
+            "minimum": 0,
+            "title": "Repairattemptcount",
+            "type": "integer"
+          },
+          "retrievalOperationCount": {
+            "minimum": 0,
+            "title": "Retrievaloperationcount",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "planStepCount",
+          "retrievalOperationCount",
+          "repairAttemptCount"
+        ],
+        "title": "TurnBudgetDto",
+        "type": "object"
+      },
+      "TurnCancelledEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "eventId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Eventid",
+            "type": "string"
+          },
+          "occurredAt": {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+            "title": "Occurredat",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/TurnCancelledPayload"
+          },
+          "schemaVersion": {
+            "const": "1.0",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "turnId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Turnid",
+            "type": "string"
+          },
+          "type": {
+            "const": "turn.cancelled",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "eventId",
+          "turnId",
+          "sequence",
+          "occurredAt",
+          "type",
+          "payload"
+        ],
+        "title": "TurnCancelledEvent",
+        "type": "object"
+      },
+      "TurnCancelledPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "const": "turn_cancelled",
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "replay": {
+            "title": "Replay",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "replay"
+        ],
+        "title": "TurnCancelledPayload",
+        "type": "object"
+      },
+      "TurnCompletedEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "eventId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Eventid",
+            "type": "string"
+          },
+          "occurredAt": {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+            "title": "Occurredat",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/TurnCompletedPayload"
+          },
+          "schemaVersion": {
+            "const": "1.0",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "turnId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Turnid",
+            "type": "string"
+          },
+          "type": {
+            "const": "turn.completed",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "eventId",
+          "turnId",
+          "sequence",
+          "occurredAt",
+          "type",
+          "payload"
+        ],
+        "title": "TurnCompletedEvent",
+        "type": "object"
+      },
+      "TurnCompletedPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "acceptedRefs": {
+            "items": {
+              "$ref": "#/components/schemas/AcceptedRefDto"
+            },
+            "title": "Acceptedrefs",
+            "type": "array"
+          },
+          "budget": {
+            "$ref": "#/components/schemas/TurnBudgetDto"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/CitationDto"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "replay": {
+            "title": "Replay",
+            "type": "boolean"
+          },
+          "route": {
+            "enum": [
+              "direct_llm",
+              "domain_rag"
+            ],
+            "title": "Route",
+            "type": "string"
+          },
+          "status": {
+            "const": "completed",
+            "title": "Status",
+            "type": "string"
+          },
+          "stopReason": {
+            "enum": [
+              "direct_llm",
+              "grounded",
+              "no_grounded_context",
+              "evidence_only",
+              "turn_budget_exhausted"
+            ],
+            "title": "Stopreason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "route",
+          "status",
+          "stopReason",
+          "citations",
+          "acceptedRefs",
+          "budget",
+          "replay"
+        ],
+        "title": "TurnCompletedPayload",
+        "type": "object"
+      },
+      "TurnFailedEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "eventId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Eventid",
+            "type": "string"
+          },
+          "occurredAt": {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+            "title": "Occurredat",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/TurnFailedPayload"
+          },
+          "schemaVersion": {
+            "const": "1.0",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "turnId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Turnid",
+            "type": "string"
+          },
+          "type": {
+            "const": "turn.failed",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "eventId",
+          "turnId",
+          "sequence",
+          "occurredAt",
+          "type",
+          "payload"
+        ],
+        "title": "TurnFailedEvent",
+        "type": "object"
+      },
+      "TurnFailedPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "replay": {
+            "title": "Replay",
+            "type": "boolean"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "retryable",
+          "replay"
+        ],
+        "title": "TurnFailedPayload",
+        "type": "object"
+      },
+      "TurnRedactedEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "eventId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Eventid",
+            "type": "string"
+          },
+          "occurredAt": {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+            "title": "Occurredat",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/TurnRedactedPayload"
+          },
+          "schemaVersion": {
+            "const": "1.0",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "turnId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Turnid",
+            "type": "string"
+          },
+          "type": {
+            "const": "turn.redacted",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "eventId",
+          "turnId",
+          "sequence",
+          "occurredAt",
+          "type",
+          "payload"
+        ],
+        "title": "TurnRedactedEvent",
+        "type": "object"
+      },
+      "TurnRedactedPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "const": "turn_redacted",
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "redactedAt": {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+            "title": "Redactedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "redactedAt"
+        ],
+        "title": "TurnRedactedPayload",
+        "type": "object"
+      },
+      "TurnStreamEvent": {
+        "discriminator": {
+          "mapping": {
+            "answer.delta": "#/components/schemas/AnswerDeltaEvent",
+            "evidence.delta": "#/components/schemas/EvidenceDeltaEvent",
+            "retrieval.completed": "#/components/schemas/RetrievalCompletedEvent",
+            "retrieval.started": "#/components/schemas/RetrievalStartedEvent",
+            "route.selected": "#/components/schemas/RouteSelectedEvent",
+            "turn.accepted": "#/components/schemas/TurnAcceptedEvent",
+            "turn.cancelled": "#/components/schemas/TurnCancelledEvent",
+            "turn.completed": "#/components/schemas/TurnCompletedEvent",
+            "turn.failed": "#/components/schemas/TurnFailedEvent",
+            "turn.redacted": "#/components/schemas/TurnRedactedEvent"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/TurnAcceptedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/RouteSelectedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/RetrievalStartedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/RetrievalCompletedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/EvidenceDeltaEvent"
+          },
+          {
+            "$ref": "#/components/schemas/AnswerDeltaEvent"
+          },
+          {
+            "$ref": "#/components/schemas/TurnCompletedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/TurnFailedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/TurnCancelledEvent"
+          },
+          {
+            "$ref": "#/components/schemas/TurnRedactedEvent"
+          }
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Context Engine SSE Types",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {}
+}

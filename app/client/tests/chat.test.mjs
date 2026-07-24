@@ -35,10 +35,13 @@ describe("F-012 chat via LS chat-shell", () => {
     assert.match(api, /"\/composer-refs:discover"/);
     assert.match(api, /composerRefTokens/);
     assert.match(api, /postSse/);
+    assert.match(api, /runResumableTurnStream/);
+    assert.match(api, /consumer\.snapshot\(\)\.turnId/);
 
     const offenders = sourceFiles()
       .filter((file) => !file.endsWith(join("src", "lib", "api", "client.ts")))
       .filter((file) => !file.endsWith(join("src", "lib", "api", "sse.ts")))
+      .filter((file) => !file.endsWith(join("src", "lib", "server", "bff-proxy.ts")))
       .filter((file) => /\bfetch\s*\(/.test(readFileSync(file, "utf8")))
       .map((file) => relative(root, file));
     assert.deepEqual(offenders, []);
@@ -46,9 +49,49 @@ describe("F-012 chat via LS chat-shell", () => {
 
   it("translates EVT-001 SSE events into LS timeline blocks", () => {
     const hook = read("src/features/chat-shell/use-chat-shell.ts");
-    for (const event of ['"stage"', '"token"', '"evidence"', '"done"', '"error"']) {
-      assert.match(hook, new RegExp(`event\\.event === ${event}`));
+    const applicationPath = hook.match(
+      /const applyTurnStreamEvent = useCallback\(\(event: TurnStreamEvent\) => \{[\s\S]*?\n  \}, \[\]\);/,
+    )?.[0];
+    assert.ok(applicationPath, "chat streams must use one canonical event application callback");
+    for (const event of [
+      '"turn.accepted"',
+      '"route.selected"',
+      '"retrieval.started"',
+      '"retrieval.completed"',
+      '"evidence.delta"',
+      '"answer.delta"',
+      '"turn.completed"',
+      '"turn.failed"',
+      '"turn.cancelled"',
+      '"turn.redacted"',
+    ]) {
+      assert.match(applicationPath, new RegExp(`event\.type === ${event}`));
     }
+    const protocol = read("src/features/chat-shell/stream-protocol.ts");
+    assert.match(protocol, /schemaVersion\.split\("\."\)\[0\] !== "1"/);
+    assert.match(protocol, /receivedSequence/);
+    assert.match(protocol, /appliedSequence/);
+    assert.match(protocol, /sequence gap/);
+    assert.match(protocol, /frame\.id !== eventId/);
+    assert.match(protocol, /closed before a terminal event/);
+    const sse = read("src/lib/api/sse.ts");
+    assert.match(sse, /response\.body\.getReader\(\)/);
+    const parser = read("src/lib/api/sse-parser.ts");
+    assert.match(parser, /ended mid-frame/);
+    assert.match(
+      hook,
+      /const handleLiveStreamEvent = useCallback\([\s\S]*?=> applyTurnStreamEvent\(event\),/,
+      "live streaming must feed the canonical event application callback",
+    );
+    assert.match(hook, /streamConversationTurn\([\s\S]*?onEvent: handleLiveStreamEvent/);
+    assert.match(
+      hook,
+      /streamConversationTurnEvents\(\{[\s\S]*?onEvent: applyTurnStreamEvent/,
+      "durable replay must feed the same canonical event application callback",
+    );
+    assert.equal(hook.includes("handleReplayEvent"), false, "replay must not use an error-only event handler");
+    assert.match(hook, /streamTransportState/);
+    assert.match(hook, /setInput\(\(current\) => current \|\| message\)/);
     const component = read("src/features/chat-shell/ChatShell.tsx");
     assert.match(component, /acceptedRefs/);
     assert.match(component, /Evidence/);

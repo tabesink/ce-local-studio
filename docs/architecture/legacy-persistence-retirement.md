@@ -20,7 +20,7 @@ This archive does not contain an exact snapshot of the removed ORM definitions o
 
 ## Phase 1 clean-install target
 
-`docs/database-schema.txt` defines a clean Phase 1 target without this closure. Active ORM metadata, route/service source, composer constraints, and audit vocabulary now match that Wiki-free boundary; `app/tests/test_phase_one_schema_scope.py` enforces the absence. However, `app/alembic.ini` points to a missing `app/migrations` directory, and no migration history exists in the reviewed references. Therefore fresh-install schema proof remains blocked: ORM metadata is not a substitute for Alembic, and no destructive or populated upgrade is authorized. Historical audit rows remain private and append-only; removal must not cascade through them or expose them publicly.
+`docs/database-schema.txt` defines a clean Phase 1 target without this closure. Active ORM metadata, route/service source, composer constraints, and audit vocabulary now match that Wiki-free boundary; `app/tests/test_phase_one_schema_scope.py` enforces the absence. The three-revision Alembic chain now has task-owned PostgreSQL 16 fresh-install and in-rebuild baseline-to-head retained-data proof under P1-01. That chain does not establish an upgrade path from an unknown populated legacy database, and no destructive or populated legacy contraction is authorized. Historical audit rows remain private and append-only; removal must not cascade through them or expose them publicly.
 
 ## Blocking compatibility decision
 

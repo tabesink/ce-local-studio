@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import uuid
@@ -7,7 +8,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from context_engine.config import Settings
@@ -17,10 +18,26 @@ from context_engine.models import (
     Conversation,
     ConversationTurn,
     ConversationTurnComposerRef,
+    ConversationTurnEvent,
     ConversationTurnEvidenceRef,
+    Domain,
+    SourceBlock,
+    SourceDocument,
+    TURN_EVENT_ACCEPTED,
+    TURN_EVENT_ANSWER_DELTA,
+    TURN_EVENT_CANCELLED,
+    TURN_EVENT_COMPLETED,
+    TURN_EVENT_EVIDENCE_DELTA,
+    TURN_EVENT_FAILED,
+    TURN_EVENT_RETRIEVAL_COMPLETED,
+    TURN_EVENT_RETRIEVAL_STARTED,
+    TURN_EVENT_REDACTED,
+    TURN_EVENT_ROUTE_SELECTED,
+    TURN_EVENT_SCHEMA_VERSION,
     TURN_ROUTE_DIRECT_LLM,
     TURN_ROUTE_DOMAIN_RAG,
     TURN_ROUTES,
+    TURN_STATUS_CANCELLED,
     TURN_STATUS_COMPLETED,
     TURN_STATUS_FAILED,
     TURN_STATUS_REDACTED,
@@ -106,7 +123,11 @@ class TurnStartResult:
 
 @dataclass(frozen=True)
 class TurnStreamEvent:
-    event: str
+    event_id: str
+    turn_id: str
+    sequence: int
+    event_type: str
+    occurred_at: Any
     payload: dict[str, Any]
 
 
@@ -258,6 +279,25 @@ def _existing_request_turn(db: Session, *, conversation_id: str, client_request_
     )
 
 
+def get_owned_turn(
+    db: Session,
+    *,
+    owner: User,
+    conversation_id: str,
+    turn_id: str,
+) -> ConversationTurn:
+    conversation = get_owned_conversation(db, owner=owner, conversation_id=conversation_id)
+    turn = db.scalar(
+        select(ConversationTurn).where(
+            ConversationTurn.id == turn_id,
+            ConversationTurn.conversation_id == conversation.id,
+        )
+    )
+    if turn is None:
+        raise ChatTurnError(404, "not_found", "Conversation turn not found.")
+    return turn
+
+
 def _prior_user_questions(db: Session, conversation_id: str) -> tuple[str, ...]:
     rows = list(
         db.scalars(
@@ -395,6 +435,29 @@ def start_or_replay_turn(
         persist_accepted_composer_refs(db, turn_id=turn.id, refs=composer_validation.refs)
         db.commit()
         db.refresh(turn)
+    _persist_event(
+        db,
+        turn=turn,
+        event_type=TURN_EVENT_ACCEPTED,
+        payload={
+            "conversationId": conversation.id,
+            "clientRequestId": turn.client_request_id,
+            "replay": False,
+        },
+        commit=False,
+    )
+    domain = db.get(Domain, turn.domain_id) if turn.domain_id else None
+    route_payload: dict[str, Any] = {"route": turn.route}
+    if domain is not None:
+        route_payload["domain"] = {"id": domain.id, "displayName": domain.display_name}
+    _persist_event(
+        db,
+        turn=turn,
+        event_type=TURN_EVENT_ROUTE_SELECTED,
+        payload=route_payload,
+        commit=False,
+    )
+    db.commit()
     safe_log(
         logger,
         "chat.turn_claimed",
@@ -519,7 +582,7 @@ def safe_turn_summary(turn: ConversationTurn) -> dict[str, Any]:
         "safeError": safe_error,
         "acceptedRefs": [
             {
-                "id": ref.id,
+                "id": ref.public_ref,
                 "kind": ref.ref_kind,
                 "order": ref.ref_order,
                 "label": ref.safe_label,
@@ -529,7 +592,7 @@ def safe_turn_summary(turn: ConversationTurn) -> dict[str, Any]:
         ],
         "evidence": [
             {
-                "id": ref.id,
+                "id": ref.public_ref,
                 "citationLabel": ref.citation_label,
                 "sourceLabel": ref.source_label,
                 "excerpt": ref.excerpt,
@@ -537,7 +600,7 @@ def safe_turn_summary(turn: ConversationTurn) -> dict[str, Any]:
             for ref in evidence_refs
         ],
         "citations": [
-            {"evidenceRefId": ref.id, "citationLabel": ref.citation_label}
+            {"evidenceRefId": ref.public_ref, "citationLabel": ref.citation_label}
             for ref in evidence_refs
             if ref.citation_label is not None
         ],
@@ -563,47 +626,143 @@ def conversation_turn_summaries(db: Session, conversation: Conversation) -> list
 
 
 def encode_sse_event(event: TurnStreamEvent) -> str:
-    data = json.dumps(event.payload, separators=(",", ":"), sort_keys=True)
-    return f"event: {event.event}\ndata: {data}\n\n"
+    envelope = {
+        "schemaVersion": TURN_EVENT_SCHEMA_VERSION,
+        "eventId": event.event_id,
+        "turnId": event.turn_id,
+        "sequence": event.sequence,
+        "type": event.event_type,
+        "occurredAt": iso_utc(event.occurred_at),
+        "payload": event.payload,
+    }
+    data = json.dumps(envelope, separators=(",", ":"), sort_keys=True)
+    return f"id: {event.event_id}\nevent: {event.event_type}\ndata: {data}\n\n"
 
 
-def _stage(turn: ConversationTurn, stage: str) -> TurnStreamEvent:
-    return TurnStreamEvent("stage", {"turnId": turn.id, "stage": stage})
-
-
-def _token(turn: ConversationTurn, text: str) -> TurnStreamEvent:
-    return TurnStreamEvent("token", {"turnId": turn.id, "text": text})
-
-
-def _error(turn: ConversationTurn, *, code: str, message: str, replay: bool) -> TurnStreamEvent:
-    return TurnStreamEvent("error", {"turnId": turn.id, "code": code, "message": message, "replay": replay})
-
-
-def _done(turn: ConversationTurn, *, replay: bool) -> TurnStreamEvent:
-    summary = safe_turn_summary(turn)
+def _event_from_row(row: ConversationTurnEvent) -> TurnStreamEvent:
     return TurnStreamEvent(
-        "done",
-        {
-            "turnId": turn.id,
-            "route": turn.route,
-            "status": turn.status,
-            "stopReason": turn.stop_reason,
-            "citations": summary["citations"],
-            "acceptedRefs": summary["acceptedRefs"],
-            "budget": summary["budget"],
-            "replay": replay,
-        },
+        event_id=row.id,
+        turn_id=row.turn_id,
+        sequence=row.sequence,
+        event_type=row.event_type,
+        occurred_at=row.occurred_at,
+        payload=json.loads(row.payload_json),
     )
 
 
-def _public_evidence_event(turn: ConversationTurn) -> TurnStreamEvent:
-    return TurnStreamEvent("evidence", {"turnId": turn.id, "evidence": safe_turn_summary(turn)["evidence"]})
+def _persist_event(
+    db: Session,
+    *,
+    turn: ConversationTurn,
+    event_type: str,
+    payload: dict[str, Any],
+    commit: bool = True,
+) -> TurnStreamEvent:
+    sequence = (
+        db.scalar(
+            select(func.coalesce(func.max(ConversationTurnEvent.sequence), 0)).where(
+                ConversationTurnEvent.turn_id == turn.id
+            )
+        )
+        or 0
+    ) + 1
+    payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+    row = ConversationTurnEvent(
+        id=f"evt_{uuid.uuid4().hex}",
+        turn_id=turn.id,
+        sequence=sequence,
+        schema_version=TURN_EVENT_SCHEMA_VERSION,
+        event_type=event_type,
+        payload_json=payload_json,
+        payload_digest=hashlib.sha256(payload_json.encode("utf-8")).hexdigest(),
+        occurred_at=utc_now(),
+    )
+    db.add(row)
+    db.flush()
+    event = _event_from_row(row)
+    if commit:
+        db.commit()
+    return event
 
+
+def _stored_events(db: Session, turn: ConversationTurn, *, after: int = 0) -> Iterator[TurnStreamEvent]:
+    rows = db.scalars(
+        select(ConversationTurnEvent)
+        .where(
+            ConversationTurnEvent.turn_id == turn.id,
+            ConversationTurnEvent.sequence > after,
+        )
+        .order_by(ConversationTurnEvent.sequence)
+    )
+    for row in rows:
+        yield _event_from_row(row)
+
+
+def _latest_event(db: Session, turn: ConversationTurn) -> TurnStreamEvent:
+    row = db.scalar(
+        select(ConversationTurnEvent)
+        .where(ConversationTurnEvent.turn_id == turn.id)
+        .order_by(ConversationTurnEvent.sequence.desc())
+        .limit(1)
+    )
+    if row is None:
+        raise RuntimeError("Turn terminal event was not persisted.")
+    return _event_from_row(row)
+
+
+def _completed_payload(turn: ConversationTurn, *, replay: bool) -> dict[str, Any]:
+    summary = safe_turn_summary(turn)
+    return {
+        "route": turn.route,
+        "status": TURN_STATUS_COMPLETED,
+        "stopReason": turn.stop_reason,
+        "citations": summary["citations"],
+        "acceptedRefs": summary["acceptedRefs"],
+        "budget": summary["budget"],
+        "replay": replay,
+    }
+
+
+def _public_evidence_items(db: Session, turn: ConversationTurn) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for ref in _public_evidence_refs(turn):
+        source = db.get(SourceDocument, ref.source_document_id)
+        block = db.get(SourceBlock, ref.source_block_id)
+        if source is None or block is None:
+            continue
+        anchor: dict[str, Any] = {
+            "pageNumber": block.page_start or 1,
+            "fallback": "section" if block.section_path else "page",
+        }
+        if block.section_path:
+            anchor["sectionLabel"] = block.section_path[:160]
+        items.append(
+            {
+                "id": ref.public_ref,
+                "citationLabel": ref.citation_label,
+                "sourceLabel": ref.source_label,
+                "excerpt": ref.excerpt,
+                "kind": block.kind,
+                "documentRef": source.public_ref,
+                "documentLabel": source.original_filename,
+                "anchor": anchor,
+            }
+        )
+    return items
+
+
+def _public_evidence_event(db: Session, turn: ConversationTurn) -> TurnStreamEvent:
+    return _persist_event(
+        db,
+        turn=turn,
+        event_type=TURN_EVENT_EVIDENCE_DELTA,
+        payload={"items": _public_evidence_items(db, turn)},
+    )
 
 def _public_evidence_refs_for_adapter(turn: ConversationTurn) -> tuple[PublicEvidenceRef, ...]:
     return tuple(
         PublicEvidenceRef(
-            id=ref.id,
+            id=ref.public_ref,
             citation_label=ref.citation_label or "",
             source_label=ref.source_label or "",
             excerpt=ref.excerpt or "",
@@ -696,7 +855,16 @@ def _complete_turn(
         values["repair_attempt_count"] = repair_attempt_count
     if not _finalize_turn_if_running(db, turn, values):
         return turn
+    db.flush()
+    db.refresh(turn)
     _set_conversation_updated(db, turn, now)
+    _persist_event(
+        db,
+        turn=turn,
+        event_type=TURN_EVENT_COMPLETED,
+        payload=_completed_payload(turn, replay=False),
+        commit=False,
+    )
     db.commit()
     turn = _refresh_turn(db, turn)
     safe_log(
@@ -725,7 +893,16 @@ def _fail_turn(db: Session, *, turn: ConversationTurn, code: str, message: str, 
     }
     if not _finalize_turn_if_running(db, turn, values):
         return turn
+    db.flush()
+    db.refresh(turn)
     _set_conversation_updated(db, turn, now)
+    _persist_event(
+        db,
+        turn=turn,
+        event_type=TURN_EVENT_FAILED,
+        payload={"code": code, "message": message, "retryable": False, "replay": False},
+        commit=False,
+    )
     db.commit()
     turn = _refresh_turn(db, turn)
     safe_log(
@@ -772,30 +949,32 @@ def _cancel_running_turn(db: Session, turn: ConversationTurn) -> None:
     current = db.get(ConversationTurn, turn.id)
     if current is None or current.status != TURN_STATUS_RUNNING:
         return
-    _fail_turn(
+    now = utc_now()
+    if not _finalize_turn_if_running(
         db,
         turn=current,
-        code="turn_cancelled",
-        message=SAFE_TURN_CANCELLED_MESSAGE,
-        stop_reason=TURN_STOP_REASON_CANCELLED,
-    )
-
-
-def _replay_events(turn: ConversationTurn) -> Iterator[TurnStreamEvent]:
-    summary = safe_turn_summary(turn)
-    if turn.status == TURN_STATUS_FAILED:
-        safe_error = summary["safeError"] or {
-            "code": "provider_failure",
-            "message": SAFE_PROVIDER_FAILURE_MESSAGE,
-        }
-        yield _error(turn, code=safe_error["code"], message=safe_error["message"], replay=True)
+        values={
+            "status": TURN_STATUS_CANCELLED,
+            "stop_reason": TURN_STOP_REASON_CANCELLED,
+            "assistant_answer": None,
+            "safe_error_code": "turn_cancelled",
+            "safe_error_message": SAFE_TURN_CANCELLED_MESSAGE,
+            "completed_at": now,
+            "updated_at": now,
+        },
+    ):
         return
-    if summary["evidence"]:
-        yield _public_evidence_event(turn)
-    if summary["assistantAnswer"]:
-        yield _token(turn, summary["assistantAnswer"])
-    yield _done(turn, replay=True)
-
+    db.flush()
+    db.refresh(current)
+    _set_conversation_updated(db, current, now)
+    _persist_event(
+        db,
+        turn=current,
+        event_type=TURN_EVENT_CANCELLED,
+        payload={"code": "turn_cancelled", "message": SAFE_TURN_CANCELLED_MESSAGE, "replay": False},
+        commit=False,
+    )
+    db.commit()
 
 def intent_for_operation(operation: str) -> str:
     try:
@@ -831,8 +1010,9 @@ class TurnOrchestrator:
         start: TurnStartResult,
     ) -> Iterator[TurnStreamEvent]:
         if start.replay:
-            yield from _replay_events(start.turn)
+            yield from _stored_events(db, start.turn)
             return
+        yield from _stored_events(db, start.turn)
         if start.synthesis is None:
             raise ChatTurnError(409, "synthesis_profile_not_ready", "Synthesis profile is not ready.")
         if start.turn.route == TURN_ROUTE_DIRECT_LLM:
@@ -844,7 +1024,6 @@ class TurnOrchestrator:
         turn = start.turn
         completed = False
         try:
-            yield _stage(turn, "direct_answering")
             tokens: list[str] = []
             assert start.synthesis is not None
             try:
@@ -858,7 +1037,9 @@ class TurnOrchestrator:
                 for token in self._synthesis_adapter.stream_direct(**kwargs):
                     if token:
                         tokens.append(token)
-                        yield _token(turn, token)
+                        yield _persist_event(
+                            db, turn=turn, event_type=TURN_EVENT_ANSWER_DELTA, payload={"text": token}
+                        )
             except SynthesisProviderError:
                 turn = _fail_turn(
                     db,
@@ -869,7 +1050,7 @@ class TurnOrchestrator:
                 )
                 completed = True
                 _record_turn_trace(settings, turn, request_id=start.request_id)
-                yield _error(turn, code="provider_failure", message=SAFE_PROVIDER_FAILURE_MESSAGE, replay=False)
+                yield _latest_event(db, turn)
                 return
             answer = "".join(tokens).strip()
             if not answer:
@@ -882,7 +1063,7 @@ class TurnOrchestrator:
                 )
                 completed = True
                 _record_turn_trace(settings, turn, request_id=start.request_id)
-                yield _error(turn, code="provider_failure", message=SAFE_PROVIDER_FAILURE_MESSAGE, replay=False)
+                yield _latest_event(db, turn)
                 return
             turn = _complete_turn(
                 db,
@@ -895,10 +1076,9 @@ class TurnOrchestrator:
             )
             completed = True
             _record_turn_trace(settings, turn, request_id=start.request_id)
-            yield _done(turn, replay=False)
+            yield _latest_event(db, turn)
         finally:
-            if not completed:
-                _cancel_running_turn(db, turn)
+            pass
 
     def _stream_domain_rag(
         self,
@@ -910,10 +1090,14 @@ class TurnOrchestrator:
         turn = start.turn
         completed = False
         try:
-            yield _stage(turn, "planning")
             operation = operation_for_message(turn.user_message)
             intent = intent_for_operation(operation)
-            yield _stage(turn, "retrieving")
+            yield _persist_event(
+                db,
+                turn=turn,
+                event_type=TURN_EVENT_RETRIEVAL_STARTED,
+                payload={"attempt": 1, "maxAttempts": 1},
+            )
             try:
                 evidence = self._retrieval_port.retrieve(
                     db,
@@ -932,9 +1116,15 @@ class TurnOrchestrator:
                 )
                 completed = True
                 _record_turn_trace(settings, turn, request_id=start.request_id)
-                yield _error(turn, code=exc.code, message=exc.message, replay=False)
+                yield _latest_event(db, turn)
                 return
             if not evidence:
+                yield _persist_event(
+                    db,
+                    turn=turn,
+                    event_type=TURN_EVENT_RETRIEVAL_COMPLETED,
+                    payload={"result": "no_grounded_context", "evidenceCount": 0},
+                )
                 turn = _complete_turn(
                     db,
                     turn=turn,
@@ -946,13 +1136,16 @@ class TurnOrchestrator:
                 )
                 completed = True
                 _record_turn_trace(settings, turn, request_id=start.request_id)
-                yield _public_evidence_event(turn)
-                yield _done(turn, replay=False)
+                yield _latest_event(db, turn)
                 return
             turn = _persist_evidence_refs(db, turn=turn, evidence=evidence)
-            yield _stage(turn, "verifying")
-            yield _public_evidence_event(turn)
-            yield _stage(turn, "answering")
+            yield _public_evidence_event(db, turn)
+            yield _persist_event(
+                db,
+                turn=turn,
+                event_type=TURN_EVENT_RETRIEVAL_COMPLETED,
+                payload={"result": "evidence_found", "evidenceCount": len(_public_evidence_refs(turn))},
+            )
             public_evidence = _public_evidence_refs_for_adapter(turn)
             tokens: list[str] = []
             assert start.synthesis is not None
@@ -968,7 +1161,9 @@ class TurnOrchestrator:
                 for token in self._synthesis_adapter.stream_grounded(**kwargs):
                     if token:
                         tokens.append(token)
-                        yield _token(turn, token)
+                        yield _persist_event(
+                            db, turn=turn, event_type=TURN_EVENT_ANSWER_DELTA, payload={"text": token}
+                        )
             except SynthesisProviderError:
                 turn = _complete_turn(
                     db,
@@ -987,7 +1182,7 @@ class TurnOrchestrator:
                     mapped_evidence_count=len(evidence),
                     citation_count=len(_public_evidence_refs(turn)),
                 )
-                yield _done(turn, replay=False)
+                yield _latest_event(db, turn)
                 return
             answer = "".join(tokens).strip()
             if not answer:
@@ -1008,7 +1203,7 @@ class TurnOrchestrator:
                     mapped_evidence_count=len(evidence),
                     citation_count=len(_public_evidence_refs(turn)),
                 )
-                yield _done(turn, replay=False)
+                yield _latest_event(db, turn)
                 return
             turn = _complete_turn(
                 db,
@@ -1027,10 +1222,9 @@ class TurnOrchestrator:
                 mapped_evidence_count=len(evidence),
                 citation_count=len(_public_evidence_refs(turn)),
             )
-            yield _done(turn, replay=False)
+            yield _latest_event(db, turn)
         finally:
-            if not completed:
-                _cancel_running_turn(db, turn)
+            pass
 
 
 def stream_turn_events(
@@ -1063,6 +1257,55 @@ def stream_turn_events(
     yield from orchestrator.stream_turn(db, settings=settings, start=start)
 
 
+def stream_turn_events_by_turn(
+    db: Session,
+    *,
+    owner: User,
+    conversation_id: str,
+    turn_id: str,
+    after: int = 0,
+) -> Iterator[TurnStreamEvent]:
+    if after < 0:
+        raise _validation_error()
+    turn = get_owned_turn(db, owner=owner, conversation_id=conversation_id, turn_id=turn_id)
+    yield from _stored_events(db, turn, after=after)
+
+
+
+def cancel_turn(
+    db: Session,
+    *,
+    owner: User,
+    conversation_id: str,
+    turn_id: str,
+) -> ConversationTurn:
+    turn = get_owned_turn(db, owner=owner, conversation_id=conversation_id, turn_id=turn_id)
+    _cancel_running_turn(db, turn=turn)
+    return _refresh_turn(db, turn)
+
+
+def _sanitize_turn_events_for_redaction(db: Session, turn: ConversationTurn) -> None:
+    rows = db.scalars(
+        select(ConversationTurnEvent)
+        .where(ConversationTurnEvent.turn_id == turn.id)
+        .order_by(ConversationTurnEvent.sequence)
+    )
+    for row in rows:
+        payload = json.loads(row.payload_json)
+        if row.event_type == TURN_EVENT_ANSWER_DELTA:
+            payload = {"text": ""}
+        elif row.event_type == TURN_EVENT_EVIDENCE_DELTA:
+            payload = {"items": []}
+        elif row.event_type == TURN_EVENT_COMPLETED:
+            payload["citations"] = []
+            payload["acceptedRefs"] = []
+        else:
+            continue
+        payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+        row.payload_json = payload_json
+        row.payload_digest = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
+
+
 def _redact_turns(db: Session, turns: list[ConversationTurn], audit_context: AuditContext | None = None) -> int:
     now = utc_now()
     changed = 0
@@ -1093,6 +1336,18 @@ def _redact_turns(db: Session, turns: list[ConversationTurn], audit_context: Aud
             target_id=turn.id,
             trace_id=turn.trace_id,
             metadata={"turnStatus": TURN_STATUS_REDACTED, "stopReason": TURN_STOP_REASON_REDACTED},
+        )
+        _sanitize_turn_events_for_redaction(db, turn)
+        _persist_event(
+            db,
+            turn=turn,
+            event_type=TURN_EVENT_REDACTED,
+            payload={
+                "code": "turn_redacted",
+                "message": "This turn was redacted.",
+                "redactedAt": iso_utc(now),
+            },
+            commit=False,
         )
         changed += 1
     if changed:

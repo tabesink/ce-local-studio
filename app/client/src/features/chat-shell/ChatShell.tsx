@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowUp, AtSign, ChevronDown, History, PanelRightClose, PanelRightOpen, Plus, X } from "lucide-react";
+import { ArrowUp, AtSign, ChevronDown, History, PanelRightClose, PanelRightOpen, Plus, RotateCcw, Square, X } from "lucide-react";
 import { cx, SegmentedControl, StatusPill } from "@/_shared/ui";
 import { EvidencePanel } from "@/features/chat-shell/EvidencePanel";
 import { useChatShell } from "@/features/chat-shell/use-chat-shell";
@@ -63,9 +63,15 @@ function ChatShellInner() {
           <span className="truncate text-[length:var(--fs-base)] font-medium text-[var(--fg)]">
             {chat.conversation?.title ?? "New conversation"}
           </span>
-          {chat.streaming && chat.streamStage ? (
-            <StatusPill tone="info">{chat.streamStage}</StatusPill>
-          ) : null}
+          <span role="status" aria-live="polite">
+            {chat.streamTransportState === "reconnecting" ? (
+              <StatusPill tone="info">Reconnecting</StatusPill>
+            ) : chat.streamTransportState === "offline" ? (
+              <StatusPill tone="danger">Offline</StatusPill>
+            ) : chat.streaming && chat.streamStage ? (
+              <StatusPill tone="info">{chat.streamStage}</StatusPill>
+            ) : null}
+          </span>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <ConversationPicker chat={chat} />
@@ -78,6 +84,29 @@ function ChatShellInner() {
           >
             <Plus className="h-4 w-4" />
           </button>
+          {chat.runningCancellableTurnId ? (
+            <button
+              type="button"
+              onClick={() => void chat.cancelTurn()}
+              title="Cancel running answer"
+              aria-label="Cancel running answer"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--dim)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--fg)]"
+            >
+              <Square className="h-4 w-4" />
+            </button>
+          ) : null}
+          {chat.selectedReplayableTurnId ? (
+            <button
+              type="button"
+              onClick={() => void chat.replayTurn()}
+              disabled={chat.streaming || chat.replayingTurnId !== null}
+              title={chat.replayingTurnId === chat.selectedReplayableTurnId ? "Replaying turn" : "Replay selected turn"}
+              aria-label="Replay selected turn"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--dim)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--fg)] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <RotateCcw className={cx("h-4 w-4", chat.replayingTurnId === chat.selectedReplayableTurnId ? "animate-spin" : "")} />
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => chat.setPanelOpen(!chat.panelOpen)}
@@ -212,8 +241,14 @@ function ChatShellInner() {
           </span>
           <span className="flex shrink-0 items-center gap-3">
             <span>{chat.selectedRefs.length ? `${chat.selectedRefs.length} refs` : ""}</span>
-            <span data-testid="chat-streaming" data-streaming={chat.streaming ? "true" : "false"}>
-              {chat.streaming ? "streaming" : ""}
+            <span
+              data-testid="chat-streaming"
+              data-streaming={chat.streaming ? "true" : "false"}
+              data-transport-state={chat.streamTransportState}
+            >
+              {chat.streamTransportState === "connected"
+                ? chat.streaming ? "streaming" : ""
+                : chat.streamTransportState}
             </span>
           </span>
         </div>
@@ -395,6 +430,9 @@ function TimelineMessage({
       ) : null}
       {message.status === "redacted" ? (
         <div className="text-[length:var(--fs-sm)] italic text-[var(--dim)]">This turn was redacted.</div>
+      ) : null}
+      {message.status === "cancelled" ? (
+        <div className="text-[length:var(--fs-sm)] italic text-[var(--dim)]">This turn was cancelled.</div>
       ) : null}
     </>
   );

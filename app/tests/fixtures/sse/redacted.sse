@@ -1,0 +1,20 @@
+id: evt_redacted_1
+event: turn.accepted
+data: {"schemaVersion":"1.0","eventId":"evt_redacted_1","turnId":"turn_redacted","sequence":1,"type":"turn.accepted","occurredAt":"2026-07-24T12:19:56Z","payload":{"conversationId":"conversation_1","clientRequestId":"request_redacted_1","replay":false}}
+
+id: evt_redacted_2
+event: route.selected
+data: {"schemaVersion":"1.0","eventId":"evt_redacted_2","turnId":"turn_redacted","sequence":2,"type":"route.selected","occurredAt":"2026-07-24T12:19:57Z","payload":{"route":"direct_llm"}}
+
+id: evt_redacted_3
+event: answer.delta
+data: {"schemaVersion":"1.0","eventId":"evt_redacted_3","turnId":"turn_redacted","sequence":3,"type":"answer.delta","occurredAt":"2026-07-24T12:19:58Z","payload":{"text":""}}
+
+id: evt_redacted_4
+event: turn.completed
+data: {"schemaVersion":"1.0","eventId":"evt_redacted_4","turnId":"turn_redacted","sequence":4,"type":"turn.completed","occurredAt":"2026-07-24T12:19:59Z","payload":{"route":"direct_llm","status":"completed","stopReason":"direct_llm","citations":[],"acceptedRefs":[],"budget":{"planStepCount":0,"retrievalOperationCount":0,"repairAttemptCount":0},"replay":false}}
+
+id: evt_redacted_5
+event: turn.redacted
+data: {"schemaVersion":"1.0","eventId":"evt_redacted_5","turnId":"turn_redacted","sequence":5,"type":"turn.redacted","occurredAt":"2026-07-24T12:20:00Z","payload":{"code":"turn_redacted","message":"This turn was redacted.","redactedAt":"2026-07-24T12:20:00Z"}}
+

@@ -1,0 +1,1271 @@
+{
+  "$defs": {
+    "AcceptedRefDto": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Description"
+        },
+        "id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "source",
+            "evidence",
+            "template"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "order": {
+          "minimum": 0,
+          "title": "Order",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "order",
+        "label",
+        "description"
+      ],
+      "title": "AcceptedRefDto",
+      "type": "object"
+    },
+    "AdminDomainDto": {
+      "additionalProperties": false,
+      "properties": {
+        "activeOperationId": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Activeoperationid"
+        },
+        "allowedActions": {
+          "items": {
+            "$ref": "#/$defs/AllowedAction"
+          },
+          "title": "Allowedactions",
+          "type": "array"
+        },
+        "controlGeneration": {
+          "minimum": 0,
+          "title": "Controlgeneration",
+          "type": "integer"
+        },
+        "createdAt": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Createdat",
+          "type": "string"
+        },
+        "displayName": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Displayname",
+          "type": "string"
+        },
+        "embeddingProfile": {
+          "$ref": "#/$defs/EmbeddingProfileSummaryDto"
+        },
+        "id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "queryEligible": {
+          "title": "Queryeligible",
+          "type": "boolean"
+        },
+        "runtimeReady": {
+          "title": "Runtimeready",
+          "type": "boolean"
+        },
+        "state": {
+          "enum": [
+            "stopped",
+            "running",
+            "deleting"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "updatedAt": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Updatedat",
+          "type": "string"
+        },
+        "version": {
+          "exclusiveMinimum": 0,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "displayName",
+        "state",
+        "queryEligible",
+        "embeddingProfile",
+        "runtimeReady",
+        "controlGeneration",
+        "activeOperationId",
+        "createdAt",
+        "updatedAt",
+        "version",
+        "allowedActions"
+      ],
+      "title": "AdminDomainDto",
+      "type": "object"
+    },
+    "AdminSourceDto": {
+      "additionalProperties": false,
+      "properties": {
+        "activeOperationId": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Activeoperationid"
+        },
+        "allowedActions": {
+          "items": {
+            "$ref": "#/$defs/AllowedAction"
+          },
+          "title": "Allowedactions",
+          "type": "array"
+        },
+        "contentType": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Contenttype",
+          "type": "string"
+        },
+        "createdAt": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Createdat",
+          "type": "string"
+        },
+        "displayName": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Displayname",
+          "type": "string"
+        },
+        "documentRef": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Documentref",
+          "type": "string"
+        },
+        "domainId": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Domainid",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "indexState": {
+          "enum": [
+            "not_requested",
+            "queued",
+            "processing",
+            "ready",
+            "failed",
+            "cancelled",
+            "deleting"
+          ],
+          "title": "Indexstate",
+          "type": "string"
+        },
+        "parserKind": {
+          "enum": [
+            "docling",
+            "reducto"
+          ],
+          "title": "Parserkind",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "minimum": 0,
+          "title": "Sizebytes",
+          "type": "integer"
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "prepared",
+            "deleting"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "updatedAt": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Updatedat",
+          "type": "string"
+        },
+        "version": {
+          "exclusiveMinimum": 0,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "documentRef",
+        "domainId",
+        "displayName",
+        "contentType",
+        "sizeBytes",
+        "state",
+        "parserKind",
+        "indexState",
+        "activeOperationId",
+        "createdAt",
+        "updatedAt",
+        "version",
+        "allowedActions"
+      ],
+      "title": "AdminSourceDto",
+      "type": "object"
+    },
+    "AllowedAction": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Action",
+          "type": "string"
+        },
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "reasonCode": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reasoncode"
+        }
+      },
+      "required": [
+        "action",
+        "enabled"
+      ],
+      "title": "AllowedAction",
+      "type": "object"
+    },
+    "ComposerRefDto": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Description"
+        },
+        "expiresAt": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Expiresat",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "source",
+            "evidence",
+            "template"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "token": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Token",
+          "type": "string"
+        }
+      },
+      "required": [
+        "token",
+        "kind",
+        "label",
+        "description",
+        "expiresAt"
+      ],
+      "title": "ComposerRefDto",
+      "type": "object"
+    },
+    "ConversationDetailDto": {
+      "additionalProperties": false,
+      "properties": {
+        "createdAt": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Createdat",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Title"
+        },
+        "turns": {
+          "items": {
+            "$ref": "#/$defs/TurnDto"
+          },
+          "title": "Turns",
+          "type": "array"
+        },
+        "updatedAt": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Updatedat",
+          "type": "string"
+        },
+        "version": {
+          "exclusiveMinimum": 0,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "createdAt",
+        "updatedAt",
+        "version",
+        "turns"
+      ],
+      "title": "ConversationDetailDto",
+      "type": "object"
+    },
+    "ConversationSummaryDto": {
+      "additionalProperties": false,
+      "properties": {
+        "createdAt": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Createdat",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Title"
+        },
+        "updatedAt": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Updatedat",
+          "type": "string"
+        },
+        "version": {
+          "exclusiveMinimum": 0,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "createdAt",
+        "updatedAt",
+        "version"
+      ],
+      "title": "ConversationSummaryDto",
+      "type": "object"
+    },
+    "CurrentUserDto": {
+      "additionalProperties": false,
+      "properties": {
+        "disabled": {
+          "const": false,
+          "title": "Disabled",
+          "type": "boolean"
+        },
+        "displayName": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Displayname",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "member",
+            "administrator"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "displayName",
+        "role",
+        "disabled"
+      ],
+      "title": "CurrentUserDto",
+      "type": "object"
+    },
+    "DocumentSummaryDto": {
+      "additionalProperties": false,
+      "properties": {
+        "contentType": {
+          "const": "application/pdf",
+          "title": "Contenttype",
+          "type": "string"
+        },
+        "domain": {
+          "$ref": "#/$defs/DomainSummaryDto"
+        },
+        "label": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "pageCount": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pagecount"
+        },
+        "previewKind": {
+          "enum": [
+            "pdf",
+            "unavailable"
+          ],
+          "title": "Previewkind",
+          "type": "string"
+        },
+        "ref": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Ref",
+          "type": "string"
+        },
+        "updatedAt": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Updatedat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "label",
+        "domain",
+        "contentType",
+        "previewKind",
+        "pageCount",
+        "updatedAt"
+      ],
+      "title": "DocumentSummaryDto",
+      "type": "object"
+    },
+    "DomainSummaryDto": {
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Displayname",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "queryEligible": {
+          "title": "Queryeligible",
+          "type": "boolean"
+        },
+        "state": {
+          "enum": [
+            "stopped",
+            "running",
+            "deleting"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "displayName",
+        "state",
+        "queryEligible"
+      ],
+      "title": "DomainSummaryDto",
+      "type": "object"
+    },
+    "EmbeddingProfileSummaryDto": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "vectorDimensions": {
+          "exclusiveMinimum": 0,
+          "title": "Vectordimensions",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "vectorDimensions"
+      ],
+      "title": "EmbeddingProfileSummaryDto",
+      "type": "object"
+    },
+    "EvidenceAnchorDto": {
+      "additionalProperties": false,
+      "properties": {
+        "fallback": {
+          "enum": [
+            "region",
+            "section",
+            "page"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "pageNumber": {
+          "minimum": 1,
+          "title": "Pagenumber",
+          "type": "integer"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EvidenceRegionDto"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "sectionLabel": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sectionlabel"
+        }
+      },
+      "required": [
+        "pageNumber",
+        "fallback"
+      ],
+      "title": "EvidenceAnchorDto",
+      "type": "object"
+    },
+    "EvidenceItemDto": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor": {
+          "$ref": "#/$defs/EvidenceAnchorDto"
+        },
+        "citationLabel": {
+          "maxLength": 32,
+          "minLength": 1,
+          "title": "Citationlabel",
+          "type": "string"
+        },
+        "documentLabel": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Documentlabel",
+          "type": "string"
+        },
+        "documentRef": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Documentref",
+          "type": "string"
+        },
+        "excerpt": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Excerpt",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "text",
+            "table",
+            "figure"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "sourceLabel": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Sourcelabel",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "citationLabel",
+        "sourceLabel",
+        "excerpt",
+        "kind",
+        "documentRef",
+        "documentLabel",
+        "anchor"
+      ],
+      "title": "EvidenceItemDto",
+      "type": "object"
+    },
+    "EvidenceRegionDto": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Height",
+          "type": "number"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Width",
+          "type": "number"
+        },
+        "x": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "title": "EvidenceRegionDto",
+      "type": "object"
+    },
+    "ModelProfileDto": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "inUse": {
+          "title": "Inuse",
+          "type": "boolean"
+        },
+        "modelName": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Modelname",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "profileKind": {
+          "enum": [
+            "synthesis",
+            "embedding"
+          ],
+          "title": "Profilekind",
+          "type": "string"
+        },
+        "providerKind": {
+          "enum": [
+            "openai",
+            "bedrock",
+            "ollama"
+          ],
+          "title": "Providerkind",
+          "type": "string"
+        },
+        "vectorDimensions": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Vectordimensions"
+        },
+        "version": {
+          "exclusiveMinimum": 0,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "profileKind",
+        "providerKind",
+        "modelName",
+        "vectorDimensions",
+        "inUse",
+        "version"
+      ],
+      "title": "ModelProfileDto",
+      "type": "object"
+    },
+    "OperationDto": {
+      "additionalProperties": false,
+      "properties": {
+        "allowedActions": {
+          "items": {
+            "$ref": "#/$defs/AllowedAction"
+          },
+          "title": "Allowedactions",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OperationErrorDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finishedAt": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Finishedat"
+        },
+        "generation": {
+          "minimum": 0,
+          "title": "Generation",
+          "type": "integer"
+        },
+        "id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Message"
+        },
+        "operationType": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Operationtype",
+          "type": "string"
+        },
+        "requestedAt": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Requestedat",
+          "type": "string"
+        },
+        "startedAt": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Startedat"
+        },
+        "status": {
+          "enum": [
+            "queued",
+            "running",
+            "succeeded",
+            "failed",
+            "cancelled"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "targetKind": {
+          "enum": [
+            "domain",
+            "source",
+            "index"
+          ],
+          "title": "Targetkind",
+          "type": "string"
+        },
+        "targetRef": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Targetref",
+          "type": "string"
+        },
+        "version": {
+          "exclusiveMinimum": 0,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "targetKind",
+        "targetRef",
+        "operationType",
+        "status",
+        "generation",
+        "message",
+        "error",
+        "requestedAt",
+        "startedAt",
+        "finishedAt",
+        "version",
+        "allowedActions"
+      ],
+      "title": "OperationDto",
+      "type": "object"
+    },
+    "OperationErrorDto": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "OperationErrorDto",
+      "type": "object"
+    },
+    "ProviderSummaryDto": {
+      "additionalProperties": false,
+      "properties": {
+        "configured": {
+          "title": "Configured",
+          "type": "boolean"
+        },
+        "credentialUpdatedAt": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Credentialupdatedat"
+        },
+        "displayName": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Displayname",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "openai",
+            "bedrock",
+            "ollama",
+            "reducto"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "requiresCredentials": {
+          "title": "Requirescredentials",
+          "type": "boolean"
+        },
+        "version": {
+          "exclusiveMinimum": 0,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "displayName",
+        "requiresCredentials",
+        "configured",
+        "credentialUpdatedAt",
+        "version"
+      ],
+      "title": "ProviderSummaryDto",
+      "type": "object"
+    },
+    "RuntimeSettingsDto": {
+      "additionalProperties": false,
+      "properties": {
+        "activeParserKind": {
+          "enum": [
+            "docling",
+            "reducto"
+          ],
+          "title": "Activeparserkind",
+          "type": "string"
+        },
+        "activeSynthesisProfileId": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 8,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Activesynthesisprofileid"
+        },
+        "version": {
+          "exclusiveMinimum": 0,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "activeSynthesisProfileId",
+        "activeParserKind",
+        "version"
+      ],
+      "title": "RuntimeSettingsDto",
+      "type": "object"
+    },
+    "TurnDto": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptedRefs": {
+          "items": {
+            "$ref": "#/$defs/AcceptedRefDto"
+          },
+          "title": "Acceptedrefs",
+          "type": "array"
+        },
+        "assistantAnswer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Assistantanswer"
+        },
+        "clientRequestId": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Clientrequestid",
+          "type": "string"
+        },
+        "completedAt": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Completedat"
+        },
+        "createdAt": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Createdat",
+          "type": "string"
+        },
+        "domain": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DomainSummaryDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnErrorDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceItemDto"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "route": {
+          "enum": [
+            "direct_llm",
+            "domain_rag"
+          ],
+          "title": "Route",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "running",
+            "completed",
+            "failed",
+            "cancelled",
+            "redacted"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "userMessage": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Usermessage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "clientRequestId",
+        "route",
+        "status",
+        "domain",
+        "userMessage",
+        "assistantAnswer",
+        "evidence",
+        "acceptedRefs",
+        "error",
+        "createdAt",
+        "completedAt"
+      ],
+      "title": "TurnDto",
+      "type": "object"
+    },
+    "TurnErrorDto": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "title": "TurnErrorDto",
+      "type": "object"
+    }
+  },
+  "$id": "urn:context-engine:public-dtos:1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Context Engine Public DTO Catalog"
+}
