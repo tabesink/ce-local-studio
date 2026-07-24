@@ -10,6 +10,7 @@ from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from context_engine.api.conventions import format_utc_timestamp
 from context_engine.config import Settings
 from context_engine.db import utc_now
 from context_engine.models import (
@@ -190,11 +191,62 @@ def is_provider_configured(provider: ProviderConfig) -> bool:
     return not provider.requires_credentials or bool(provider.credential_ciphertext)
 
 
+def strong_etag(version: int) -> str:
+    if version < 1:
+        raise ValueError("version must be a positive integer")
+    return f'"{version}"'
+
+
+def parse_if_match_version(if_match: str | None) -> int:
+    """Parse a required strong ETag from If-Match into a positive version."""
+    if if_match is None or not if_match.strip():
+        raise RuntimeConfigError(428, "validation_error", "If-Match is required.")
+    raw = if_match.strip()
+    if raw.startswith("W/") or raw.startswith("w/"):
+        raise RuntimeConfigError(428, "validation_error", "If-Match must be a strong ETag.")
+    # Accept a single strong tag, optionally wrapped in quotes.
+    if "," in raw:
+        raise RuntimeConfigError(428, "validation_error", "If-Match must name exactly one version.")
+    value = raw[1:-1] if raw.startswith('"') and raw.endswith('"') and len(raw) >= 2 else raw
+    try:
+        version = int(value)
+    except ValueError as exc:
+        raise RuntimeConfigError(428, "validation_error", "If-Match is invalid.") from exc
+    if version < 1:
+        raise RuntimeConfigError(428, "validation_error", "If-Match is invalid.")
+    return version
+
+
+def _require_expected_version(current: int, expected_version: int) -> None:
+    if current != expected_version:
+        raise RuntimeConfigError(409, "stale_revision", "Resource version is stale.")
+
+
+def model_profile_in_use(db: Session, profile: ModelProfile) -> bool:
+    if profile.id in DEFAULT_MODEL_PROFILE_IDS:
+        return True
+    settings = ensure_runtime_settings(db)
+    if settings.active_synthesis_profile_id == profile.id:
+        return True
+    return _domain_references_model_profile(db, profile.id)
+
+
 def safe_provider(provider: ProviderConfig) -> dict[str, Any]:
-    return {"providerKind": provider.provider_kind, "isConfigured": is_provider_configured(provider)}
+    return {
+        "kind": provider.provider_kind,
+        "displayName": provider.display_name,
+        "requiresCredentials": provider.requires_credentials,
+        "configured": is_provider_configured(provider),
+        "credentialUpdatedAt": (
+            format_utc_timestamp(provider.credential_updated_at)
+            if provider.credential_updated_at is not None
+            else None
+        ),
+        "version": provider.version,
+    }
 
 
-def safe_model_profile(profile: ModelProfile) -> dict[str, Any]:
+def safe_model_profile(db: Session, profile: ModelProfile) -> dict[str, Any]:
     return {
         "id": profile.id,
         "name": profile.name,
@@ -202,7 +254,8 @@ def safe_model_profile(profile: ModelProfile) -> dict[str, Any]:
         "providerKind": profile.provider_kind,
         "modelName": profile.model_name,
         "vectorDimensions": profile.vector_dimensions,
-        "isDefault": profile.id in DEFAULT_MODEL_PROFILE_IDS,
+        "inUse": model_profile_in_use(db, profile),
+        "version": profile.version,
     }
 
 
@@ -210,6 +263,7 @@ def safe_runtime_settings(settings: RuntimeSettings) -> dict[str, Any]:
     return {
         "activeSynthesisProfileId": settings.active_synthesis_profile_id,
         "activeParserKind": settings.active_parser_kind,
+        "version": settings.version,
     }
 
 
@@ -228,18 +282,45 @@ def runtime_settings_snapshot(db: Session) -> dict[str, Any]:
     settings = ensure_runtime_settings(db)
     return {
         "providers": [safe_provider(provider) for provider in providers],
-        "modelProfiles": [safe_model_profile(profile) for profile in profiles],
+        "modelProfiles": [safe_model_profile(db, profile) for profile in profiles],
         "runtimeSettings": safe_runtime_settings(settings),
     }
 
 
-def _provider_or_error(db: Session, provider_kind: str) -> ProviderConfig:
+def _provider_or_error(db: Session, provider_kind: str, *, for_update: bool = False) -> ProviderConfig:
     if provider_kind not in PROVIDER_KINDS:
         raise RuntimeConfigError(404, "provider_not_found", "Provider not found.")
-    provider = db.get(ProviderConfig, provider_kind)
+    statement = select(ProviderConfig).where(ProviderConfig.provider_kind == provider_kind)
+    if for_update:
+        statement = statement.with_for_update()
+    provider = db.scalars(statement).first()
     if provider is None:
         raise RuntimeConfigError(404, "provider_not_found", "Provider not found.")
     return provider
+
+
+def _model_profile_or_error(db: Session, profile_id: str, *, for_update: bool = False) -> ModelProfile:
+    statement = select(ModelProfile).where(ModelProfile.id == profile_id)
+    if for_update:
+        statement = statement.with_for_update()
+    profile = db.scalars(statement).first()
+    if profile is None:
+        raise RuntimeConfigError(404, "model_profile_not_found", "Model profile not found.")
+    return profile
+
+
+def _runtime_settings_for_update(db: Session) -> RuntimeSettings:
+    settings = db.scalars(
+        select(RuntimeSettings).where(RuntimeSettings.id == RUNTIME_SETTINGS_ID).with_for_update()
+    ).first()
+    if settings is None:
+        settings = RuntimeSettings(id=RUNTIME_SETTINGS_ID, active_parser_kind=PARSER_DOCLING)
+        db.add(settings)
+        db.flush()
+        settings = db.scalars(
+            select(RuntimeSettings).where(RuntimeSettings.id == RUNTIME_SETTINGS_ID).with_for_update()
+        ).one()
+    return settings
 
 
 def _commit_runtime_mutation(
@@ -277,16 +358,26 @@ def rotate_provider_credential(
     provider_kind: str,
     credential: str,
     crypto: SecretCrypto,
+    *,
+    expected_version: int,
     audit_context: AuditContext | None = None,
 ) -> ProviderConfig:
-    provider = _provider_or_error(db, provider_kind)
-    if not provider.requires_credentials:
-        raise RuntimeConfigError(422, "provider_credentials_unsupported", "Provider does not accept credentials.")
+    if not credential or not credential.strip():
+        raise RuntimeConfigError(422, "validation_error", "Credential is required.")
 
     def mutate() -> ProviderConfig:
+        provider = _provider_or_error(db, provider_kind, for_update=True)
+        if not provider.requires_credentials:
+            raise RuntimeConfigError(
+                422,
+                "provider_credentials_unsupported",
+                "Provider does not accept credentials.",
+            )
+        _require_expected_version(provider.version, expected_version)
         provider.credential_ciphertext = crypto.encrypt_secret(credential)
         provider.credential_updated_at = utc_now()
         provider.updated_at = provider.credential_updated_at
+        provider.version = provider.version + 1
         _activate_default_synthesis_if_ready(db)
         return provider
 
@@ -398,20 +489,19 @@ def update_model_profile(
     db: Session,
     profile_id: str,
     updates: dict[str, Any],
+    *,
+    expected_version: int,
     audit_context: AuditContext | None = None,
 ) -> ModelProfile:
-    profile = db.get(ModelProfile, profile_id)
-    if profile is None:
-        raise RuntimeConfigError(404, "model_profile_not_found", "Model profile not found.")
-
-    _reject_if_embedding_profile_in_use(db, profile)
-    next_model_name = updates.get("model_name", profile.model_name)
-    next_dimensions = updates.get("vector_dimensions", profile.vector_dimensions)
-    if "model_name" in updates or "vector_dimensions" in updates:
-        _validate_model_profile(profile.provider_kind, profile.profile_kind, next_dimensions)
-        _validate_model_catalog(profile.provider_kind, profile.profile_kind, next_model_name, next_dimensions)
-
     def mutate() -> ModelProfile:
+        profile = _model_profile_or_error(db, profile_id, for_update=True)
+        _require_expected_version(profile.version, expected_version)
+        _reject_if_embedding_profile_in_use(db, profile)
+        next_model_name = updates.get("model_name", profile.model_name)
+        next_dimensions = updates.get("vector_dimensions", profile.vector_dimensions)
+        if "model_name" in updates or "vector_dimensions" in updates:
+            _validate_model_profile(profile.provider_kind, profile.profile_kind, next_dimensions)
+            _validate_model_catalog(profile.provider_kind, profile.profile_kind, next_model_name, next_dimensions)
         if "vector_dimensions" in updates:
             profile.vector_dimensions = next_dimensions
         if "name" in updates:
@@ -419,6 +509,7 @@ def update_model_profile(
         if "model_name" in updates:
             profile.model_name = next_model_name
         profile.updated_at = utc_now()
+        profile.version = profile.version + 1
         return profile
 
     return _commit_runtime_mutation(
@@ -464,14 +555,16 @@ def _provider_ready_or_error(provider: ProviderConfig) -> None:
 def update_runtime_settings(
     db: Session,
     updates: dict[str, Any],
+    *,
+    expected_version: int,
     audit_context: AuditContext | None = None,
 ) -> RuntimeSettings:
     if not updates:
         raise RuntimeConfigError(422, "empty_runtime_settings_patch", "At least one runtime setting is required.")
 
-    settings = ensure_runtime_settings(db)
-
     def mutate() -> RuntimeSettings:
+        settings = _runtime_settings_for_update(db)
+        _require_expected_version(settings.version, expected_version)
         if "active_synthesis_profile_id" in updates:
             profile_id = updates["active_synthesis_profile_id"]
             if profile_id is None:
@@ -499,6 +592,7 @@ def update_runtime_settings(
             settings.active_parser_kind = parser_kind
 
         settings.updated_at = utc_now()
+        settings.version = settings.version + 1
         return settings
 
     return _commit_runtime_mutation(

@@ -965,6 +965,10 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** ModelProfileMutationResponse */
+        ModelProfileMutationResponse: {
+            modelProfile: components["schemas"]["ModelProfileDto"];
+        };
         /** ModelProfilePatchRequest */
         ModelProfilePatchRequest: {
             /** Modelname */
@@ -1020,6 +1024,10 @@ export interface components {
             /** Credential */
             credential: string;
         };
+        /** ProviderMutationResponse */
+        ProviderMutationResponse: {
+            provider: components["schemas"]["ProviderSummaryDto"];
+        };
         /** ProviderSummaryDto */
         ProviderSummaryDto: {
             /** Configured */
@@ -1058,12 +1066,24 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** RuntimeSettingsMutationResponse */
+        RuntimeSettingsMutationResponse: {
+            runtimeSettings: components["schemas"]["RuntimeSettingsDto"];
+        };
         /** RuntimeSettingsPatchRequest */
         RuntimeSettingsPatchRequest: {
             /** Activeparserkind */
             activeParserKind?: string | null;
             /** Activesynthesisprofileid */
             activeSynthesisProfileId?: string | null;
+        };
+        /** RuntimeSettingsSnapshotResponse */
+        RuntimeSettingsSnapshotResponse: {
+            /** Modelprofiles */
+            modelProfiles: components["schemas"]["ModelProfileDto"][];
+            /** Providers */
+            providers: components["schemas"]["ProviderSummaryDto"][];
+            runtimeSettings: components["schemas"]["RuntimeSettingsDto"];
         };
         /** TurnDto */
         TurnDto: {
@@ -1749,9 +1769,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["RuntimeSettingsSnapshotResponse"];
                 };
             };
         };
@@ -1759,7 +1777,9 @@ export interface operations {
     admin_update_runtime_settings_api_v1_admin_runtime_settings_patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1775,9 +1795,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["RuntimeSettingsMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1810,9 +1828,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ModelProfileMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1858,7 +1874,9 @@ export interface operations {
     admin_update_model_profile_api_v1_admin_runtime_settings_model_profiles__id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
             path: {
                 id: string;
             };
@@ -1876,9 +1894,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ModelProfileMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1895,7 +1911,9 @@ export interface operations {
     admin_rotate_provider_credential_api_v1_admin_runtime_settings_providers__kind__put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
             path: {
                 kind: string;
             };
@@ -1913,9 +1931,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ProviderMutationResponse"];
                 };
             };
             /** @description Validation Error */

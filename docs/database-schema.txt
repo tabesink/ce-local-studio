@@ -46,7 +46,9 @@ provider_configs
   display_name varchar(80) NOT NULL
   requires_credentials boolean NOT NULL
   credential_ciphertext text NULL
-  credential_updated_at timestamp NULL; created_at, updated_at timestamp NOT NULL
+  credential_updated_at timestamp NULL
+  version integer NOT NULL DEFAULT 1 CHECK >= 1
+  created_at, updated_at timestamp NOT NULL
 
 model_profiles
   id PK varchar(36); name varchar(120) NOT NULL
@@ -55,12 +57,14 @@ model_profiles
   model_name varchar(200) NOT NULL; vector_dimensions integer NULL
   CHECK embedding -> dimensions present and positive
   CHECK synthesis -> dimensions absent
+  version integer NOT NULL DEFAULT 1 CHECK >= 1
   created_at, updated_at timestamp NOT NULL
 
 runtime_settings
   id PK integer CHECK id=1
   active_synthesis_profile_id FK model_profiles.id NULL
   active_parser_kind varchar(32) CHECK IN ('docling','reducto')
+  version integer NOT NULL DEFAULT 1 CHECK >= 1
   created_at, updated_at timestamp NOT NULL
 
 DOMAIN AND SOURCE PIPELINE

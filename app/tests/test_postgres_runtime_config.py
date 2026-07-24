@@ -1,24 +1,29 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 import os
 from pathlib import Path
 import re
+from threading import Barrier, BrokenBarrierError
 from uuid import uuid4
 
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
+from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.engine import Engine, URL, make_url
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
+from context_engine.app import create_app
 from context_engine.config import Settings
 from context_engine.db import create_db_engine, create_session_factory
 from context_engine.models import (
     AUDIT_EVENT_RUNTIME_DEFAULTS_UPDATED,
     AUDIT_EVENT_RUNTIME_MODEL_PROFILE_CREATED,
+    AUDIT_EVENT_RUNTIME_PROVIDER_CONFIG_ROTATED,
     AuditEvent,
     PARSER_DOCLING,
     PARSER_REDUCTO,
@@ -31,9 +36,19 @@ from context_engine.models import (
     ProviderConfig,
     ROLE_ADMINISTRATOR,
     RuntimeSettings,
+    User,
 )
+from context_engine.api.contract_app import CANONICAL_API_PREFIX, CANONICAL_REQUEST_ID_HEADER
+from context_engine.security import hash_session_token
 from context_engine.services.audit import AuditContext
-from context_engine.services.auth import create_user
+from context_engine.services.auth import create_auth_session, create_user
+from context_engine.services.csrf import issue_csrf_token
+from context_engine.services.request_security import (
+    CLIENT_BUCKET_HEADER,
+    CSRF_HEADER,
+    PUBLIC_HOST_HEADER,
+    PUBLIC_PROTO_HEADER,
+)
 from context_engine.services.runtime_config import (
     DEFAULT_MODEL_PROFILE_IDS,
     DEFAULT_SYNTHESIS_PROFILE_ID,
@@ -52,8 +67,8 @@ from context_engine.services.runtime_config import (
 APP_ROOT = Path(__file__).resolve().parents[1]
 ADMIN_URL_ENV = "CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL"
 OPT_IN_ENV = "CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS"
-HEAD_REVISION = "c4e8f1a02b93"
-DATABASE_NAME_PATTERN = re.compile(r"^ce_p201_[a-z_]+_[0-9a-f]{32}$")
+HEAD_REVISION = "b7e2a91c04d8"
+DATABASE_NAME_PATTERN = re.compile(r"^ce_p20[12]_[a-z_]+_[0-9a-f]{32}$")
 
 pytestmark = pytest.mark.postgresql
 
@@ -227,12 +242,27 @@ def test_p2_01_runtime_config_schema_and_services_on_postgresql_16() -> None:
                     openai = db.get(ProviderConfig, PROVIDER_OPENAI)
                     assert openai is not None
                     openai.credential_ciphertext = None
+                    openai.version = 1
                     db.commit()
-                    rotate_provider_credential(db, PROVIDER_OPENAI, "test-openai-key", crypto, audit_context=audit)
+                    rotated = rotate_provider_credential(
+                        db,
+                        PROVIDER_OPENAI,
+                        "test-openai-key",
+                        crypto,
+                        expected_version=1,
+                        audit_context=audit,
+                    )
+                    assert rotated.version == 2
+                    assert rotated.credential_ciphertext is not None
+                    assert rotated.credential_ciphertext != "test-openai-key"
+                    assert crypto.decrypt_secret(rotated.credential_ciphertext) == "test-openai-key"
 
+                    settings_row = db.get(RuntimeSettings, 1)
+                    assert settings_row is not None
                     updated = update_runtime_settings(
                         db,
                         {"active_synthesis_profile_id": DEFAULT_SYNTHESIS_PROFILE_ID},
+                        expected_version=settings_row.version,
                         audit_context=audit,
                     )
                     assert updated.active_synthesis_profile_id == DEFAULT_SYNTHESIS_PROFILE_ID
@@ -245,14 +275,25 @@ def test_p2_01_runtime_config_schema_and_services_on_postgresql_16() -> None:
                         update_runtime_settings(
                             db,
                             {"active_parser_kind": PARSER_REDUCTO},
+                            expected_version=updated.version,
                             audit_context=audit,
                         )
                     assert reducto_not_ready.value.code == "provider_not_ready"
 
-                    rotate_provider_credential(db, PROVIDER_REDUCTO, "test-reducto-key", crypto, audit_context=audit)
+                    reducto = db.get(ProviderConfig, PROVIDER_REDUCTO)
+                    assert reducto is not None
+                    rotate_provider_credential(
+                        db,
+                        PROVIDER_REDUCTO,
+                        "test-reducto-key",
+                        crypto,
+                        expected_version=reducto.version,
+                        audit_context=audit,
+                    )
                     parser_updated = update_runtime_settings(
                         db,
                         {"active_parser_kind": PARSER_REDUCTO},
+                        expected_version=updated.version,
                         audit_context=audit,
                     )
                     assert parser_updated.active_parser_kind == PARSER_REDUCTO
@@ -263,11 +304,227 @@ def test_p2_01_runtime_config_schema_and_services_on_postgresql_16() -> None:
                     assert "test-openai-key" not in serialized
                     assert "test-reducto-key" not in serialized
                     for provider in snapshot["providers"]:
+                        assert set(provider.keys()) == {
+                            "kind",
+                            "displayName",
+                            "requiresCredentials",
+                            "configured",
+                            "credentialUpdatedAt",
+                            "version",
+                        }
                         assert "credential" not in provider
-                        assert "ciphertext" not in provider
-                        assert set(provider.keys()) <= {"providerKind", "isConfigured"}
+                        assert isinstance(provider["version"], int) and provider["version"] >= 1
+                    for profile in snapshot["modelProfiles"]:
+                        assert set(profile.keys()) == {
+                            "id",
+                            "name",
+                            "profileKind",
+                            "providerKind",
+                            "modelName",
+                            "vectorDimensions",
+                            "inUse",
+                            "version",
+                        }
+                        assert "isDefault" not in profile
+                    assert set(snapshot["runtimeSettings"].keys()) == {
+                        "activeSynthesisProfileId",
+                        "activeParserKind",
+                        "version",
+                    }
                 finally:
                     db.close()
+            finally:
+                engine.dispose()
+    finally:
+        admin_engine.dispose()
+
+
+def test_p2_02_provider_credential_version_race_and_http_a01_on_postgresql_16() -> None:
+    admin_url = _required_admin_url()
+    admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
+    try:
+        _assert_postgresql_16(admin_engine)
+        with _disposable_database(admin_engine, admin_url, "cred") as database_url:
+            config = _alembic_config(database_url)
+            assert ScriptDirectory.from_config(config).get_heads() == [HEAD_REVISION]
+            command.upgrade(config, "head")
+
+            database_url_text = database_url.render_as_string(hide_password=False)
+            settings = Settings(
+                database_url=database_url_text,
+                testing=True,
+                public_origin="http://ce.example.test",
+                internal_hosts="testserver",
+                trusted_bff_peers="testclient",
+                csrf_signing_key="MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+                session_cookie_secure=False,
+            )
+            engine = create_db_engine(settings)
+            session_factory = create_session_factory(engine)
+            try:
+                with engine.connect() as connection:
+                    version_checks = {
+                        row[0]
+                        for row in connection.execute(
+                            text(
+                                "SELECT conname FROM pg_constraint "
+                                "WHERE conrelid IN ("
+                                " 'provider_configs'::regclass,"
+                                " 'model_profiles'::regclass,"
+                                " 'runtime_settings'::regclass"
+                                ") AND conname LIKE '%version%'"
+                            )
+                        )
+                    }
+                assert "ck_provider_configs_version_positive" in version_checks
+                assert "ck_model_profiles_version_positive" in version_checks
+                assert "ck_runtime_settings_version_positive" in version_checks
+
+                db = session_factory()
+                try:
+                    seed_runtime_config(db)
+                    admin = create_user(db, username="p202-admin", password="Password123!", role=ROLE_ADMINISTRATOR)
+                    audit = AuditContext(actor_user=admin, request_id="req-p202", actor_kind="administrator")
+                    crypto = SecretCrypto.from_settings(settings)
+
+                    first = rotate_provider_credential(
+                        db,
+                        PROVIDER_OPENAI,
+                        "first-secret",
+                        crypto,
+                        expected_version=1,
+                        audit_context=audit,
+                    )
+                    assert first.version == 2
+                    with pytest.raises(RuntimeConfigError) as stale:
+                        rotate_provider_credential(
+                            db,
+                            PROVIDER_OPENAI,
+                            "stale-secret",
+                            crypto,
+                            expected_version=1,
+                            audit_context=audit,
+                        )
+                    assert stale.value.status_code == 409
+                    assert stale.value.code == "stale_revision"
+                    openai = db.get(ProviderConfig, PROVIDER_OPENAI)
+                    assert openai is not None
+                    assert crypto.decrypt_secret(openai.credential_ciphertext or "") == "first-secret"
+
+                    barrier = Barrier(2)
+                    outcomes: list[str] = []
+                    admin_id = admin.id
+
+                    def _racing_rotate(secret: str) -> None:
+                        local_db = session_factory()
+                        try:
+                            actor = local_db.get(User, admin_id)
+                            assert actor is not None
+                            barrier.wait(timeout=5)
+                            rotate_provider_credential(
+                                local_db,
+                                PROVIDER_OPENAI,
+                                secret,
+                                crypto,
+                                expected_version=2,
+                                audit_context=AuditContext(
+                                    actor_user=actor,
+                                    request_id=f"req-{secret}",
+                                    actor_kind="administrator",
+                                ),
+                            )
+                            outcomes.append("ok")
+                        except RuntimeConfigError as exc:
+                            assert exc.code == "stale_revision"
+                            outcomes.append("stale")
+                        except BrokenBarrierError:
+                            outcomes.append("barrier")
+                        finally:
+                            local_db.close()
+
+                    with ThreadPoolExecutor(max_workers=2) as pool:
+                        futures = [
+                            pool.submit(_racing_rotate, "race-a"),
+                            pool.submit(_racing_rotate, "race-b"),
+                        ]
+                        for future in futures:
+                            future.result(timeout=15)
+                    assert sorted(outcomes) == ["ok", "stale"]
+                    db.expire_all()
+                    openai = db.get(ProviderConfig, PROVIDER_OPENAI)
+                    assert openai is not None
+                    assert openai.version == 3
+                    assert crypto.decrypt_secret(openai.credential_ciphertext or "") in {"race-a", "race-b"}
+                    rotate_audits = list(
+                        db.scalars(
+                            select(AuditEvent).where(
+                                AuditEvent.event_name == AUDIT_EVENT_RUNTIME_PROVIDER_CONFIG_ROTATED
+                            )
+                        )
+                    )
+                    # Initial rotate plus one concurrent winner; the stale loser writes no audit.
+                    assert len(rotate_audits) == 2
+                finally:
+                    db.close()
+
+                app = create_app(settings)
+                with session_factory() as session:
+                    admin_row = session.scalar(select(User).where(User.username == "p202-admin"))
+                    assert admin_row is not None
+                    token, _auth_session = create_auth_session(session, admin_row, settings)
+                    csrf = issue_csrf_token(settings, binding=hash_session_token(token))
+
+                with TestClient(app) as client:
+                    client.cookies.set(settings.session_cookie_name, token, path="/")
+                    client.cookies.set(settings.csrf_cookie_name, csrf, path="/")
+                    headers = {
+                        "Origin": "http://ce.example.test",
+                        CSRF_HEADER: csrf,
+                        PUBLIC_HOST_HEADER: "ce.example.test",
+                        PUBLIC_PROTO_HEADER: "http",
+                        CLIENT_BUCKET_HEADER: "p202-bucket",
+                    }
+                    missing = client.put(
+                        f"{CANONICAL_API_PREFIX}/admin/runtime-settings/providers/openai",
+                        headers=headers,
+                        json={"credential": "http-secret"},
+                    )
+                    assert missing.status_code == 428
+                    assert missing.json()["error"]["code"] == "validation_error"
+                    assert CANONICAL_REQUEST_ID_HEADER in missing.headers
+
+                    snapshot = client.get(
+                        f"{CANONICAL_API_PREFIX}/admin/runtime-settings",
+                        headers=headers,
+                    )
+                    assert snapshot.status_code == 200
+                    provider = next(item for item in snapshot.json()["providers"] if item["kind"] == "openai")
+                    version = provider["version"]
+                    assert provider["configured"] is True
+                    assert "credential" not in provider
+
+                    stale_http = client.put(
+                        f"{CANONICAL_API_PREFIX}/admin/runtime-settings/providers/openai",
+                        headers={**headers, "If-Match": f'"{version - 1}"'},
+                        json={"credential": "http-stale"},
+                    )
+                    assert stale_http.status_code == 409
+                    assert stale_http.json()["error"]["code"] == "stale_revision"
+
+                    ok = client.put(
+                        f"{CANONICAL_API_PREFIX}/admin/runtime-settings/providers/openai",
+                        headers={**headers, "If-Match": f'"{version}"'},
+                        json={"credential": "http-secret"},
+                    )
+                    assert ok.status_code == 200
+                    assert ok.headers["etag"] == f'"{version + 1}"'
+                    assert ok.headers["cache-control"] == "private, no-store, no-transform"
+                    body = ok.json()["provider"]
+                    assert body["kind"] == "openai"
+                    assert body["configured"] is True
+                    assert body["version"] == version + 1
+                    assert "credential" not in body
+                    assert "http-secret" not in str(ok.json()).lower()
             finally:
                 engine.dispose()
     finally:

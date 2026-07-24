@@ -267,6 +267,7 @@ class ProviderConfig(Base):
     __tablename__ = "provider_configs"
     __table_args__ = (
         CheckConstraint("provider_kind in ('openai', 'bedrock', 'ollama', 'reducto')", name="ck_provider_configs_provider_kind"),
+        CheckConstraint("version >= 1", name="ck_provider_configs_version_positive"),
     )
 
     provider_kind: Mapped[str] = mapped_column(String(32), primary_key=True)
@@ -274,6 +275,7 @@ class ProviderConfig(Base):
     requires_credentials: Mapped[bool] = mapped_column(Boolean, nullable=False)
     credential_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     credential_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now, onupdate=utc_now)
 
@@ -286,6 +288,7 @@ class ModelProfile(Base):
         CheckConstraint("profile_kind != 'embedding' or vector_dimensions is not null", name="ck_model_profiles_embedding_dimensions_required"),
         CheckConstraint("profile_kind != 'synthesis' or vector_dimensions is null", name="ck_model_profiles_synthesis_dimensions_absent"),
         CheckConstraint("vector_dimensions is null or vector_dimensions > 0", name="ck_model_profiles_vector_dimensions_positive"),
+        CheckConstraint("version >= 1", name="ck_model_profiles_version_positive"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -299,6 +302,7 @@ class ModelProfile(Base):
     )
     model_name: Mapped[str] = mapped_column(String(200), nullable=False)
     vector_dimensions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now, onupdate=utc_now)
 
@@ -308,6 +312,7 @@ class RuntimeSettings(Base):
     __table_args__ = (
         CheckConstraint("id = 1", name="ck_runtime_settings_singleton"),
         CheckConstraint("active_parser_kind in ('docling', 'reducto')", name="ck_runtime_settings_active_parser_kind"),
+        CheckConstraint("version >= 1", name="ck_runtime_settings_version_positive"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
@@ -317,6 +322,7 @@ class RuntimeSettings(Base):
         nullable=True,
     )
     active_parser_kind: Mapped[str] = mapped_column(String(32), nullable=False, default=PARSER_DOCLING)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now, onupdate=utc_now)
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from cryptography.fernet import Fernet
 
 from context_engine.models import (
     PARSER_DOCLING,
@@ -16,8 +17,13 @@ from context_engine.services.audit import AuditContext, AuditError
 from context_engine.services.runtime_config import (
     DEFAULT_SYNTHESIS_PROFILE_ID,
     RuntimeConfigError,
+    SecretCrypto,
     create_model_profile,
     delete_model_profile,
+    parse_if_match_version,
+    rotate_provider_credential,
+    safe_provider,
+    strong_etag,
     update_runtime_settings,
 )
 
@@ -53,7 +59,7 @@ class RecordingSession:
     def get(self, model: type[Any], key: Any) -> Any | None:
         return self._store.get((model, key))
 
-    def scalars(self, _statement: Any) -> Any:
+    def scalars(self, statement: Any) -> Any:
         class _Result:
             def __init__(self, values: list[Any]) -> None:
                 self._values = values
@@ -61,6 +67,18 @@ class RecordingSession:
             def __iter__(self):
                 return iter(self._values)
 
+            def first(self):
+                return self._values[0] if self._values else None
+
+            def one(self):
+                if len(self._values) != 1:
+                    raise RuntimeError("expected exactly one row")
+                return self._values[0]
+
+        entity = statement.column_descriptions[0]["entity"]
+        matched = [value for (model, _key), value in self._store.items() if model is entity]
+        if matched:
+            return _Result(matched)
         return _Result(self._scalars)
 
 
@@ -133,15 +151,92 @@ def test_update_runtime_settings_rejects_unready_provider() -> None:
             vector_dimensions=None,
         )
     )
-    session.add(RuntimeSettings(id=1, active_parser_kind=PARSER_DOCLING))
+    session.add(RuntimeSettings(id=1, active_parser_kind=PARSER_DOCLING, version=1))
 
     with pytest.raises(RuntimeConfigError) as exc_info:
         update_runtime_settings(
             session,
             {"active_synthesis_profile_id": DEFAULT_SYNTHESIS_PROFILE_ID},
+            expected_version=1,
             audit_context=AuditContext(actor_kind="administrator"),
         )
 
     assert exc_info.value.code == "provider_not_ready"
     assert session.commit_count == 0
 
+
+def test_parse_if_match_version_requires_strong_etag() -> None:
+    with pytest.raises(RuntimeConfigError) as missing:
+        parse_if_match_version(None)
+    assert missing.value.status_code == 428
+    assert missing.value.code == "validation_error"
+
+    with pytest.raises(RuntimeConfigError) as weak:
+        parse_if_match_version('W/"1"')
+    assert weak.value.status_code == 428
+
+    assert parse_if_match_version('"3"') == 3
+    assert parse_if_match_version("3") == 3
+    assert strong_etag(3) == '"3"'
+
+
+def test_safe_provider_projects_closed_dto_without_secrets() -> None:
+    provider = ProviderConfig(
+        provider_kind=PROVIDER_OPENAI,
+        display_name="OpenAI",
+        requires_credentials=True,
+        credential_ciphertext="cipher-text-value",
+        version=4,
+    )
+    projected = safe_provider(provider)
+    assert projected == {
+        "kind": "openai",
+        "displayName": "OpenAI",
+        "requiresCredentials": True,
+        "configured": True,
+        "credentialUpdatedAt": None,
+        "version": 4,
+    }
+    assert "credential" not in projected
+    assert "ciphertext" not in str(projected).lower()
+    assert "providerKind" not in projected
+    assert "isConfigured" not in projected
+
+
+def test_secret_crypto_round_trip_and_wrong_key_fail_closed() -> None:
+    current = SecretCrypto(Fernet.generate_key().decode("utf-8"))
+    other = SecretCrypto(Fernet.generate_key().decode("utf-8"))
+    ciphertext = current.encrypt_secret("provider-secret")
+    assert ciphertext != "provider-secret"
+    assert current.decrypt_secret(ciphertext) == "provider-secret"
+    with pytest.raises(RuntimeConfigError) as exc_info:
+        other.decrypt_secret(ciphertext)
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.code == "runtime_config_unavailable"
+
+
+def test_rotate_provider_credential_rejects_stale_version() -> None:
+    session = RecordingSession()
+    session.add(
+        ProviderConfig(
+            provider_kind=PROVIDER_OPENAI,
+            display_name="OpenAI",
+            requires_credentials=True,
+            version=2,
+        )
+    )
+    crypto = SecretCrypto(Fernet.generate_key().decode("utf-8"))
+
+    with pytest.raises(RuntimeConfigError) as exc_info:
+        rotate_provider_credential(
+            session,
+            PROVIDER_OPENAI,
+            "new-secret",
+            crypto,
+            expected_version=1,
+            audit_context=AuditContext(actor_kind="administrator"),
+        )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.code == "stale_revision"
+    assert session.commit_count == 0

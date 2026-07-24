@@ -1244,6 +1244,19 @@
         "title": "ModelProfileDto",
         "type": "object"
       },
+      "ModelProfileMutationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "modelProfile": {
+            "$ref": "#/components/schemas/ModelProfileDto"
+          }
+        },
+        "required": [
+          "modelProfile"
+        ],
+        "title": "ModelProfileMutationResponse",
+        "type": "object"
+      },
       "ModelProfilePatchRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1459,6 +1472,19 @@
         "title": "ProviderCredentialRequest",
         "type": "object"
       },
+      "ProviderMutationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/ProviderSummaryDto"
+          }
+        },
+        "required": [
+          "provider"
+        ],
+        "title": "ProviderMutationResponse",
+        "type": "object"
+      },
       "ProviderSummaryDto": {
         "additionalProperties": false,
         "properties": {
@@ -1569,6 +1595,19 @@
         "title": "RuntimeSettingsDto",
         "type": "object"
       },
+      "RuntimeSettingsMutationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "runtimeSettings": {
+            "$ref": "#/components/schemas/RuntimeSettingsDto"
+          }
+        },
+        "required": [
+          "runtimeSettings"
+        ],
+        "title": "RuntimeSettingsMutationResponse",
+        "type": "object"
+      },
       "RuntimeSettingsPatchRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1596,6 +1635,35 @@
           }
         },
         "title": "RuntimeSettingsPatchRequest",
+        "type": "object"
+      },
+      "RuntimeSettingsSnapshotResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "modelProfiles": {
+            "items": {
+              "$ref": "#/components/schemas/ModelProfileDto"
+            },
+            "title": "Modelprofiles",
+            "type": "array"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderSummaryDto"
+            },
+            "title": "Providers",
+            "type": "array"
+          },
+          "runtimeSettings": {
+            "$ref": "#/components/schemas/RuntimeSettingsDto"
+          }
+        },
+        "required": [
+          "providers",
+          "modelProfiles",
+          "runtimeSettings"
+        ],
+        "title": "RuntimeSettingsSnapshotResponse",
         "type": "object"
       },
       "TurnDto": {
@@ -2668,9 +2736,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Runtime Settings Api V1 Admin Runtime Settings Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RuntimeSettingsSnapshotResponse"
                 }
               }
             },
@@ -2681,6 +2747,24 @@
       },
       "patch": {
         "operationId": "admin_update_runtime_settings_api_v1_admin_runtime_settings_patch",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -2696,9 +2780,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Update Runtime Settings Api V1 Admin Runtime Settings Patch",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RuntimeSettingsMutationResponse"
                 }
               }
             },
@@ -2736,9 +2818,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Create Model Profile Api V1 Admin Runtime Settings Model Profiles Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ModelProfileMutationResponse"
                 }
               }
             },
@@ -2800,6 +2880,22 @@
               "title": "Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
           }
         ],
         "requestBody": {
@@ -2817,9 +2913,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Update Model Profile Api V1 Admin Runtime Settings Model Profiles  Id  Patch",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ModelProfileMutationResponse"
                 }
               }
             },
@@ -2851,6 +2945,22 @@
               "title": "Kind",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
           }
         ],
         "requestBody": {
@@ -2868,9 +2978,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Rotate Provider Credential Api V1 Admin Runtime Settings Providers  Kind  Put",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ProviderMutationResponse"
                 }
               }
             },

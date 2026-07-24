@@ -7,12 +7,17 @@ from email.parser import BytesParser
 from email.policy import default as email_policy
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Body, Depends, Path, Query, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Body, Depends, Header, Path, Query, Request, Response
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from context_engine.api.catalog_schemas import (
+    ModelProfileDto,
+    ProviderSummaryDto,
+    RuntimeSettingsDto,
+)
 from context_engine.api.dependencies import CurrentSession, get_db, get_settings, require_admin, require_current_session
 from context_engine.api.errors import ApiError, request_id_from
 from context_engine.api.public_schemas import ErrorEnvelope, CsrfResponse, LiveHealthResponse, ReadyHealthResponse
@@ -65,11 +70,13 @@ from context_engine.services.runtime_config import (
     SecretCrypto,
     create_model_profile,
     delete_model_profile,
+    parse_if_match_version,
     rotate_provider_credential,
     runtime_settings_snapshot,
     safe_model_profile,
     safe_provider,
     safe_runtime_settings,
+    strong_etag,
     update_model_profile,
     update_runtime_settings,
 )
@@ -141,6 +148,32 @@ class ModelProfilePatchRequest(BaseModel):
 class RuntimeSettingsPatchRequest(BaseModel):
     active_synthesis_profile_id: str | None = Field(default=None, alias="activeSynthesisProfileId")
     active_parser_kind: str | None = Field(default=None, alias="activeParserKind")
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class RuntimeSettingsSnapshotResponse(BaseModel):
+    providers: list[ProviderSummaryDto]
+    model_profiles: list[ModelProfileDto] = Field(alias="modelProfiles")
+    runtime_settings: RuntimeSettingsDto = Field(alias="runtimeSettings")
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class ProviderMutationResponse(BaseModel):
+    provider: ProviderSummaryDto
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class ModelProfileMutationResponse(BaseModel):
+    model_profile: ModelProfileDto = Field(alias="modelProfile")
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class RuntimeSettingsMutationResponse(BaseModel):
+    runtime_settings: RuntimeSettingsDto = Field(alias="runtimeSettings")
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -608,15 +641,22 @@ def post_conversation_turn_cancel(
     return {"turn": safe_turn_summary(turn)}
 
 
-@api_router.get("/admin/runtime-settings")
+def _private_json_response(payload: dict[str, object], *, status_code: int = 200, etag: str | None = None) -> JSONResponse:
+    headers = {"Cache-Control": "private, no-store, no-transform"}
+    if etag is not None:
+        headers["ETag"] = etag
+    return JSONResponse(status_code=status_code, content=payload, headers=headers)
+
+
+@api_router.get("/admin/runtime-settings", response_model=RuntimeSettingsSnapshotResponse)
 def admin_runtime_settings(
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
-) -> dict[str, object]:
-    return runtime_settings_snapshot(db)
+) -> JSONResponse:
+    return _private_json_response(runtime_settings_snapshot(db))
 
 
-@api_router.put("/admin/runtime-settings/providers/{kind}")
+@api_router.put("/admin/runtime-settings/providers/{kind}", response_model=ProviderMutationResponse)
 def admin_rotate_provider_credential(
     request: Request,
     provider_kind: Annotated[str, Path(alias="kind")],
@@ -624,27 +664,37 @@ def admin_rotate_provider_credential(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> dict[str, object]:
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+) -> JSONResponse:
     try:
+        expected_version = parse_if_match_version(if_match)
         provider = rotate_provider_credential(
             db,
             provider_kind,
             payload.credential,
             SecretCrypto.from_settings(settings),
+            expected_version=expected_version,
             audit_context=_audit_context(request, admin),
         )
     except RuntimeConfigError as exc:
         raise _runtime_config_api_error(exc) from exc
-    return {"provider": safe_provider(provider)}
+    return _private_json_response(
+        {"provider": safe_provider(provider)},
+        etag=strong_etag(provider.version),
+    )
 
 
-@api_router.post("/admin/runtime-settings/model-profiles", status_code=201)
+@api_router.post(
+    "/admin/runtime-settings/model-profiles",
+    status_code=201,
+    response_model=ModelProfileMutationResponse,
+)
 def admin_create_model_profile(
     request: Request,
     payload: ModelProfileCreateRequest,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
-) -> dict[str, object]:
+) -> JSONResponse:
     try:
         profile = create_model_profile(
             db,
@@ -657,27 +707,40 @@ def admin_create_model_profile(
         )
     except RuntimeConfigError as exc:
         raise _runtime_config_api_error(exc) from exc
-    return {"modelProfile": safe_model_profile(profile)}
+    return _private_json_response(
+        {"modelProfile": safe_model_profile(db, profile)},
+        status_code=201,
+        etag=strong_etag(profile.version),
+    )
 
 
-@api_router.patch("/admin/runtime-settings/model-profiles/{id}")
+@api_router.patch(
+    "/admin/runtime-settings/model-profiles/{id}",
+    response_model=ModelProfileMutationResponse,
+)
 def admin_update_model_profile(
     request: Request,
     profile_id: Annotated[str, Path(alias="id")],
     payload: ModelProfilePatchRequest,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
-) -> dict[str, object]:
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+) -> JSONResponse:
     try:
+        expected_version = parse_if_match_version(if_match)
         profile = update_model_profile(
             db,
             profile_id,
             payload.model_dump(exclude_unset=True),
+            expected_version=expected_version,
             audit_context=_audit_context(request, admin),
         )
     except RuntimeConfigError as exc:
         raise _runtime_config_api_error(exc) from exc
-    return {"modelProfile": safe_model_profile(profile)}
+    return _private_json_response(
+        {"modelProfile": safe_model_profile(db, profile)},
+        etag=strong_etag(profile.version),
+    )
 
 
 @api_router.delete("/admin/runtime-settings/model-profiles/{id}", status_code=204)
@@ -691,25 +754,31 @@ def admin_delete_model_profile(
         delete_model_profile(db, profile_id, audit_context=_audit_context(request, admin))
     except RuntimeConfigError as exc:
         raise _runtime_config_api_error(exc) from exc
-    return Response(status_code=204)
+    return Response(status_code=204, headers={"Cache-Control": "private, no-store, no-transform"})
 
 
-@api_router.patch("/admin/runtime-settings")
+@api_router.patch("/admin/runtime-settings", response_model=RuntimeSettingsMutationResponse)
 def admin_update_runtime_settings(
     request: Request,
     payload: RuntimeSettingsPatchRequest,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
-) -> dict[str, object]:
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+) -> JSONResponse:
     try:
-        settings = update_runtime_settings(
+        expected_version = parse_if_match_version(if_match)
+        settings_row = update_runtime_settings(
             db,
             payload.model_dump(exclude_unset=True),
+            expected_version=expected_version,
             audit_context=_audit_context(request, admin),
         )
     except RuntimeConfigError as exc:
         raise _runtime_config_api_error(exc) from exc
-    return {"runtimeSettings": safe_runtime_settings(settings)}
+    return _private_json_response(
+        {"runtimeSettings": safe_runtime_settings(settings_row)},
+        etag=strong_etag(settings_row.version),
+    )
 
 
 @api_router.post("/admin/domains", status_code=201)

@@ -57,8 +57,10 @@ P0-06 closure evidence (2026-07-24): deterministic generation now emits and byte
 | P1-05 | DONE | P1-02,P1-03 | Origin/Host and CSRF policy, session rotation/revocation/TTL, login throttling and ingress auth tests; security persistence/config contract approved 2026-07-24 |
 | P1-06 | DONE | P1-01 | append-only audit schema, transactional AuditService and protected-mutation helper |
 | P2-01 | DONE | P1 | provider_configs, model_profiles, runtime_settings migrations and services |
-| P2-02 | NOT_STARTED | P2-01 | credential encryption/rotation and safe DTO projection |
+| P2-02 | DONE | P2-01 | credential encryption/rotation and safe DTO projection |
 | P2-03 | NOT_STARTED | P2-01 | synthesis/embedding validation, immutable dimension rules and defaults |
+
+P2-02 closure evidence (2026-07-24): `docs/_scratch/p2-02-credential-dto-inventory.md` records retain/modify/add decisions. Alembic head `b7e2a91c04d8` adds positive `version` columns on the three runtime-config tables. PostgreSQL 16 proof covers Fernet encrypt-at-rest rotate, closed `ProviderSummaryDto`/`ModelProfileDto`/`RuntimeSettingsDto` snapshots, sequential and concurrent `stale_revision` losers, and HTTP A-01 `428`/`409`/`200` with strong `ETag`. Unit proofs cover closed projection, wrong-key decrypt fail-closed, `If-Match` parse, and stale rotate rejection. Results were 35 focused runtime-config/foundation/audit/schema/health/DTO tests passing; generated contract snapshots pass. `docs/_scratch/p2-02-credential-dto-evidence.md` records commands and keeps immutable embedding completion with P2-03 and Settings UI DTO/`If-Match` adoption with P9.
 
 P2-01 closure evidence (2026-07-24): `docs/_scratch/p2-01-runtime-config-inventory.md` records retain/modify/defer decisions. PostgreSQL 16 proof covers schema checks for the three tables, insert-only catalog seed that preserves credentials, protected-mutation profile create and defaults update, default-profile delete denial, synthesis/Reducto readiness gates, and snapshot absence of secrets. Unit proofs cover default delete, audit rollback on create, and unready-provider rejection. Results were 27 focused runtime-config/foundation/audit/schema/health tests passing. `docs/_scratch/p2-01-runtime-config-evidence.md` records commands and keeps DTO/ETag/encryption with P2-02 and immutable embedding completion with P2-03.
 
