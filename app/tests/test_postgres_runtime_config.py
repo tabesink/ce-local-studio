@@ -25,6 +25,7 @@ from context_engine.models import (
     AUDIT_EVENT_RUNTIME_MODEL_PROFILE_CREATED,
     AUDIT_EVENT_RUNTIME_PROVIDER_CONFIG_ROTATED,
     AuditEvent,
+    DOMAIN_STATE_STOPPED,
     PARSER_DOCLING,
     PARSER_REDUCTO,
     PROFILE_EMBEDDING,
@@ -32,6 +33,7 @@ from context_engine.models import (
     PROVIDER_KINDS,
     PROVIDER_OPENAI,
     PROVIDER_REDUCTO,
+    Domain,
     ModelProfile,
     ProviderConfig,
     ROLE_ADMINISTRATOR,
@@ -60,6 +62,7 @@ from context_engine.services.runtime_config import (
     rotate_provider_credential,
     runtime_settings_snapshot,
     seed_runtime_config,
+    update_model_profile,
     update_runtime_settings,
 )
 
@@ -68,7 +71,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 ADMIN_URL_ENV = "CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL"
 OPT_IN_ENV = "CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS"
 HEAD_REVISION = "b7e2a91c04d8"
-DATABASE_NAME_PATTERN = re.compile(r"^ce_p20[12]_[a-z_]+_[0-9a-f]{32}$")
+DATABASE_NAME_PATTERN = re.compile(r"^ce_p20[123]_[a-z_]+_[0-9a-f]{32}$")
 
 pytestmark = pytest.mark.postgresql
 
@@ -97,7 +100,7 @@ def _assert_postgresql_16(admin_engine: Engine) -> None:
 
 @contextmanager
 def _disposable_database(admin_engine: Engine, admin_url: URL, label: str):
-    database_name = f"ce_p201_{label}_{uuid4().hex}"
+    database_name = f"ce_p203_{label}_{uuid4().hex}"
     assert DATABASE_NAME_PATTERN.fullmatch(database_name)
     database_url = admin_url.set(database=database_name)
 
@@ -544,6 +547,201 @@ def test_p2_02_provider_credential_version_race_and_http_a01_on_postgresql_16() 
                     assert body["version"] == version + 1
                     assert "credential" not in body
                     assert "http-secret" not in str(ok.json()).lower()
+            finally:
+                engine.dispose()
+    finally:
+        admin_engine.dispose()
+
+
+def test_p2_03_immutable_embedding_and_defaults_on_postgresql_16() -> None:
+    admin_url = _required_admin_url()
+    admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
+    try:
+        _assert_postgresql_16(admin_engine)
+        with _disposable_database(admin_engine, admin_url, "embed") as database_url:
+            config = _alembic_config(database_url)
+            assert ScriptDirectory.from_config(config).get_heads() == [HEAD_REVISION]
+            command.upgrade(config, "head")
+
+            database_url_text = database_url.render_as_string(hide_password=False)
+            settings = Settings(
+                database_url=database_url_text,
+                testing=True,
+                public_origin="http://ce.example.test",
+                internal_hosts="testserver",
+                trusted_bff_peers="testclient",
+                csrf_signing_key="MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+                session_cookie_secure=False,
+            )
+            engine = create_db_engine(settings)
+            session_factory = create_session_factory(engine)
+            try:
+                db = session_factory()
+                try:
+                    seed_runtime_config(db)
+                    admin = create_user(db, username="p203-admin", password="Password123!", role=ROLE_ADMINISTRATOR)
+                    audit = AuditContext(actor_user=admin, request_id="req-p203", actor_kind="administrator")
+
+                    used = db.get(ModelProfile, "openai-embedding-default")
+                    assert used is not None
+                    assert used.vector_dimensions == 1536
+                    db.add(
+                        Domain(
+                            id="domain_manuals",
+                            display_name="Equipment Manuals",
+                            state=DOMAIN_STATE_STOPPED,
+                            embedding_profile_id=used.id,
+                            runtime_instance_id=str(uuid4()),
+                            control_generation=1,
+                        )
+                    )
+                    db.commit()
+
+                    snapshot = runtime_settings_snapshot(db)
+                    used_projection = next(
+                        profile for profile in snapshot["modelProfiles"] if profile["id"] == used.id
+                    )
+                    assert used_projection["inUse"] is True
+                    assert used_projection["vectorDimensions"] == 1536
+
+                    with pytest.raises(RuntimeConfigError) as dim_denied:
+                        update_model_profile(
+                            db,
+                            used.id,
+                            {"vector_dimensions": 3072, "model_name": "text-embedding-3-large"},
+                            expected_version=used.version,
+                            audit_context=audit,
+                        )
+                    assert dim_denied.value.status_code == 409
+                    assert dim_denied.value.code == "model_profile_in_use"
+
+                    with pytest.raises(RuntimeConfigError) as name_denied:
+                        update_model_profile(
+                            db,
+                            used.id,
+                            {"name": "Renamed Used Embedding"},
+                            expected_version=used.version,
+                            audit_context=audit,
+                        )
+                    assert name_denied.value.code == "model_profile_in_use"
+
+                    with pytest.raises(RuntimeConfigError) as delete_denied:
+                        delete_model_profile(db, used.id, audit_context=audit)
+                    assert delete_denied.value.code == "model_profile_in_use"
+
+                    db.expire_all()
+                    used_after = db.get(ModelProfile, used.id)
+                    assert used_after is not None
+                    assert used_after.vector_dimensions == 1536
+                    assert used_after.model_name == "text-embedding-3-small"
+                    assert used_after.name == "OpenAI Default Embedding"
+                    assert used_after.version == 1
+
+                    unused = create_model_profile(
+                        db,
+                        name="OpenAI Embedding Large Extra",
+                        profile_kind=PROFILE_EMBEDDING,
+                        provider_kind=PROVIDER_OPENAI,
+                        model_name="text-embedding-3-large",
+                        vector_dimensions=3072,
+                        audit_context=audit,
+                    )
+                    unused_version = unused.version
+                    renamed = update_model_profile(
+                        db,
+                        unused.id,
+                        {"name": "OpenAI Embedding Large Unused"},
+                        expected_version=unused_version,
+                        audit_context=audit,
+                    )
+                    assert renamed.name == "OpenAI Embedding Large Unused"
+                    assert renamed.vector_dimensions == 3072
+                    assert renamed.version == unused_version + 1
+
+                    settings_row = db.get(RuntimeSettings, 1)
+                    assert settings_row is not None
+                    with pytest.raises(RuntimeConfigError) as embedding_as_synthesis:
+                        update_runtime_settings(
+                            db,
+                            {"active_synthesis_profile_id": used.id},
+                            expected_version=settings_row.version,
+                            audit_context=audit,
+                        )
+                    assert embedding_as_synthesis.value.code == "invalid_active_synthesis_profile"
+
+                    with pytest.raises((IntegrityError, DBAPIError)):
+                        db.execute(
+                            text(
+                                "UPDATE model_profiles SET vector_dimensions = 0 "
+                                "WHERE id = :profile_id"
+                            ),
+                            {"profile_id": unused.id},
+                        )
+                        db.commit()
+                    db.rollback()
+                finally:
+                    db.close()
+
+                app = create_app(settings)
+                with session_factory() as session:
+                    admin_row = session.scalar(select(User).where(User.username == "p203-admin"))
+                    assert admin_row is not None
+                    token, _auth_session = create_auth_session(session, admin_row, settings)
+                    csrf = issue_csrf_token(settings, binding=hash_session_token(token))
+
+                with TestClient(app) as client:
+                    client.cookies.set(settings.session_cookie_name, token, path="/")
+                    client.cookies.set(settings.csrf_cookie_name, csrf, path="/")
+                    headers = {
+                        "Origin": "http://ce.example.test",
+                        CSRF_HEADER: csrf,
+                        PUBLIC_HOST_HEADER: "ce.example.test",
+                        PUBLIC_PROTO_HEADER: "http",
+                        CLIENT_BUCKET_HEADER: "p203-bucket",
+                    }
+
+                    snapshot = client.get(
+                        f"{CANONICAL_API_PREFIX}/admin/runtime-settings",
+                        headers=headers,
+                    )
+                    assert snapshot.status_code == 200
+                    used_http = next(
+                        profile
+                        for profile in snapshot.json()["modelProfiles"]
+                        if profile["id"] == "openai-embedding-default"
+                    )
+                    assert used_http["inUse"] is True
+                    used_version = used_http["version"]
+
+                    denied = client.patch(
+                        f"{CANONICAL_API_PREFIX}/admin/runtime-settings/model-profiles/openai-embedding-default",
+                        headers={**headers, "If-Match": f'"{used_version}"'},
+                        json={
+                            "modelName": "text-embedding-3-large",
+                            "vectorDimensions": 3072,
+                        },
+                    )
+                    assert denied.status_code == 409
+                    assert denied.json()["error"]["code"] == "model_profile_in_use"
+                    assert CANONICAL_REQUEST_ID_HEADER in denied.headers
+
+                    created = client.post(
+                        f"{CANONICAL_API_PREFIX}/admin/runtime-settings/model-profiles",
+                        headers=headers,
+                        json={
+                            "name": "OpenAI Embedding Ada Extra",
+                            "profileKind": "embedding",
+                            "providerKind": "openai",
+                            "modelName": "text-embedding-ada-002",
+                            "vectorDimensions": 1536,
+                        },
+                    )
+                    assert created.status_code == 201
+                    body = created.json()["modelProfile"]
+                    assert body["profileKind"] == "embedding"
+                    assert body["vectorDimensions"] == 1536
+                    assert body["inUse"] is False
+                    assert "ETag" in created.headers or "etag" in created.headers
             finally:
                 engine.dispose()
     finally:

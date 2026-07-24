@@ -6,8 +6,7 @@ from typing import Any, TypeVar
 import uuid
 
 from cryptography.fernet import Fernet, InvalidToken
-from sqlalchemy import inspect, select, text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from context_engine.api.conventions import format_utc_timestamp
@@ -31,6 +30,7 @@ from context_engine.models import (
     PROVIDER_OLLAMA,
     PROVIDER_OPENAI,
     PROVIDER_REDUCTO,
+    Domain,
     ModelProfile,
     ProviderConfig,
     RuntimeSettings,
@@ -399,8 +399,19 @@ def _validate_model_profile(provider_kind: str, profile_kind: str, vector_dimens
         raise RuntimeConfigError(422, "invalid_profile_kind", "Invalid profile kind.")
     if provider_kind not in MODEL_PROVIDER_KINDS:
         raise RuntimeConfigError(422, "invalid_model_provider", "Invalid model profile provider.")
-    if profile_kind == PROFILE_EMBEDDING and vector_dimensions is None:
-        raise RuntimeConfigError(422, "vector_dimensions_required", "Embedding profiles require vector dimensions.")
+    if profile_kind == PROFILE_EMBEDDING:
+        if vector_dimensions is None:
+            raise RuntimeConfigError(
+                422,
+                "vector_dimensions_required",
+                "Embedding profiles require vector dimensions.",
+            )
+        if vector_dimensions <= 0:
+            raise RuntimeConfigError(
+                422,
+                "vector_dimensions_invalid",
+                "Embedding vector dimensions must be positive.",
+            )
     if profile_kind == PROFILE_SYNTHESIS and vector_dimensions is not None:
         raise RuntimeConfigError(422, "vector_dimensions_not_allowed", "Synthesis profiles do not use vector dimensions.")
 
@@ -428,21 +439,12 @@ def _validate_model_catalog(provider_kind: str, profile_kind: str, model_name: s
 
 
 def _domain_references_model_profile(db: Session, profile_id: str) -> bool:
-    bind = db.get_bind()
-    try:
-        inspector = inspect(bind)
-        if not inspector.has_table("domains"):
-            return False
-        columns = {column["name"] for column in inspector.get_columns("domains")}
-        if "embedding_profile_id" not in columns:
-            return False
-        row = db.execute(
-            text("SELECT 1 FROM domains WHERE embedding_profile_id = :profile_id LIMIT 1"),
-            {"profile_id": profile_id},
+    return (
+        db.scalars(
+            select(Domain).where(Domain.embedding_profile_id == profile_id).limit(1)
         ).first()
-    except SQLAlchemyError:
-        return False
-    return row is not None
+        is not None
+    )
 
 
 def _reject_if_embedding_profile_in_use(db: Session, profile: ModelProfile) -> None:
