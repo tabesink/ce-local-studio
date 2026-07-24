@@ -15,7 +15,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | ID | Phase/outcome | Status | Depends on | Exit gate |
 | --- | --- | --- | --- | --- |
 | P0 | Contract and repository spine | DONE | - | governance, vocabulary, ADRs, API/data/SSE conventions, CI skeleton approved |
-| P1 | Trusted app foundation | IN_PROGRESS | P0 | migrated Postgres, seeded admin, cookie auth, owner/admin guards, health and safe errors pass; P1-06 remains |
+| P1 | Trusted app foundation | DONE | P0 | migrated Postgres, seeded admin, cookie auth, owner/admin guards, health and safe errors, append-only transactional audit pass |
 | P2 | Trusted runtime configuration | NOT_STARTED | P1 | encrypted credentials, model profiles, parser/synthesis defaults, admin contract tests pass |
 | P3 | Knowledge Domain runtime | NOT_STARTED | P2 | per-domain runtime boundary, lifecycle operations, leases/generations, readiness proven |
 | P4 | Source preparation | NOT_STARTED | P3 | upload/storage/parser adapters produce canonical blocks and support retry/cancel/delete |
@@ -55,7 +55,7 @@ P0-06 closure evidence (2026-07-24): deterministic generation now emits and byte
 | P1-03 | DONE | P1-02 | current-user/admin dependencies, ownership helpers and denial audit hook |
 | P1-04 | DONE | P1-01 | request IDs, safe errors/logging, live/ready endpoints |
 | P1-05 | DONE | P1-02,P1-03 | Origin/Host and CSRF policy, session rotation/revocation/TTL, login throttling and ingress auth tests; security persistence/config contract approved 2026-07-24 |
-| P1-06 | NOT_STARTED | P1-01 | append-only audit schema, transactional AuditService and protected-mutation helper |
+| P1-06 | DONE | P1-01 | append-only audit schema, transactional AuditService and protected-mutation helper |
 | P2-01 | NOT_STARTED | P1 | provider_configs, model_profiles, runtime_settings migrations and services |
 | P2-02 | NOT_STARTED | P2-01 | credential encryption/rotation and safe DTO projection |
 | P2-03 | NOT_STARTED | P2-01 | synthesis/embedding validation, immutable dimension rules and defaults |
@@ -69,6 +69,8 @@ P1-03 closure evidence (2026-07-24): `docs/_scratch/p1-03-authorization-inventor
 P1-04 closure evidence (2026-07-24): `docs/_scratch/p1-04-health-readiness-inventory.md` records retained P0 request/error behavior and the bounded P1-04 readiness scope. PostgreSQL 16 proof now covers database connectivity, exact Alembic head, enabled-administrator bootstrap viability, safe correlated/no-store `503`, and process-only liveness. Structured logging tests prove unsafe keyword fields are dropped and unclassified raw messages cannot become JSON events. Results were 12 focused logging/health/error/request-ID tests, 9 PostgreSQL tests, and 26 identity/generated-contract tests passing. `docs/_scratch/p1-04-health-readiness-evidence.md` records red baselines and keeps governed object-storage readiness with P4/P10-02, browser cache isolation with P9-05, and broad sink privacy with P8.
 
 P1-05 closure evidence (2026-07-24): `docs/_scratch/p1-05-ingress-session-inventory.md` records the approved schema/security/deployment contract boundary. PostgreSQL 16 HTTP proof covers untrusted-peer denial, signed CSRF bootstrap, hostile Origin rejection, login session+CSRF rotation, authenticated logout `204`, durable login throttle `429` with `Retry-After`, idle touch cadence, and idle expiry. Unit tests cover CSRF binding and Origin/CSRF enforcement. Results were 5 focused ingress/security tests and 40 focused P1 regression tests passing; generated contract snapshots pass. `docs/_scratch/p1-05-ingress-session-evidence.md` records commands and keeps deployed topology/BFF stripping with P9-05/P10, stream checkpoints with P7, and broad privacy with P8.
+
+P1-06 closure evidence (2026-07-24): `docs/_scratch/p1-06-audit-inventory.md` records retain/modify/add decisions for append-only enforcement and the protected-mutation helper. PostgreSQL 16 proof covers Alembic head `c4e8f1a02b93` triggers, atomic `commit_protected_mutation` success for `user.disabled`, ORM/raw UPDATE/DELETE rejection, and product-row rollback when the required audit event is rejected. Unit proofs cover allowlist rejection and helper commit/rollback. Results were 22 focused audit/foundation/observability/schema tests passing. `docs/_scratch/p1-06-audit-evidence.md` records commands and keeps broad call-site allowlist coverage and privacy scans with P8-01.
 
 ### P3-P6 - Domain, content, indexing, retrieval
 

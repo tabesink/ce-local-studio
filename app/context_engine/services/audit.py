@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 
+from sqlalchemy import event
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -33,6 +35,8 @@ ALLOWED_AUDIT_METADATA_KEYS = {
     "stopReason",
     "redactedTurnCount",
 }
+
+T = TypeVar("T")
 
 
 class AuditError(Exception):
@@ -107,14 +111,18 @@ class AuditService:
         safe_error_code: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> AuditEvent:
-        context = context or AuditContext()
-        resolved_actor_user = actor_user if actor_user is not None else context.actor_user
-        resolved_actor_kind = actor_kind or context.actor_kind or actor_kind_for_user(resolved_actor_user)
-        resolved_request_id = request_id if request_id is not None else context.request_id
-        resolved_trace_id = trace_id if trace_id is not None else context.trace_id
-        if event_name not in AUDIT_EVENT_NAMES or resolved_actor_kind not in AUDIT_ACTOR_KINDS or outcome not in AUDIT_OUTCOMES:
-            raise AuditError()
         try:
+            context = context or AuditContext()
+            resolved_actor_user = actor_user if actor_user is not None else context.actor_user
+            resolved_actor_kind = actor_kind or context.actor_kind or actor_kind_for_user(resolved_actor_user)
+            resolved_request_id = request_id if request_id is not None else context.request_id
+            resolved_trace_id = trace_id if trace_id is not None else context.trace_id
+            if (
+                event_name not in AUDIT_EVENT_NAMES
+                or resolved_actor_kind not in AUDIT_ACTOR_KINDS
+                or outcome not in AUDIT_OUTCOMES
+            ):
+                raise AuditError()
             event = AuditEvent(
                 id=str(uuid.uuid4()),
                 event_name=event_name,
@@ -131,8 +139,68 @@ class AuditService:
             )
             self._db.add(event)
             self._db.flush()
-        except (AuditError, SQLAlchemyError):
+            return event
+        except AuditError:
             self._db.rollback()
-            raise AuditError()
-        return event
+            raise
+        except SQLAlchemyError:
+            self._db.rollback()
+            raise AuditError() from None
 
+
+def commit_protected_mutation(
+    db: Session,
+    mutate: Callable[[], T],
+    *,
+    event_name: str,
+    context: AuditContext | None = None,
+    actor_user: User | None = None,
+    actor_kind: str | None = None,
+    target_kind: str | None = None,
+    target_id: str | None = None,
+    request_id: str | None = None,
+    trace_id: str | None = None,
+    outcome: str = AUDIT_OUTCOME_SUCCEEDED,
+    safe_error_code: str | None = None,
+    metadata: dict[str, Any] | Callable[[T], dict[str, Any] | None] | None = None,
+) -> T:
+    """Persist a protected product change and its required audit row together.
+
+    Commits only when both the mutation and audit insert succeed. Any audit
+    validation/persistence failure raises ``AuditError`` after rolling back so
+    the product change is not durable.
+    """
+    try:
+        result = mutate()
+        resolved_metadata = metadata(result) if callable(metadata) else metadata
+        AuditService(db).record(
+            event_name,
+            context=context,
+            actor_user=actor_user,
+            actor_kind=actor_kind,
+            target_kind=target_kind,
+            target_id=target_id,
+            request_id=request_id,
+            trace_id=trace_id,
+            outcome=outcome,
+            safe_error_code=safe_error_code,
+            metadata=resolved_metadata,
+        )
+        db.commit()
+        return result
+    except AuditError:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
+
+
+@event.listens_for(AuditEvent, "before_update")
+def _forbid_audit_event_update(_mapper, _connection, _target) -> None:
+    raise AuditError("audit_events is append-only")
+
+
+@event.listens_for(AuditEvent, "before_delete")
+def _forbid_audit_event_delete(_mapper, _connection, _target) -> None:
+    raise AuditError("audit_events is append-only")

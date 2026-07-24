@@ -14,6 +14,7 @@ from context_engine.services.audit import (
     ALLOWED_AUDIT_METADATA_KEYS,
     AuditContext,
     AuditService,
+    commit_protected_mutation,
 )
 
 
@@ -65,6 +66,7 @@ def test_phase_one_excludes_deferred_observability_read_service() -> None:
     assert not any(event in constraint_sql for event in DEFERRED_OBSERVABILITY_EVENTS)
     assert DEFERRED_OBSERVABILITY_METADATA_KEYS.isdisjoint(ALLOWED_AUDIT_METADATA_KEYS)
     assert not hasattr(AuditService, "list_events")
+    assert callable(commit_protected_mutation)
     assert not any(hasattr(audit_module, symbol) for symbol in DEFERRED_AUDIT_READ_SYMBOLS)
 
 

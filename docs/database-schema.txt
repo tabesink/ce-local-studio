@@ -206,7 +206,7 @@ audit_events
   metadata_json text NULL containing service-validated flat <=4096-byte JSON
   created_at timestamp NOT NULL
   indexes: created DESC, event+created, actor+created, target+created, request_id, trace_id
-  APPEND ONLY; no update/delete/export API in v1
+  APPEND ONLY; BEFORE UPDATE/DELETE triggers reject mutation; no update/delete/export API in v1
 
 CRITICAL CROSS-TABLE INVARIANTS
 -------------------------------
