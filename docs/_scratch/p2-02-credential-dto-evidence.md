@@ -19,6 +19,8 @@ Status: DONE
   `credentialUpdatedAt`/`inUse`/`version`).
 - Credential rotate encrypts with Fernet `CONFIG_ENCRYPTION_KEY`, bumps version
   under `SELECT FOR UPDATE`, and commits through protected mutation + audit.
+  Auto-activation of default synthesis also locks `runtime_settings` and bumps
+  its version so pre-rotate settings `If-Match` values become stale.
 - Catalogued mutations require strong `If-Match`; missing/malformed → `428
   validation_error`; stale → `409 stale_revision`; success returns strong `ETag`
   and `private, no-store` cache policy.
