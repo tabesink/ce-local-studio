@@ -194,6 +194,17 @@ def test_p1_05_csrf_origin_peer_rotation_logout_and_throttle_on_postgresql_16() 
                         {},
                     )
 
+                    with session_factory() as session:
+                        from context_engine.models import User as UserModel
+
+                        member_row = session.get(UserModel, member_id)
+                        assert member_row is not None
+                        presented_token, presented_session = create_auth_session(
+                            session, member_row, settings
+                        )
+                        presented_session_id = presented_session.id
+
+                    client.cookies.set(settings.session_cookie_name, presented_token, path="/")
                     login = client.post(
                         f"{CANONICAL_API_PREFIX}/auth/login",
                         headers={**_trusted_headers(), CSRF_HEADER: preauth},
@@ -204,10 +215,15 @@ def test_p1_05_csrf_origin_peer_rotation_logout_and_throttle_on_postgresql_16() 
                     )
                     assert login.status_code == 200
                     assert login.json()["user"]["id"] == member_id
-                    session_token = client.cookies.get(settings.session_cookie_name)
-                    session_csrf = client.cookies.get(settings.csrf_cookie_name)
-                    assert session_token
+                    session_token = login.cookies.get(settings.session_cookie_name)
+                    session_csrf = login.cookies.get(settings.csrf_cookie_name)
+                    assert session_token and session_token != presented_token
                     assert session_csrf and session_csrf != preauth
+                    client.cookies.set(settings.session_cookie_name, session_token, path="/")
+                    client.cookies.set(settings.csrf_cookie_name, session_csrf, path="/")
+                    with session_factory() as session:
+                        old = session.get(AuthSession, presented_session_id)
+                        assert old is not None and old.revoked_at is not None
 
                     me = client.get(
                         f"{CANONICAL_API_PREFIX}/auth/me",

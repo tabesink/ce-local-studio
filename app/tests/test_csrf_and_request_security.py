@@ -66,6 +66,31 @@ def test_request_security_policy_requires_complete_ingress_settings() -> None:
         )
 
 
+def test_testing_bypass_disables_ingress_when_settings_absent() -> None:
+    settings = Settings(testing=True)
+    policy = build_request_security_policy(settings)
+    assert policy.enabled is False
+
+    app = FastAPI()
+
+    @app.middleware("http")
+    async def security_middleware(request: Request, call_next):
+        enforce_request_security(request, settings, policy)
+        response = await call_next(request)
+        response.headers["X-CE-Test-Bucket"] = getattr(request.state, "client_bucket", "")
+        return response
+
+    @app.post("/api/v1/probe")
+    def probe() -> dict[str, str]:
+        return {"ok": "true"}
+
+    with TestClient(app) as client:
+        response = client.post("/api/v1/probe")
+        assert response.status_code == 200
+        assert response.json() == {"ok": "true"}
+        assert response.headers["x-ce-test-bucket"] == "test-bypass"
+
+
 def test_enforce_request_security_rejects_hostile_origin_and_csrf() -> None:
     settings = _secured_settings()
     policy = build_request_security_policy(settings)
