@@ -20,9 +20,9 @@ def iso_utc(value: datetime) -> str:
 def safe_user(user: User) -> dict[str, Any]:
     return {
         "id": user.id,
-        "username": user.username,
+        "displayName": user.username,
         "role": user.role,
-        "isDisabled": user.is_disabled,
+        "disabled": False,
     }
 
 
@@ -30,24 +30,19 @@ def seed_admin(db: Session, settings: Settings) -> User | None:
     if not settings.admin_username or not settings.admin_password:
         return None
 
-    now = utc_now()
     user = db.scalar(select(User).where(User.username == settings.admin_username))
-    password_hash = hash_password(settings.admin_password)
-    if user is None:
-        user = User(
-            username=settings.admin_username,
-            password_hash=password_hash,
-            role=ROLE_ADMINISTRATOR,
-            is_disabled=False,
-            password_changed_at=now,
-        )
-        db.add(user)
-    else:
-        user.password_hash = password_hash
-        user.role = ROLE_ADMINISTRATOR
-        user.is_disabled = False
-        user.password_changed_at = now
-        user.updated_at = now
+    if user is not None:
+        return user
+
+    now = utc_now()
+    user = User(
+        username=settings.admin_username,
+        password_hash=hash_password(settings.admin_password),
+        role=ROLE_ADMINISTRATOR,
+        is_disabled=False,
+        password_changed_at=now,
+    )
+    db.add(user)
     db.commit()
     db.refresh(user)
     return user
@@ -77,14 +72,30 @@ def authenticate_user(db: Session, username: str, password: str) -> User | None:
     return user
 
 
-def create_auth_session(db: Session, user: User, settings: Settings) -> tuple[str, AuthSession]:
+def create_auth_session(
+    db: Session,
+    user: User,
+    settings: Settings,
+    *,
+    presented_token: str | None = None,
+) -> tuple[str, AuthSession]:
     token = generate_session_token()
     now = utc_now()
+    if presented_token:
+        presented_session = db.scalar(
+            select(AuthSession)
+            .where(AuthSession.token_hash == hash_session_token(presented_token))
+            .with_for_update()
+        )
+        if presented_session is not None and presented_session.revoked_at is None:
+            presented_session.revoked_at = now
+
     auth_session = AuthSession(
         user_id=user.id,
         token_hash=hash_session_token(token),
         expires_at=now + timedelta(seconds=settings.session_ttl_seconds),
         created_at=now,
+        last_used_at=now,
     )
     db.add(auth_session)
     db.commit()

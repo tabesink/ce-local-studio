@@ -333,6 +333,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/csrf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Csrf */
+        get: operations["csrf_api_v1_auth_csrf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -436,6 +453,40 @@ export interface paths {
         head?: never;
         /** Patch Conversation */
         patch: operations["patch_conversation_api_v1_conversations__conversationId__patch"];
+        trace?: never;
+    };
+    "/api/v1/conversations/{conversationId}/turns/{turnId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Conversation Turn Events */
+        get: operations["get_conversation_turn_events_api_v1_conversations__conversationId__turns__turnId__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/conversations/{conversationId}/turns/{turnId}:cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Conversation Turn Cancel */
+        post: operations["post_conversation_turn_cancel_api_v1_conversations__conversationId__turns__turnId__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/conversations/{conversationId}/turns:stream": {
@@ -688,6 +739,11 @@ export interface components {
         ConversationTitleRequest: {
             /** Title */
             title?: string | null;
+        };
+        /** CsrfResponse */
+        CsrfResponse: {
+            /** Csrftoken */
+            csrfToken: string;
         };
         /** CurrentUserDto */
         CurrentUserDto: {
@@ -1895,6 +1951,26 @@ export interface operations {
             };
         };
     };
+    csrf_api_v1_auth_csrf_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsrfResponse"];
+                };
+            };
+        };
+    };
     login_api_v1_auth_login_post: {
         parameters: {
             query?: never;
@@ -1940,15 +2016,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
-                };
+                content?: never;
             };
         };
     };
@@ -2145,6 +2217,74 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_conversation_turn_events_api_v1_conversations__conversationId__turns__turnId__events_get: {
+        parameters: {
+            query?: {
+                after?: number;
+            };
+            header?: never;
+            path: {
+                conversationId: string;
+                turnId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_conversation_turn_cancel_api_v1_conversations__conversationId__turns__turnId__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversationId: string;
+                turnId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };

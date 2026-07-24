@@ -33,7 +33,7 @@ class JsonLogFormatter(logging.Formatter):
             "timestamp": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
             "level": record.levelname.lower(),
             "logger": record.name,
-            "event": getattr(record, "event", record.getMessage()),
+            "event": getattr(record, "event", "unclassified"),
         }
         for field in sorted(SAFE_LOG_FIELDS - {"event"}):
             value = getattr(record, field, None)

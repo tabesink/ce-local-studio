@@ -25,6 +25,22 @@ auth_sessions
   expires_at timestamp NOT NULL INDEX
   revoked_at, last_used_at timestamp NULL; created_at timestamp NOT NULL
 
+login_throttle_buckets
+  id PK varchar(36)
+  client_bucket_hash varchar(64) NOT NULL
+  username_hash varchar(64) NOT NULL
+  window_started_at timestamp NOT NULL
+  failure_count integer NOT NULL CHECK >= 0
+  blocked_until timestamp NULL INDEX
+  updated_at timestamp NOT NULL
+  UNIQUE (client_bucket_hash, username_hash)
+
+  Internal security authority only. Both keys are server-side SHA-256 hashes;
+  raw usernames, client addresses/buckets, cookies, CSRF values and passwords
+  are forbidden. Failed-login updates lock the unique row transactionally.
+  Successful authentication deletes the matching row. Rows not updated within
+  24 hours are eligible for bounded opportunistic cleanup.
+
 provider_configs
   provider_kind PK varchar(32) CHECK IN ('openai','bedrock','ollama','reducto')
   display_name varchar(80) NOT NULL
@@ -131,6 +147,21 @@ conversation_turns
   CHECK direct_llm -> domain_id IS NULL; domain_rag -> domain_id IS NOT NULL
   INDEX(conversation_id, created_at DESC); active/status indexes from migration
 
+conversation_turn_events
+  id PK varchar(36) globally unique opaque event ID
+  turn_id FK conversation_turns.id CASCADE
+  sequence integer NOT NULL CHECK >=1
+  schema_version varchar(16) NOT NULL CHECK = '1.0'
+  event_type closed set turn.accepted/route.selected/retrieval.started/
+    retrieval.completed/evidence.delta/answer.delta/turn.completed/
+    turn.failed/turn.cancelled/turn.redacted
+  payload_json text NOT NULL containing canonical safe camelCase JSON
+  payload_digest varchar(64) NOT NULL CHECK length = 64
+  occurred_at timestamp NOT NULL
+  UNIQUE(turn_id, sequence); INDEX(turn_id, sequence)
+  APPEND ONLY except redaction atomically replaces superseded public projections
+  with one higher-sequence turn.redacted event
+
 conversation_turn_evidence_refs
   id PK; public_ref varchar(64) NOT NULL UNIQUE INDEX
   turn_id FK conversation_turns.id CASCADE
@@ -190,3 +221,5 @@ CRITICAL CROSS-TABLE INVARIANTS
 8. Protected state mutations and their audit row commit or roll back together.
 9. Never persist raw composer tokens, assembled prompts, raw LightRAG hits/provider
     payloads, runtime URLs, storage paths, credentials, or stack traces in product tables.
+10. Safe turn events are persisted before their sequence is resumable; terminal turn
+    state and its terminal event commit atomically.

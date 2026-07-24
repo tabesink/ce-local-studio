@@ -20,7 +20,7 @@ FastAPI -> PostgreSQL + governed object storage + private adapters/workers
 1. Ingress terminates TLS, normalizes one trusted `Host`, replaces forwarding headers, and routes `/api/v1/*` to Next.
 2. Next resolves one server-only `CONTEXT_ENGINE_API_BASE` and validates the ingress-normalized public host and scheme against server configuration; request data can never alter the upstream or select the canonical public origin.
 3. The BFF copies only the allowlisted request method, path, query, body, `Accept`, `Content-Type`, browser `Origin`, `Cookie`, `Range`, `If-Range`, `If-Match`, `Idempotency-Key`, `X-CSRF-Token`, and `X-Client-Request-Id`.
-4. The BFF removes `Authorization`, `X-API-Key`, all `X-User-*`/`X-Role-*`, caller-supplied `Forwarded`/`X-Forwarded-*`, `Host`, `X-CE-Public-Host`, `X-CE-Public-Proto`, hop-by-hop headers, and content-framing headers it recalculates. Only after the validation in step 2, it adds server-derived `X-CE-Public-Host` and `X-CE-Public-Proto` values for FastAPI; browser values can never populate those headers.
+4. The BFF removes `Authorization`, `X-API-Key`, all `X-User-*`/`X-Role-*`, caller-supplied `Forwarded`/`X-Forwarded-*`, `Host`, `X-CE-Public-Host`, `X-CE-Public-Proto`, `X-CE-Client-Bucket`, hop-by-hop headers, and content-framing headers it recalculates. Only after the validation in step 2, it adds server-derived `X-CE-Public-Host`, `X-CE-Public-Proto`, and `X-CE-Client-Bucket` values for FastAPI. The client bucket is a bounded opaque ingress classification, never a raw address; browser values can never populate these headers.
 5. FastAPI accepts the public host/proto headers only from the private BFF peer, validates them and the forwarded browser `Origin` against the configured public origin, validates its internal upstream `Host`, then checks session, CSRF where required, coarse role, and service-level authorization. It generates `X-Request-ID`; caller values are correlation hints only and never become the server request ID.
 6. The BFF passes the upstream body through without buffering. It returns only allowlisted response headers and strips infrastructure headers.
 
@@ -31,16 +31,18 @@ No generic `/proxy?url=` route is permitted.
 | Item | Rule |
 | --- | --- |
 | Session cookie | `ce_session`; random opaque value; hash only in PostgreSQL; `HttpOnly`, `Path=/`, no `Domain`, configured `Secure`, validated `SameSite=Lax` or stricter |
-| CSRF cookie | `ce_csrf`; signed opaque value; readable by same-origin browser code, `Path=/`, no `Domain`, same `Secure`/`SameSite` policy; it grants no authentication |
+| CSRF cookie | `ce_csrf`; signed opaque value using the dedicated CSRF signing key; readable by same-origin browser code, `Path=/`, no `Domain`, same `Secure`/`SameSite` policy; it grants no authentication |
 | Bootstrap | `GET /api/v1/auth/csrf` issues a pre-auth CSRF cookie and returns the same value as `{ "csrfToken": "..." }`; response is `no-store` |
 | Unsafe request | `POST`, `PUT`, `PATCH`, and `DELETE` require exact cookie/header match in `X-CSRF-Token`, a valid server signature, and an allowed public `Origin` |
 | Login | Requires pre-auth CSRF; revokes/rotates the presented session; creates a new session; rotates CSRF to a value bound to that session |
 | Logout | Requires authenticated CSRF; revokes the session before expiring both cookies |
-| Expiry | Enforce absolute and idle expiry in FastAPI on every request; update last-use at a bounded cadence, not per streamed event |
+| Expiry | `auth_sessions.expires_at` is absolute expiry. Enforce it plus configured idle expiry in FastAPI on every request; initialize `last_used_at` at creation and persist touches no more often than the configured cadence. Streams recheck at bounded checkpoints owned by P7, not per event |
 
 The BFF forwards `Set-Cookie` from FastAPI unchanged except for an explicitly tested development-only `Secure` policy. It never copies a session into JSON, local storage, a bearer token, or a module singleton. `GET /auth/me` is the only identity source after navigation or role change.
 
-Login throttling is keyed by an ingress-verified client bucket plus normalized username hash; messages do not disclose whether the account exists or is disabled. Authentication, CSRF, and rate-limit failures use the canonical safe envelope.
+Login throttling is keyed by the server-derived ingress client bucket hash plus normalized-username hash in PostgreSQL `login_throttle_buckets`. Failed-login updates lock the unique bucket transactionally; successful authentication clears it. The configured window, failure threshold and block duration are bounded positive values. `429` uses a safe integer `Retry-After`; messages do not disclose whether the account exists or is disabled. Authentication, CSRF, and rate-limit failures use the canonical safe envelope. Raw usernames, addresses/buckets, cookies, CSRF values and passwords are never stored in throttle rows.
+
+CSRF tokens are opaque signed values with a private version, issued-at time, random nonce and binding. Pre-auth tokens bind to a pre-auth sentinel and are rotated after successful login to the new session token hash; authenticated unsafe requests require the session binding. Logout revokes the session before expiring both cookies. Verification accepts only the configured current key; key rotation requires a separately configured bounded previous-key compatibility window and must never reuse the provider-credential encryption key.
 
 ## BFF route requirements
 

@@ -56,6 +56,10 @@ class ErrorEnvelope(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class CsrfResponse(BaseModel):
+    csrf_token: str = Field(alias="csrfToken")
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 class LiveHealthResponse(BaseModel):
     status: Literal["live"]
 

@@ -107,8 +107,15 @@ TURN_ROUTES = (TURN_ROUTE_DIRECT_LLM, TURN_ROUTE_DOMAIN_RAG)
 TURN_STATUS_RUNNING = "running"
 TURN_STATUS_COMPLETED = "completed"
 TURN_STATUS_FAILED = "failed"
+TURN_STATUS_CANCELLED = "cancelled"
 TURN_STATUS_REDACTED = "redacted"
-TURN_STATUSES = (TURN_STATUS_RUNNING, TURN_STATUS_COMPLETED, TURN_STATUS_FAILED, TURN_STATUS_REDACTED)
+TURN_STATUSES = (
+    TURN_STATUS_RUNNING,
+    TURN_STATUS_COMPLETED,
+    TURN_STATUS_FAILED,
+    TURN_STATUS_CANCELLED,
+    TURN_STATUS_REDACTED,
+)
 TURN_STOP_REASON_DIRECT_LLM = "direct_llm"
 TURN_STOP_REASON_GROUNDED = "grounded"
 TURN_STOP_REASON_NO_GROUNDED_CONTEXT = "no_grounded_context"
@@ -232,6 +239,28 @@ class AuthSession(Base):
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
 
     user: Mapped[User] = relationship(back_populates="sessions")
+
+
+class LoginThrottleBucket(Base):
+    __tablename__ = "login_throttle_buckets"
+    __table_args__ = (
+        CheckConstraint("failure_count >= 0", name="ck_login_throttle_buckets_failure_count"),
+        Index(
+            "uq_login_throttle_buckets_key",
+            "client_bucket_hash",
+            "username_hash",
+            unique=True,
+        ),
+        Index("ix_login_throttle_buckets_blocked_until", "blocked_until"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    client_bucket_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    username_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    window_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False)
+    failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    blocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now, onupdate=utc_now)
 
 
 class ProviderConfig(Base):
@@ -384,12 +413,14 @@ class SourceDocument(Base):
         CheckConstraint("original_size_bytes > 0", name="ck_source_documents_size_positive"),
         CheckConstraint("preparation_generation >= 1", name="ck_source_documents_generation_positive"),
         CheckConstraint("index_generation >= 0", name="ck_source_documents_index_generation_nonnegative"),
+        Index("uq_source_documents_public_ref", "public_ref", unique=True),
         Index("uq_source_documents_domain_hash", "domain_id", "original_sha256", unique=True),
         Index("ix_source_documents_domain_created", "domain_id", text("created_at DESC")),
         Index("ix_source_documents_domain_index_state", "domain_id", "index_state"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    public_ref: Mapped[str] = mapped_column(String(64), nullable=False, default=lambda: f"doc_{uuid.uuid4().hex}")
     domain_id: Mapped[str] = mapped_column(
         String(64),
         ForeignKey("domains.id", ondelete="CASCADE"),
@@ -658,6 +689,70 @@ class ConversationTurn(Base):
         passive_deletes=True,
         order_by="ConversationTurnComposerRef.ref_order",
     )
+    events: Mapped[list["ConversationTurnEvent"]] = relationship(
+        back_populates="turn",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ConversationTurnEvent.sequence",
+    )
+
+
+TURN_EVENT_SCHEMA_VERSION = "1.0"
+TURN_EVENT_ACCEPTED = "turn.accepted"
+TURN_EVENT_ROUTE_SELECTED = "route.selected"
+TURN_EVENT_RETRIEVAL_STARTED = "retrieval.started"
+TURN_EVENT_RETRIEVAL_COMPLETED = "retrieval.completed"
+TURN_EVENT_EVIDENCE_DELTA = "evidence.delta"
+TURN_EVENT_ANSWER_DELTA = "answer.delta"
+TURN_EVENT_COMPLETED = "turn.completed"
+TURN_EVENT_FAILED = "turn.failed"
+TURN_EVENT_CANCELLED = "turn.cancelled"
+TURN_EVENT_REDACTED = "turn.redacted"
+TURN_EVENT_TYPES = (
+    TURN_EVENT_ACCEPTED,
+    TURN_EVENT_ROUTE_SELECTED,
+    TURN_EVENT_RETRIEVAL_STARTED,
+    TURN_EVENT_RETRIEVAL_COMPLETED,
+    TURN_EVENT_EVIDENCE_DELTA,
+    TURN_EVENT_ANSWER_DELTA,
+    TURN_EVENT_COMPLETED,
+    TURN_EVENT_FAILED,
+    TURN_EVENT_CANCELLED,
+    TURN_EVENT_REDACTED,
+)
+
+
+class ConversationTurnEvent(Base):
+    __tablename__ = "conversation_turn_events"
+    __table_args__ = (
+        CheckConstraint("sequence >= 1", name="ck_conversation_turn_events_sequence_positive"),
+        CheckConstraint(
+            f"schema_version = '{TURN_EVENT_SCHEMA_VERSION}'",
+            name="ck_conversation_turn_events_schema_version",
+        ),
+        CheckConstraint(f"event_type in {TURN_EVENT_TYPES}", name="ck_conversation_turn_events_type"),
+        CheckConstraint("length(payload_digest) = 64", name="ck_conversation_turn_events_digest_size"),
+        Index("uq_conversation_turn_events_sequence", "turn_id", "sequence", unique=True),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    turn_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("conversation_turns.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    schema_version: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default=TURN_EVENT_SCHEMA_VERSION,
+    )
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text(), nullable=False)
+    payload_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now)
+
+    turn: Mapped[ConversationTurn] = relationship(back_populates="events")
 
 
 class ConversationTurnEvidenceRef(Base):
@@ -677,10 +772,12 @@ class ConversationTurnEvidenceRef(Base):
             sqlite_where=text("redacted_at IS NULL"),
             postgresql_where=text("redacted_at IS NULL"),
         ),
+        Index("uq_conversation_turn_evidence_refs_public_ref", "public_ref", unique=True),
         Index("ix_conversation_turn_evidence_refs_source_document", "source_document_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    public_ref: Mapped[str] = mapped_column(String(64), nullable=False, default=lambda: f"ev_{uuid.uuid4().hex}")
     turn_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("conversation_turns.id", ondelete="CASCADE"),
@@ -767,9 +864,11 @@ class ConversationTurnComposerRef(Base):
         Index("ix_conversation_turn_composer_refs_source_document", "source_document_id"),
         Index("ix_conversation_turn_composer_refs_evidence_ref", "evidence_ref_id"),
         Index("ix_conversation_turn_composer_refs_template", "prompt_template_id"),
+        Index("uq_conversation_turn_composer_refs_public_ref", "public_ref", unique=True),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    public_ref: Mapped[str] = mapped_column(String(64), nullable=False, default=lambda: f"accepted_{uuid.uuid4().hex}")
     turn_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("conversation_turns.id", ondelete="CASCADE"),

@@ -7,6 +7,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from argon2.low_level import Type
 
+
 _password_hasher = PasswordHasher(
     time_cost=3,
     memory_cost=65536,
@@ -30,6 +31,10 @@ def verify_password(password_hash: str, password: str) -> bool:
 
 def generate_session_token() -> str:
     return secrets.token_urlsafe(48)
+
+
+def generate_csrf_token() -> str:
+    return secrets.token_urlsafe(32)
 
 
 def hash_session_token(token: str) -> str:

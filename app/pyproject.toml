@@ -34,6 +34,7 @@ pythonpath = ["."]
 addopts = "-q --basetemp=tests/.pytest-tmp"
 markers = [
     "integration_docker: requires a live Docker daemon; used for Slice A controller lifecycle proof",
+    "postgresql: requires explicit opt-in and an administrative PostgreSQL 16 test URL",
 ]
 
 [tool.setuptools.packages.find]

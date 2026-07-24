@@ -121,13 +121,10 @@ def test_registered_route_delta_is_explicit() -> None:
 
     assert registered - authoritative == set()
     assert authoritative - registered == {
-        ("GET", f"{CANONICAL_API_PREFIX}/auth/csrf"),
-        ("GET", f"{CANONICAL_API_PREFIX}/conversations/{{}}/turns/{{}}/events"),
         ("GET", f"{CANONICAL_API_PREFIX}/documents"),
         ("GET", f"{CANONICAL_API_PREFIX}/documents/{{}}"),
         ("GET", f"{CANONICAL_API_PREFIX}/documents/{{}}/content"),
         ("GET", f"{CANONICAL_API_PREFIX}/evidence/{{}}/location"),
-        ("POST", f"{CANONICAL_API_PREFIX}/conversations/{{}}/turns/{{}}:cancel"),
     }
 
 
@@ -169,6 +166,7 @@ def test_registered_path_parameters_are_camel_case() -> None:
         "id",
         "kind",
         "sourceId",
+        "turnId",
     }
 
 

@@ -557,6 +557,20 @@
         "title": "ConversationTitleRequest",
         "type": "object"
       },
+      "CsrfResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "csrfToken": {
+            "title": "Csrftoken",
+            "type": "string"
+          }
+        },
+        "required": [
+          "csrfToken"
+        ],
+        "title": "CsrfResponse",
+        "type": "object"
+      },
       "CurrentUserDto": {
         "additionalProperties": false,
         "properties": {
@@ -2896,6 +2910,24 @@
         "summary": "Admin Users"
       }
     },
+    "/api/v1/auth/csrf": {
+      "get": {
+        "operationId": "csrf_api_v1_auth_csrf_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CsrfResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Csrf"
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "operationId": "login_api_v1_auth_login_post",
@@ -2940,18 +2972,7 @@
       "post": {
         "operationId": "logout_api_v1_auth_logout_post",
         "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "boolean"
-                  },
-                  "title": "Response Logout Api V1 Auth Logout Post",
-                  "type": "object"
-                }
-              }
-            },
+          "204": {
             "description": "Successful Response"
           }
         },
@@ -3207,6 +3228,121 @@
           }
         },
         "summary": "Patch Conversation"
+      }
+    },
+    "/api/v1/conversations/{conversationId}/turns/{turnId}/events": {
+      "get": {
+        "operationId": "get_conversation_turn_events_api_v1_conversations__conversationId__turns__turnId__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversationId",
+            "required": true,
+            "schema": {
+              "maxLength": 36,
+              "minLength": 1,
+              "title": "Conversationid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "turnId",
+            "required": true,
+            "schema": {
+              "maxLength": 36,
+              "minLength": 1,
+              "title": "Turnid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "After",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Conversation Turn Events"
+      }
+    },
+    "/api/v1/conversations/{conversationId}/turns/{turnId}:cancel": {
+      "post": {
+        "operationId": "post_conversation_turn_cancel_api_v1_conversations__conversationId__turns__turnId__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversationId",
+            "required": true,
+            "schema": {
+              "maxLength": 36,
+              "minLength": 1,
+              "title": "Conversationid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "turnId",
+            "required": true,
+            "schema": {
+              "maxLength": 36,
+              "minLength": 1,
+              "title": "Turnid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Post Conversation Turn Cancel Api V1 Conversations  Conversationid  Turns  Turnid  Cancel Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Conversation Turn Cancel"
       }
     },
     "/api/v1/conversations/{conversationId}/turns:stream": {

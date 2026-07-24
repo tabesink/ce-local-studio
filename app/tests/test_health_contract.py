@@ -16,11 +16,17 @@ from context_engine.api.routes import live, ready
 from context_engine.app import create_app
 from context_engine.config import Settings
 from context_engine.db import Base
+from context_engine.services.readiness import SUPPORTED_ALEMBIC_HEAD
 
 
 class HealthyDatabase:
     def execute(self, _statement: object) -> None:
         return None
+
+    def scalar(self, statement: object) -> str:
+        if "alembic_version" in str(statement):
+            return SUPPORTED_ALEMBIC_HEAD
+        return "enabled-administrator-id"
 
 
 class UnhealthyDatabase:
@@ -81,4 +87,5 @@ def test_readiness_failure_returns_closed_safe_error_envelope(tmp_path: Path) ->
         }
     }
     assert response.headers[CANONICAL_REQUEST_ID_HEADER]
+    assert response.headers["Cache-Control"] == "private, no-store, no-transform"
 

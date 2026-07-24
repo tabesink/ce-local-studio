@@ -39,9 +39,19 @@ class Settings:
     config_encryption_key: str | None = field(default_factory=lambda: _env("CONFIG_ENCRYPTION_KEY"), repr=False)
     testing: bool = field(default_factory=lambda: _env_bool("CONTEXT_ENGINE_TESTING", False))
     session_cookie_name: str = "ce_session"
+    csrf_cookie_name: str = "ce_csrf"
     session_cookie_secure: bool = field(default_factory=lambda: _env_bool("CE_SESSION_COOKIE_SECURE", True))
     session_cookie_samesite: str = field(default_factory=lambda: _env("CE_SESSION_COOKIE_SAMESITE", "lax") or "lax")
     session_ttl_seconds: int = field(default_factory=lambda: _env_int("CE_SESSION_TTL_SECONDS", 60 * 60 * 8))
+    session_idle_ttl_seconds: int = field(default_factory=lambda: _env_int("CE_SESSION_IDLE_TTL_SECONDS", 60 * 30))
+    session_touch_interval_seconds: int = field(default_factory=lambda: _env_int("CE_SESSION_TOUCH_INTERVAL_SECONDS", 60))
+    public_origin: str | None = field(default_factory=lambda: _env("CE_PUBLIC_ORIGIN"))
+    internal_hosts: str | None = field(default_factory=lambda: _env("CE_INTERNAL_HOSTS"))
+    trusted_bff_peers: str | None = field(default_factory=lambda: _env("CE_TRUSTED_BFF_PEERS"))
+    csrf_signing_key: str | None = field(default_factory=lambda: _env("CE_CSRF_SIGNING_KEY"), repr=False)
+    login_throttle_window_seconds: int = field(default_factory=lambda: _env_int("CE_LOGIN_THROTTLE_WINDOW_SECONDS", 300))
+    login_throttle_max_failures: int = field(default_factory=lambda: _env_int("CE_LOGIN_THROTTLE_MAX_FAILURES", 5))
+    login_throttle_block_seconds: int = field(default_factory=lambda: _env_int("CE_LOGIN_THROTTLE_BLOCK_SECONDS", 900))
     domain_runtime_root: str = field(default_factory=lambda: _env("CE_DOMAIN_RUNTIME_ROOT", ".data/domain-runtimes") or ".data/domain-runtimes")
     domain_runtime_controller_kind: str = field(default_factory=lambda: _env("CE_DOMAIN_RUNTIME_CONTROLLER_KIND", "docker") or "docker")
     domain_controller_command: str | None = field(default_factory=lambda: _env("CE_DOMAIN_CONTROLLER_COMMAND"))
@@ -66,6 +76,18 @@ class Settings:
             # beats silently shipping a session cookie the browser will drop.
             raise ValueError("session_cookie_samesite='none' requires session_cookie_secure=True.")
         object.__setattr__(self, "session_cookie_samesite", samesite)
+        if self.session_ttl_seconds <= 0:
+            raise ValueError("session_ttl_seconds must be positive.")
+        if self.session_idle_ttl_seconds <= 0 or self.session_idle_ttl_seconds > self.session_ttl_seconds:
+            raise ValueError("session_idle_ttl_seconds must be positive and no greater than session_ttl_seconds.")
+        if self.session_touch_interval_seconds <= 0 or self.session_touch_interval_seconds >= self.session_idle_ttl_seconds:
+            raise ValueError("session_touch_interval_seconds must be positive and less than session_idle_ttl_seconds.")
+        if self.login_throttle_window_seconds <= 0:
+            raise ValueError("login_throttle_window_seconds must be positive.")
+        if self.login_throttle_max_failures <= 0:
+            raise ValueError("login_throttle_max_failures must be positive.")
+        if self.login_throttle_block_seconds <= 0:
+            raise ValueError("login_throttle_block_seconds must be positive.")
         if self.domain_storage_limit_bytes <= 0:
             raise ValueError("domain_storage_limit_bytes must be positive.")
 

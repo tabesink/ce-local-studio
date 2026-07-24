@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from context_engine.services.readiness import ReadinessError, check_readiness
+
 from datetime import datetime
 from email.parser import BytesParser
 from email.policy import default as email_policy
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Body, Depends, Path, Request, Response
+from fastapi import APIRouter, Body, Depends, Path, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select, text
@@ -13,11 +15,12 @@ from sqlalchemy.orm import Session
 
 from context_engine.api.dependencies import CurrentSession, get_db, get_settings, require_admin, require_current_session
 from context_engine.api.errors import ApiError, request_id_from
-from context_engine.api.public_schemas import ErrorEnvelope, LiveHealthResponse, ReadyHealthResponse
+from context_engine.api.public_schemas import ErrorEnvelope, CsrfResponse, LiveHealthResponse, ReadyHealthResponse
 from context_engine.config import Settings
 from context_engine.models import (
     User,
 )
+from context_engine.security import hash_session_token
 from context_engine.services.audit import AuditContext
 from context_engine.services.auth import (
     authenticate_user,
@@ -26,11 +29,21 @@ from context_engine.services.auth import (
     revoke_session_token,
     safe_user,
 )
+from context_engine.services.csrf import CSRF_PREAUTH_BINDING, issue_csrf_token
+from context_engine.services.login_throttle import (
+    LoginRateLimited,
+    assert_login_allowed,
+    clear_login_failures,
+    record_login_failure,
+)
 from context_engine.services.chat_turns import (
     ChatTurnError,
-    encode_sse_event,
-    stream_turn_events,
+    cancel_turn,
     conversation_turn_summaries,
+    encode_sse_event,
+    safe_turn_summary,
+    stream_turn_events,
+    stream_turn_events_by_turn,
 )
 from context_engine.services.composer_refs import (
     ComposerRefError,
@@ -205,36 +218,11 @@ api_router = APIRouter()
 health_router = APIRouter()
 
 
-@health_router.get("/health/live", response_model=LiveHealthResponse)
-def live() -> dict[str, str]:
-    return {"status": "live"}
+def _client_bucket(request: Request) -> str:
+    return getattr(request.state, "client_bucket", None) or "test-bypass"
 
 
-@health_router.get(
-    "/health/ready",
-    response_model=ReadyHealthResponse,
-    responses={503: {"model": ErrorEnvelope, "description": "Service is not ready."}},
-)
-def ready(db: Session = Depends(get_db)) -> dict[str, str]:
-    try:
-        db.execute(text("SELECT 1"))
-    except Exception as exc:
-        raise ApiError(503, "dependency_unavailable", "Service unavailable.") from exc
-    return {"status": "ready"}
-
-
-@api_router.post("/auth/login")
-def login(
-    payload: LoginRequest,
-    response: Response,
-    db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
-) -> dict[str, object]:
-    user = authenticate_user(db, payload.username, payload.password)
-    if user is None:
-        raise ApiError(401, "invalid_credentials", "Invalid username or password.")
-
-    token, auth_session = create_auth_session(db, user, settings)
+def _set_session_cookie(response: Response, settings: Settings, token: str) -> None:
     response.set_cookie(
         key=settings.session_cookie_name,
         value=token,
@@ -244,35 +232,125 @@ def login(
         samesite=settings.session_cookie_samesite,
         path="/",
     )
-    return {"user": safe_user(user), "session": {"expiresAt": iso_utc(auth_session.expires_at)}}
 
 
-@api_router.get("/auth/me")
-def me(current: CurrentSession = Depends(require_current_session)) -> dict[str, object]:
-    return {"user": safe_user(current.user), "session": {"expiresAt": iso_utc(current.auth_session.expires_at)}}
-
-
-@api_router.post("/auth/logout")
-def logout(
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
-) -> dict[str, bool]:
-    token = request.cookies.get(settings.session_cookie_name)
-    if token:
-        revoke_session_token(db, token)
+def _set_csrf_cookie(response: Response, settings: Settings, token: str) -> None:
     response.set_cookie(
-        key=settings.session_cookie_name,
-        value="",
-        max_age=0,
-        expires=0,
-        httponly=True,
+        key=settings.csrf_cookie_name,
+        value=token,
+        max_age=settings.session_ttl_seconds,
+        httponly=False,
         secure=settings.session_cookie_secure,
         samesite=settings.session_cookie_samesite,
         path="/",
     )
-    return {"ok": True}
+
+
+def _expire_auth_cookies(response: Response, settings: Settings) -> None:
+    common = {
+        "value": "",
+        "max_age": 0,
+        "expires": 0,
+        "secure": settings.session_cookie_secure,
+        "samesite": settings.session_cookie_samesite,
+        "path": "/",
+    }
+    response.set_cookie(key=settings.session_cookie_name, httponly=True, **common)
+    response.set_cookie(key=settings.csrf_cookie_name, httponly=False, **common)
+
+
+@health_router.get("/health/live", response_model=LiveHealthResponse)
+def live() -> dict[str, str]:
+    return {"status": "live"}
+
+
+@api_router.get("/auth/csrf", response_model=CsrfResponse)
+def csrf(response: Response, settings: Settings = Depends(get_settings)) -> dict[str, str]:
+    token = issue_csrf_token(settings, binding=CSRF_PREAUTH_BINDING)
+    _set_csrf_cookie(response, settings, token)
+    response.headers["Cache-Control"] = "private, no-store, no-transform"
+    return {"csrfToken": token}
+
+
+@health_router.get(
+    "/health/ready",
+    response_model=ReadyHealthResponse,
+    responses={503: {"model": ErrorEnvelope, "description": "Service is not ready."}},
+)
+def ready(db: Session = Depends(get_db)) -> dict[str, str]:
+    try:
+        check_readiness(db)
+    except ReadinessError as exc:
+        raise ApiError(503, "dependency_unavailable", "Service unavailable.") from exc
+    return {"status": "ready"}
+
+
+@api_router.post("/auth/login")
+def login(
+    payload: LoginRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, object]:
+    client_bucket = _client_bucket(request)
+    try:
+        assert_login_allowed(db, client_bucket=client_bucket, username=payload.username)
+    except LoginRateLimited as exc:
+        raise ApiError(
+            429,
+            "rate_limited",
+            "Login temporarily unavailable.",
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+
+    user = authenticate_user(db, payload.username, payload.password)
+    if user is None:
+        record_login_failure(
+            db,
+            settings,
+            client_bucket=client_bucket,
+            username=payload.username,
+        )
+        raise ApiError(401, "invalid_credentials", "Invalid username or password.")
+
+    clear_login_failures(db, client_bucket=client_bucket, username=payload.username)
+    token, _auth_session = create_auth_session(
+        db,
+        user,
+        settings,
+        presented_token=request.cookies.get(settings.session_cookie_name),
+    )
+    _set_session_cookie(response, settings, token)
+    _set_csrf_cookie(
+        response,
+        settings,
+        issue_csrf_token(settings, binding=hash_session_token(token)),
+    )
+    response.headers["Cache-Control"] = "private, no-store, no-transform"
+    return {"user": safe_user(user)}
+
+
+@api_router.get("/auth/me")
+def me(current: CurrentSession = Depends(require_current_session)) -> dict[str, object]:
+    return {"user": safe_user(current.user)}
+
+
+@api_router.post("/auth/logout", status_code=204, response_class=Response)
+def logout(
+    request: Request,
+    response: Response,
+    _: CurrentSession = Depends(require_current_session),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    token = request.cookies.get(settings.session_cookie_name)
+    if token:
+        revoke_session_token(db, token)
+    _expire_auth_cookies(response, settings)
+    response.status_code = 204
+    response.headers["Cache-Control"] = "private, no-store, no-transform"
+    return response
 
 
 @api_router.get("/admin/users")
@@ -437,10 +515,11 @@ def remove_conversation(
 
 
 
-def _streaming_sse_response(first_event, remaining_events) -> StreamingResponse:
+def _streaming_sse_response(first_event: TurnStreamEvent | None, remaining_events) -> StreamingResponse:
     def body():
         try:
-            yield encode_sse_event(first_event)
+            if first_event is not None:
+                yield encode_sse_event(first_event)
             for event in remaining_events:
                 yield encode_sse_event(event)
         finally:
@@ -448,7 +527,15 @@ def _streaming_sse_response(first_event, remaining_events) -> StreamingResponse:
             if close is not None:
                 close()
 
-    return StreamingResponse(body(), media_type="text/event-stream")
+    return StreamingResponse(
+        body(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "private, no-store, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @api_router.post("/conversations/{conversationId}/turns:stream")
@@ -482,6 +569,43 @@ def post_conversation_turn_stream(
     except StopIteration as exc:  # pragma: no cover - defensive guard for a broken projector
         raise ApiError(500, "internal_error", "Internal server error.") from exc
     return _streaming_sse_response(first_event, events)
+
+
+@api_router.get("/conversations/{conversationId}/turns/{turnId}/events")
+def get_conversation_turn_events(
+    conversation_id: Annotated[str, Path(alias="conversationId", min_length=1, max_length=36)],
+    turn_id: Annotated[str, Path(alias="turnId", min_length=1, max_length=36)],
+    after: int = Query(default=0, ge=0),
+    current: CurrentSession = Depends(require_current_session),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    events = stream_turn_events_by_turn(
+        db,
+        owner=current.user,
+        conversation_id=conversation_id,
+        turn_id=turn_id,
+        after=after,
+    )
+    return _streaming_sse_response(None, events)
+
+
+@api_router.post("/conversations/{conversationId}/turns/{turnId}:cancel", status_code=202)
+def post_conversation_turn_cancel(
+    conversation_id: Annotated[str, Path(alias="conversationId", min_length=1, max_length=36)],
+    turn_id: Annotated[str, Path(alias="turnId", min_length=1, max_length=36)],
+    current: CurrentSession = Depends(require_current_session),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    try:
+        turn = cancel_turn(
+            db,
+            owner=current.user,
+            conversation_id=conversation_id,
+            turn_id=turn_id,
+        )
+    except ChatTurnError as exc:
+        raise _chat_turn_api_error(exc) from exc
+    return {"turn": safe_turn_summary(turn)}
 
 
 @api_router.get("/admin/runtime-settings")

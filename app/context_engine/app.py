@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from context_engine.api.errors import (
     ApiError,
     api_error_handler,
+    error_response,
     http_error_handler,
     unhandled_error_handler,
     validation_error_handler,
@@ -25,10 +26,10 @@ from context_engine.api.contract_app import (
 from context_engine.config import Settings
 from context_engine.db import create_db_engine, create_session_factory
 from context_engine.services.audit import AuditError
-from context_engine.services.auth import seed_admin
 from context_engine.services.prompt_templates import seed_prompt_templates
 from context_engine.services.runtime_config import seed_runtime_config, validate_config_encryption_key
 from context_engine.services.structured_logging import configure_json_logging, safe_log
+from context_engine.services.request_security import RequestSecurityError, build_request_security_policy, enforce_request_security
 
 import logging
 
@@ -39,6 +40,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app_settings = settings or Settings.from_env()
     configure_json_logging()
     validate_config_encryption_key(app_settings)
+    request_security_policy = build_request_security_policy(app_settings)
     engine = create_db_engine(app_settings)
     session_factory = create_session_factory(engine)
 
@@ -49,7 +51,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.session_factory = session_factory
         db = session_factory()
         try:
-            seed_admin(db, app_settings)
             seed_runtime_config(db)
             seed_prompt_templates(db)
         finally:
@@ -70,6 +71,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
         request.state.actor_kind = "public"
+        try:
+            enforce_request_security(request, app_settings, request_security_policy)
+        except RequestSecurityError as exc:
+            response = error_response(request, exc.status_code, exc.code, exc.message)
+            response.headers[CANONICAL_REQUEST_ID_HEADER] = request_id
+            safe_log(
+                logger,
+                "http_request",
+                request_id=request_id,
+                actor_kind="public",
+                elapsed_ms=int((time.perf_counter() - started) * 1000),
+                http_method=request.method,
+                http_route=_route_template(request),
+                http_status=exc.status_code,
+                outcome="failed",
+                safe_error_code=exc.code,
+            )
+            return response
         try:
             response = await call_next(request)
         except Exception:
@@ -117,6 +136,4 @@ def _route_template(request: Request) -> str:
 
 
 async def audit_error_handler(request: Request, exc: AuditError):
-    from context_engine.api.errors import error_response
-
     return error_response(request, exc.status_code, exc.code, exc.message)

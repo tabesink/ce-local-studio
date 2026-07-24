@@ -47,13 +47,17 @@ def require_current_session(
     now = utc_now()
     if auth_session is None or auth_session.revoked_at is not None or auth_session.expires_at <= now:
         raise _unauthenticated()
+    last_used_at = auth_session.last_used_at or auth_session.created_at
+    if last_used_at.timestamp() + settings.session_idle_ttl_seconds <= now.timestamp():
+        raise _unauthenticated()
 
     user = db.get(User, auth_session.user_id)
     if user is None or user.is_disabled:
         raise _unauthenticated()
 
-    auth_session.last_used_at = now
-    db.commit()
+    if last_used_at.timestamp() + settings.session_touch_interval_seconds <= now.timestamp():
+        auth_session.last_used_at = now
+        db.commit()
     request.state.actor_kind = user.role
     request.state.actor_user_id = user.id
     return CurrentSession(user=user, auth_session=auth_session)

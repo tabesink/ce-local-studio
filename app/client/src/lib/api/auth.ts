@@ -13,6 +13,6 @@ export const authApi = {
     return ceFetch<SessionUserResponse>("/auth/me", { handleUnauthorized: false });
   },
   logout() {
-    return ceFetch<{ ok: boolean }>("/auth/logout", { method: "POST", handleUnauthorized: false });
+    return ceFetch<void>("/auth/logout", { method: "POST", handleUnauthorized: false });
   },
 };

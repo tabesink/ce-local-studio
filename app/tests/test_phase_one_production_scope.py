@@ -30,7 +30,11 @@ PRODUCTION_FILES = (
     APP_ROOT / "client" / "package.json",
     APP_ROOT / "client" / "Dockerfile",
     APP_ROOT / "contracts" / "openapi.json",
+    APP_ROOT / "contracts" / "public-dtos.schema.json",
+    APP_ROOT / "contracts" / "sse-events.schema.json",
+    APP_ROOT / "contracts" / "sse-events.openapi.json",
     REPO_ROOT / "scripts" / "generate_openapi.py",
+    REPO_ROOT / "scripts" / "generate_json_schemas.py",
     REPO_ROOT / "scripts" / "dev.sh",
 )
 
@@ -39,6 +43,7 @@ def test_phase_one_physical_route_tree_is_exact() -> None:
     route_directories = {path.name for path in CLIENT_ROUTE_ROOT.iterdir() if path.is_dir()}
 
     assert route_directories == {
+        "api",
         "chat",
         "database-visualize",
         "documents",

@@ -144,6 +144,9 @@ configure_runtime_env() {
   fi
 
   export CE_SESSION_COOKIE_SECURE="${CE_SESSION_COOKIE_SECURE:-false}"
+  # Host-native API is reached without the BFF peer headers until P9-05/P10.
+  # Keep the testing bypass unless the operator supplies full ingress settings.
+  export CONTEXT_ENGINE_TESTING="${CONTEXT_ENGINE_TESTING:-true}"
 }
 
 sync_api_base() {
@@ -201,6 +204,7 @@ sync_api_base "$PREFERRED_BACKEND_PORT"
 
 echo "Migrating database..."
 (cd "$APP_DIR" && "$PYTHON_BIN" -m alembic upgrade head)
+(cd "$APP_DIR" && "$PYTHON_BIN" -m context_engine.bootstrap_admin)
 
 echo "Starting backend on http://$BACKEND_HOST:$BACKEND_PORT"
 (cd "$APP_DIR" && "$PYTHON_BIN" -m uvicorn context_engine.app:create_app --factory --reload --reload-dir context_engine --reload-dir migrations --host "$BACKEND_HOST" --port "$BACKEND_PORT") &
