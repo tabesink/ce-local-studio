@@ -16,7 +16,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | --- | --- | --- | --- | --- |
 | P0 | Contract and repository spine | DONE | - | governance, vocabulary, ADRs, API/data/SSE conventions, CI skeleton approved |
 | P1 | Trusted app foundation | DONE | P0 | migrated Postgres, seeded admin, cookie auth, owner/admin guards, health and safe errors, append-only transactional audit pass |
-| P2 | Trusted runtime configuration | NOT_STARTED | P1 | encrypted credentials, model profiles, parser/synthesis defaults, admin contract tests pass |
+| P2 | Trusted runtime configuration | DONE | P1 | encrypted credentials, model profiles, parser/synthesis defaults, admin contract tests pass |
 | P3 | Knowledge Domain runtime | NOT_STARTED | P2 | per-domain runtime boundary, lifecycle operations, leases/generations, readiness proven |
 | P4 | Source preparation | NOT_STARTED | P3 | upload/storage/parser adapters produce canonical blocks and support retry/cancel/delete |
 | P5 | LightRAG indexing eligibility | NOT_STARTED | P4 | vendored fixture proves idempotent submit, readiness, delete, provenance markers, eligibility |
@@ -58,7 +58,9 @@ P0-06 closure evidence (2026-07-24): deterministic generation now emits and byte
 | P1-06 | DONE | P1-01 | append-only audit schema, transactional AuditService and protected-mutation helper |
 | P2-01 | DONE | P1 | provider_configs, model_profiles, runtime_settings migrations and services |
 | P2-02 | DONE | P2-01 | credential encryption/rotation and safe DTO projection |
-| P2-03 | NOT_STARTED | P2-01 | synthesis/embedding validation, immutable dimension rules and defaults |
+| P2-03 | DONE | P2-01 | synthesis/embedding validation, immutable dimension rules and defaults |
+
+P2-03 closure evidence (2026-07-24): `docs/_scratch/p2-03-embedding-validation-inventory.md` records retain/modify decisions. Service validation rejects non-positive embedding dimensions before catalog checks; domain-referenced embeddings are immutable under PATCH/DELETE via ORM reference detection; defaults reject embedding-as-synthesis; embedding resolve fails closed for synthesis/unready providers. PostgreSQL 16 proof covers domain-referenced A-02 denial, unused-profile create/rename, DB zero-dimension check, and HTTP admin PATCH `409 model_profile_in_use` plus create `201`. Results were 37 focused runtime-config/foundation/audit/schema/health tests passing. `docs/_scratch/p2-03-embedding-validation-evidence.md` records commands and keeps domain embedding replacement with P3, Settings UI with P9, and HTTP ErrorCode catalog closure as a residual.
 
 P2-02 closure evidence (2026-07-24): `docs/_scratch/p2-02-credential-dto-inventory.md` records retain/modify/add decisions. Alembic head `b7e2a91c04d8` adds positive `version` columns on the three runtime-config tables. PostgreSQL 16 proof covers Fernet encrypt-at-rest rotate, closed `ProviderSummaryDto`/`ModelProfileDto`/`RuntimeSettingsDto` snapshots, sequential and concurrent `stale_revision` losers, and HTTP A-01 `428`/`409`/`200` with strong `ETag`. Unit proofs cover closed projection, wrong-key decrypt fail-closed, `If-Match` parse, and stale rotate rejection. Results were 35 focused runtime-config/foundation/audit/schema/health/DTO tests passing; generated contract snapshots pass. `docs/_scratch/p2-02-credential-dto-evidence.md` records commands and keeps immutable embedding completion with P2-03 and Settings UI DTO/`If-Match` adoption with P9.
 
