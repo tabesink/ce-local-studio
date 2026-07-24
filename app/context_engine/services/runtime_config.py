@@ -172,19 +172,22 @@ def _seed_model_catalog(db: Session) -> None:
 
 
 def _activate_default_synthesis_if_ready(db: Session) -> None:
-    settings = db.get(RuntimeSettings, RUNTIME_SETTINGS_ID)
-    if settings is None:
-        settings = RuntimeSettings(id=RUNTIME_SETTINGS_ID, active_parser_kind=PARSER_DOCLING)
-        db.add(settings)
-        db.flush()
+    """Activate default synthesis when ready; bump settings version if mutated."""
+    settings = ensure_runtime_settings(db)
     if settings.active_synthesis_profile_id is not None:
         return
 
     profile = db.get(ModelProfile, DEFAULT_SYNTHESIS_PROFILE_ID)
     provider = db.get(ProviderConfig, PROVIDER_OPENAI)
-    if profile is not None and provider is not None and is_provider_configured(provider):
-        settings.active_synthesis_profile_id = profile.id
-        settings.updated_at = utc_now()
+    if profile is None or provider is None or not is_provider_configured(provider):
+        return
+
+    settings = _runtime_settings_for_update(db)
+    if settings.active_synthesis_profile_id is not None:
+        return
+    settings.active_synthesis_profile_id = profile.id
+    settings.updated_at = utc_now()
+    settings.version = settings.version + 1
 
 
 def is_provider_configured(provider: ProviderConfig) -> bool:

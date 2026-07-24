@@ -387,6 +387,11 @@ def test_p2_02_provider_credential_version_race_and_http_a01_on_postgresql_16() 
                     audit = AuditContext(actor_user=admin, request_id="req-p202", actor_kind="administrator")
                     crypto = SecretCrypto.from_settings(settings)
 
+                    settings_before = db.get(RuntimeSettings, 1)
+                    assert settings_before is not None
+                    assert settings_before.active_synthesis_profile_id is None
+                    settings_version_before = settings_before.version
+
                     first = rotate_provider_credential(
                         db,
                         PROVIDER_OPENAI,
@@ -396,6 +401,20 @@ def test_p2_02_provider_credential_version_race_and_http_a01_on_postgresql_16() 
                         audit_context=audit,
                     )
                     assert first.version == 2
+                    db.expire_all()
+                    settings_after = db.get(RuntimeSettings, 1)
+                    assert settings_after is not None
+                    assert settings_after.active_synthesis_profile_id == DEFAULT_SYNTHESIS_PROFILE_ID
+                    assert settings_after.version == settings_version_before + 1
+                    with pytest.raises(RuntimeConfigError) as stale_settings:
+                        update_runtime_settings(
+                            db,
+                            {"active_parser_kind": PARSER_DOCLING},
+                            expected_version=settings_version_before,
+                            audit_context=audit,
+                        )
+                    assert stale_settings.value.code == "stale_revision"
+
                     with pytest.raises(RuntimeConfigError) as stale:
                         rotate_provider_credential(
                             db,
