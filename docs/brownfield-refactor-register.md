@@ -61,6 +61,7 @@ DRIFT IDs 01 through 33 appear exactly once above as primary rows.
 | Foundation in lifted code | Owner | Required proof before credit | Status |
 | --- | --- | --- | --- |
 | FastAPI app factory, settings, SQLAlchemy engine/session and Alembic chain | P1-01 | disposable PostgreSQL 16 fresh-install, baseline-to-head retained-row, metadata-drift and canonical session-factory proof | DONE |
+| provider_configs / model_profiles / runtime_settings schema and services | P2-01 | disposable PostgreSQL 16 schema/seed/service mutation proof; insert-only catalog seed; protected-mutation profile and defaults paths | DONE |
 | Argon2 and opaque session-token hashing | P1 | session rotation/expiry/revocation and PostgreSQL tests | DONE |
 | owner/admin query scaffolding | P1, P7 | P1-03 proves current-role/disabled rechecks, active admin-route guards, denial audits, administrator non-ownership and conversation indistinguishable-404 behavior; P7 turn/stream races remain | IN_PROGRESS |
 | request IDs, error translation and allowlisted logging | P0-03, P1, P8 | P0-03 proves the exact envelope/header; P1-04 proves safe no-store errors, bounded unclassified events and allowlisted logging fields; broad sink privacy remains P8 | IN_PROGRESS |

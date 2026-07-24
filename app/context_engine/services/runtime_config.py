@@ -32,7 +32,7 @@ from context_engine.models import (
     ProviderConfig,
     RuntimeSettings,
 )
-from context_engine.services.audit import AuditContext, AuditService
+from context_engine.services.audit import AuditContext, commit_protected_mutation
 
 TEST_CONFIG_ENCRYPTION_KEY = "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="
 RUNTIME_SETTINGS_ID = 1
@@ -126,21 +126,18 @@ class SecretCrypto:
 
 
 def seed_runtime_config(db: Session) -> None:
+    """Insert missing closed catalog rows only; never rewrite existing config."""
     existing = {provider.provider_kind: provider for provider in db.scalars(select(ProviderConfig))}
     for provider_kind, display_name, requires_credentials in PROVIDER_DEFAULTS:
-        provider = existing.get(provider_kind)
-        if provider is None:
-            db.add(
-                ProviderConfig(
-                    provider_kind=provider_kind,
-                    display_name=display_name,
-                    requires_credentials=requires_credentials,
-                )
+        if provider_kind in existing:
+            continue
+        db.add(
+            ProviderConfig(
+                provider_kind=provider_kind,
+                display_name=display_name,
+                requires_credentials=requires_credentials,
             )
-        else:
-            provider.display_name = display_name
-            provider.requires_credentials = requires_credentials
-            provider.updated_at = utc_now()
+        )
 
     if db.get(RuntimeSettings, RUNTIME_SETTINGS_ID) is None:
         db.add(RuntimeSettings(id=RUNTIME_SETTINGS_ID, active_parser_kind=PARSER_DOCLING))
@@ -155,21 +152,18 @@ def seed_runtime_config(db: Session) -> None:
 def _seed_model_catalog(db: Session) -> None:
     existing = {profile.id: profile for profile in db.scalars(select(ModelProfile))}
     for entry in MODEL_CATALOG:
-        profile = existing.get(entry.seed_id)
-        if profile is None:
-            db.add(
-                ModelProfile(
-                    id=entry.seed_id,
-                    name=entry.name,
-                    profile_kind=entry.profile_kind,
-                    provider_kind=entry.provider_kind,
-                    model_name=entry.model_name,
-                    vector_dimensions=entry.vector_dimensions,
-                )
+        if entry.seed_id in existing:
+            continue
+        db.add(
+            ModelProfile(
+                id=entry.seed_id,
+                name=entry.name,
+                profile_kind=entry.profile_kind,
+                provider_kind=entry.provider_kind,
+                model_name=entry.model_name,
+                vector_dimensions=entry.vector_dimensions,
             )
-        elif profile.name != entry.name:
-            profile.name = entry.name
-            profile.updated_at = utc_now()
+        )
 
 
 def _activate_default_synthesis_if_ready(db: Session) -> None:
@@ -220,8 +214,7 @@ def ensure_runtime_settings(db: Session) -> RuntimeSettings:
     if settings is None:
         settings = RuntimeSettings(id=RUNTIME_SETTINGS_ID, active_parser_kind=PARSER_DOCLING)
         db.add(settings)
-        db.commit()
-        db.refresh(settings)
+        db.flush()
     return settings
 
 
@@ -245,6 +238,36 @@ def _provider_or_error(db: Session, provider_kind: str) -> ProviderConfig:
     return provider
 
 
+def _commit_runtime_mutation(
+    db: Session,
+    mutate,
+    *,
+    audit_context: AuditContext | None,
+    event_name: str,
+    target_kind: str | None = None,
+    target_id: str | None = None,
+    refresh: bool = True,
+):
+    if audit_context is None:
+        result = mutate()
+        db.commit()
+        if refresh and result is not None:
+            db.refresh(result)
+        return result
+
+    result = commit_protected_mutation(
+        db,
+        mutate,
+        event_name=event_name,
+        context=audit_context,
+        target_kind=target_kind,
+        target_id=target_id,
+    )
+    if refresh and result is not None:
+        db.refresh(result)
+    return result
+
+
 def rotate_provider_credential(
     db: Session,
     provider_kind: str,
@@ -255,15 +278,22 @@ def rotate_provider_credential(
     provider = _provider_or_error(db, provider_kind)
     if not provider.requires_credentials:
         raise RuntimeConfigError(422, "provider_credentials_unsupported", "Provider does not accept credentials.")
-    provider.credential_ciphertext = crypto.encrypt_secret(credential)
-    provider.credential_updated_at = utc_now()
-    provider.updated_at = provider.credential_updated_at
-    _activate_default_synthesis_if_ready(db)
-    if audit_context is not None:
-        AuditService(db).record(AUDIT_EVENT_RUNTIME_PROVIDER_CONFIG_ROTATED, context=audit_context)
-    db.commit()
-    db.refresh(provider)
-    return provider
+
+    def mutate() -> ProviderConfig:
+        provider.credential_ciphertext = crypto.encrypt_secret(credential)
+        provider.credential_updated_at = utc_now()
+        provider.updated_at = provider.credential_updated_at
+        _activate_default_synthesis_if_ready(db)
+        return provider
+
+    return _commit_runtime_mutation(
+        db,
+        mutate,
+        audit_context=audit_context,
+        event_name=AUDIT_EVENT_RUNTIME_PROVIDER_CONFIG_ROTATED,
+        target_kind="provider_config",
+        target_id=provider_kind,
+    )
 
 
 def _validate_model_profile(provider_kind: str, profile_kind: str, vector_dimensions: int | None) -> None:
@@ -335,19 +365,26 @@ def create_model_profile(
     _validate_model_profile(provider_kind, profile_kind, vector_dimensions)
     _validate_model_catalog(provider_kind, profile_kind, model_name, vector_dimensions)
     _provider_or_error(db, provider_kind)
-    profile = ModelProfile(
-        name=name,
-        profile_kind=profile_kind,
-        provider_kind=provider_kind,
-        model_name=model_name,
-        vector_dimensions=vector_dimensions,
+
+    def mutate() -> ModelProfile:
+        profile = ModelProfile(
+            name=name,
+            profile_kind=profile_kind,
+            provider_kind=provider_kind,
+            model_name=model_name,
+            vector_dimensions=vector_dimensions,
+        )
+        db.add(profile)
+        db.flush()
+        return profile
+
+    return _commit_runtime_mutation(
+        db,
+        mutate,
+        audit_context=audit_context,
+        event_name=AUDIT_EVENT_RUNTIME_MODEL_PROFILE_CREATED,
+        target_kind="model_profile",
     )
-    db.add(profile)
-    if audit_context is not None:
-        AuditService(db).record(AUDIT_EVENT_RUNTIME_MODEL_PROFILE_CREATED, context=audit_context)
-    db.commit()
-    db.refresh(profile)
-    return profile
 
 
 def update_model_profile(
@@ -367,32 +404,49 @@ def update_model_profile(
         _validate_model_profile(profile.provider_kind, profile.profile_kind, next_dimensions)
         _validate_model_catalog(profile.provider_kind, profile.profile_kind, next_model_name, next_dimensions)
 
-    if "vector_dimensions" in updates:
-        profile.vector_dimensions = next_dimensions
-    if "name" in updates:
-        profile.name = updates["name"]
-    if "model_name" in updates:
-        profile.model_name = next_model_name
-    profile.updated_at = utc_now()
-    if audit_context is not None:
-        AuditService(db).record(AUDIT_EVENT_RUNTIME_MODEL_PROFILE_UPDATED, context=audit_context)
-    db.commit()
-    db.refresh(profile)
-    return profile
+    def mutate() -> ModelProfile:
+        if "vector_dimensions" in updates:
+            profile.vector_dimensions = next_dimensions
+        if "name" in updates:
+            profile.name = updates["name"]
+        if "model_name" in updates:
+            profile.model_name = next_model_name
+        profile.updated_at = utc_now()
+        return profile
+
+    return _commit_runtime_mutation(
+        db,
+        mutate,
+        audit_context=audit_context,
+        event_name=AUDIT_EVENT_RUNTIME_MODEL_PROFILE_UPDATED,
+        target_kind="model_profile",
+        target_id=profile_id,
+    )
 
 
 def delete_model_profile(db: Session, profile_id: str, audit_context: AuditContext | None = None) -> None:
     profile = db.get(ModelProfile, profile_id)
     if profile is None:
         raise RuntimeConfigError(404, "model_profile_not_found", "Model profile not found.")
+    if profile.id in DEFAULT_MODEL_PROFILE_IDS:
+        raise RuntimeConfigError(409, "model_profile_in_use", "Model profile is in use.")
     settings = ensure_runtime_settings(db)
     if settings.active_synthesis_profile_id == profile.id:
         raise RuntimeConfigError(409, "model_profile_in_use", "Model profile is in use.")
     _reject_if_embedding_profile_in_use(db, profile)
-    db.delete(profile)
-    if audit_context is not None:
-        AuditService(db).record(AUDIT_EVENT_RUNTIME_MODEL_PROFILE_DELETED, context=audit_context)
-    db.commit()
+
+    def mutate() -> None:
+        db.delete(profile)
+
+    _commit_runtime_mutation(
+        db,
+        mutate,
+        audit_context=audit_context,
+        event_name=AUDIT_EVENT_RUNTIME_MODEL_PROFILE_DELETED,
+        target_kind="model_profile",
+        target_id=profile_id,
+        refresh=False,
+    )
 
 
 def _provider_ready_or_error(provider: ProviderConfig) -> None:
@@ -409,34 +463,45 @@ def update_runtime_settings(
         raise RuntimeConfigError(422, "empty_runtime_settings_patch", "At least one runtime setting is required.")
 
     settings = ensure_runtime_settings(db)
-    if "active_synthesis_profile_id" in updates:
-        profile_id = updates["active_synthesis_profile_id"]
-        if profile_id is None:
-            raise RuntimeConfigError(422, "active_synthesis_required", "Active synthesis profile is required.")
-        profile = db.get(ModelProfile, profile_id)
-        if profile is None:
-            raise RuntimeConfigError(404, "model_profile_not_found", "Model profile not found.")
-        if profile.profile_kind != PROFILE_SYNTHESIS:
-            raise RuntimeConfigError(422, "invalid_active_synthesis_profile", "Active synthesis profile must be a synthesis profile.")
-        provider = _provider_or_error(db, profile.provider_kind)
-        _provider_ready_or_error(provider)
-        settings.active_synthesis_profile_id = profile.id
 
-    if "active_parser_kind" in updates:
-        parser_kind = updates["active_parser_kind"]
-        if parser_kind not in PARSER_KINDS:
-            raise RuntimeConfigError(422, "invalid_parser_kind", "Invalid parser kind.")
-        if parser_kind == PARSER_REDUCTO:
-            reducto = _provider_or_error(db, PROVIDER_REDUCTO)
-            _provider_ready_or_error(reducto)
-        settings.active_parser_kind = parser_kind
+    def mutate() -> RuntimeSettings:
+        if "active_synthesis_profile_id" in updates:
+            profile_id = updates["active_synthesis_profile_id"]
+            if profile_id is None:
+                raise RuntimeConfigError(422, "active_synthesis_required", "Active synthesis profile is required.")
+            profile = db.get(ModelProfile, profile_id)
+            if profile is None:
+                raise RuntimeConfigError(404, "model_profile_not_found", "Model profile not found.")
+            if profile.profile_kind != PROFILE_SYNTHESIS:
+                raise RuntimeConfigError(
+                    422,
+                    "invalid_active_synthesis_profile",
+                    "Active synthesis profile must be a synthesis profile.",
+                )
+            provider = _provider_or_error(db, profile.provider_kind)
+            _provider_ready_or_error(provider)
+            settings.active_synthesis_profile_id = profile.id
 
-    settings.updated_at = utc_now()
-    if audit_context is not None:
-        AuditService(db).record(AUDIT_EVENT_RUNTIME_DEFAULTS_UPDATED, context=audit_context)
-    db.commit()
-    db.refresh(settings)
-    return settings
+        if "active_parser_kind" in updates:
+            parser_kind = updates["active_parser_kind"]
+            if parser_kind not in PARSER_KINDS:
+                raise RuntimeConfigError(422, "invalid_parser_kind", "Invalid parser kind.")
+            if parser_kind == PARSER_REDUCTO:
+                reducto = _provider_or_error(db, PROVIDER_REDUCTO)
+                _provider_ready_or_error(reducto)
+            settings.active_parser_kind = parser_kind
+
+        settings.updated_at = utc_now()
+        return settings
+
+    return _commit_runtime_mutation(
+        db,
+        mutate,
+        audit_context=audit_context,
+        event_name=AUDIT_EVENT_RUNTIME_DEFAULTS_UPDATED,
+        target_kind="runtime_settings",
+        target_id=str(RUNTIME_SETTINGS_ID),
+    )
 
 
 @dataclass(frozen=True)

@@ -56,9 +56,11 @@ P0-06 closure evidence (2026-07-24): deterministic generation now emits and byte
 | P1-04 | DONE | P1-01 | request IDs, safe errors/logging, live/ready endpoints |
 | P1-05 | DONE | P1-02,P1-03 | Origin/Host and CSRF policy, session rotation/revocation/TTL, login throttling and ingress auth tests; security persistence/config contract approved 2026-07-24 |
 | P1-06 | DONE | P1-01 | append-only audit schema, transactional AuditService and protected-mutation helper |
-| P2-01 | NOT_STARTED | P1 | provider_configs, model_profiles, runtime_settings migrations and services |
+| P2-01 | DONE | P1 | provider_configs, model_profiles, runtime_settings migrations and services |
 | P2-02 | NOT_STARTED | P2-01 | credential encryption/rotation and safe DTO projection |
 | P2-03 | NOT_STARTED | P2-01 | synthesis/embedding validation, immutable dimension rules and defaults |
+
+P2-01 closure evidence (2026-07-24): `docs/_scratch/p2-01-runtime-config-inventory.md` records retain/modify/defer decisions. PostgreSQL 16 proof covers schema checks for the three tables, insert-only catalog seed that preserves credentials, protected-mutation profile create and defaults update, default-profile delete denial, synthesis/Reducto readiness gates, and snapshot absence of secrets. Unit proofs cover default delete, audit rollback on create, and unready-provider rejection. Results were 27 focused runtime-config/foundation/audit/schema/health tests passing. `docs/_scratch/p2-01-runtime-config-evidence.md` records commands and keeps DTO/ETag/encryption with P2-02 and immutable embedding completion with P2-03.
 
 P1-01 closure evidence (2026-07-24): `docs/_scratch/p1-01-foundation-inventory.md` records retain/modify/add decisions before implementation. `app/tests/test_postgres_foundation.py` then proved, against an ephemeral PostgreSQL 16 server, empty-database Alembic upgrade to the single head `d07141ac7d95`, app-factory construction without schema mutation, canonical engine/session behavior, successful metadata drift checks, baseline-to-head retained data, incremental downgrade, and clean re-upgrade. The focused result was 2 passed. `docs/_scratch/p1-01-foundation-evidence.md` records the command, safety controls, and rollback/restore boundary. Unknown populated legacy compatibility remains blocked under P12-01.
 
