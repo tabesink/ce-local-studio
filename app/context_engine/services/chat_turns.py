@@ -205,6 +205,12 @@ class P6RetrievalPort:
         except ScopedRetrievalError as exc:
             raise ChatTurnError(502, "domain_runtime_unavailable", "Knowledge domain runtime is unavailable.") from exc
         except EvidenceRetrievalError as exc:
+            if exc.code == "domain_runtime_dependency_unavailable":
+                raise ChatTurnError(
+                    502,
+                    "domain_runtime_unavailable",
+                    "Knowledge domain runtime is unavailable.",
+                ) from exc
             raise ChatTurnError(exc.status_code, exc.code, exc.message) from exc
         if not result.had_eligible_sources:
             return []

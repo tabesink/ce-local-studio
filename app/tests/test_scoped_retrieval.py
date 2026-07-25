@@ -16,13 +16,19 @@ from context_engine.models import (
     SourceDocument,
 )
 from context_engine.services.evidence import (
+    EVIDENCE_RESULT_FOUND,
+    EvidenceRetrievalError,
     FrozenRetrievalScope,
     FrozenSourceIdentity,
+    InternalMappedEvidence,
+    InternalScopedRetrievalResult,
     ScopedRetrievalCandidate,
     ScopedRetrievalError,
     ScopedRetrievalResult,
     map_retrieval_hits_to_internal_evidence,
+    resolve_available_domain,
     retrieve_bounded_candidates,
+    retrieve_scoped_evidence,
 )
 from context_engine.services.indexing import LightRAGClientProtocol
 
@@ -256,15 +262,15 @@ def test_retrieval_settings_are_positive_and_aggregate_covers_one_candidate() ->
 
 
 class _Rows:
-    def __init__(self, rows: list[tuple[SourceBlock, SourceDocument]]) -> None:
+    def __init__(self, rows: list[tuple[SourceBlock, SourceDocument, int | None]]) -> None:
         self._rows = rows
 
-    def all(self) -> list[tuple[SourceBlock, SourceDocument]]:
+    def all(self) -> list[tuple[SourceBlock, SourceDocument, int | None]]:
         return self._rows
 
 
 class _MappingSession:
-    def __init__(self, rows: list[tuple[SourceBlock, SourceDocument]]) -> None:
+    def __init__(self, rows: list[tuple[SourceBlock, SourceDocument, int | None]]) -> None:
         self.rows = rows
         self.execute_calls = 0
 
@@ -298,6 +304,8 @@ def test_exact_schema_v2_mapping_uses_one_query_canonical_content_and_dense_firs
         source_order=2,
         kind="text",
         canonical_markdown="Canonical database content",
+        page_start=7,
+        section_path="  Service   limits  ",
     )
     scope = FrozenRetrievalScope(
         domain_id=source.domain_id,
@@ -318,7 +326,7 @@ def test_exact_schema_v2_mapping_uses_one_query_canonical_content_and_dense_firs
         f"[CE_BLOCK schema=2 source_id={source.id} source_sha256={source.original_sha256} "
         f"block_id={block.id} order={block.source_order}]"
     )
-    db = _MappingSession([(block, source)])
+    db = _MappingSession([(block, source, None)])
 
     mapped = map_retrieval_hits_to_internal_evidence(
         db,  # type: ignore[arg-type]
@@ -353,4 +361,183 @@ def test_exact_schema_v2_mapping_uses_one_query_canonical_content_and_dense_firs
     assert mapped[0].source_document_id == source.id
     assert mapped[0].source_block_id == block.id
     assert mapped[0].excerpt == "Canonical database content"
+    assert mapped[0].kind == "text"
+    assert mapped[0].document_ref == "docref-source-1"
+    assert mapped[0].document_label == "manual.pdf"
+    assert mapped[0].anchor == {
+        "pageNumber": 7,
+        "sectionLabel": "Service limits",
+        "fallback": "section",
+    }
     assert mapped[0].retrieval_order == 1
+
+
+def test_figure_anchor_uses_only_unambiguous_linked_image_pages() -> None:
+    source = SourceDocument(
+        id="source-figure",
+        public_ref="docref-source-figure",
+        domain_id="domain-retrieval",
+        original_filename="figure.pdf",
+        content_type="application/pdf",
+        original_sha256="e" * 64,
+        original_size_bytes=128,
+        original_object_key="obj/source-figure",
+        state=SOURCE_STATE_PREPARED,
+        parser_kind="docling",
+        preparation_generation=2,
+        index_state=SOURCE_INDEX_STATE_READY,
+        index_generation=3,
+        index_request_id="source-figure-3-request",
+        index_content_hash="f" * 64,
+    )
+    block = SourceBlock(
+        id="block-figure",
+        source_document_id=source.id,
+        domain_id=source.domain_id,
+        source_order=1,
+        kind="figure",
+        canonical_markdown="Canonical figure caption",
+        section_path="Figure section",
+    )
+    scope = FrozenRetrievalScope(
+        domain_id=source.domain_id,
+        control_generation=2,
+        runtime_instance_id="runtime-1",
+        sources=(
+            FrozenSourceIdentity(
+                source_document_id=source.id,
+                preparation_generation=source.preparation_generation,
+                index_generation=source.index_generation,
+                index_request_id=source.index_request_id or "",
+                index_content_hash=source.index_content_hash or "",
+                original_sha256=source.original_sha256,
+            ),
+        ),
+    )
+    marker = (
+        f"[CE_BLOCK schema=2 source_id={source.id} source_sha256={source.original_sha256} "
+        f"block_id={block.id} order=1]\nprivate"
+    )
+
+    mapped = map_retrieval_hits_to_internal_evidence(
+        _MappingSession([(block, source, 9), (block, source, 9)]),  # type: ignore[arg-type]
+        hits=[ScopedRetrievalCandidate(text=marker)],
+        frozen_scope=scope,
+    )
+    assert mapped[0].anchor == {
+        "pageNumber": 9,
+        "sectionLabel": "Figure section",
+        "fallback": "section",
+    }
+
+    conflicted = map_retrieval_hits_to_internal_evidence(
+        _MappingSession([(block, source, 9), (block, source, 10)]),  # type: ignore[arg-type]
+        hits=[ScopedRetrievalCandidate(text=marker)],
+        frozen_scope=scope,
+    )
+    assert conflicted[0].anchor is None
+
+
+def test_stateless_projection_assigns_dense_response_local_citations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        evidence_service,
+        "retrieve_internal_scoped_evidence",
+        lambda *_args, **_kwargs: InternalScopedRetrievalResult(
+            had_eligible_sources=True,
+            evidence=(
+                InternalMappedEvidence(
+                    source_document_id="private-source",
+                    source_block_id="private-block",
+                    source_label="manual.pdf",
+                    excerpt="Canonical excerpt",
+                    kind="table",
+                    document_ref="docref-public-1",
+                    document_label="manual.pdf",
+                    anchor={"pageNumber": 4, "fallback": "page"},
+                    retrieval_order=1,
+                ),
+            ),
+        ),
+    )
+
+    response = retrieve_scoped_evidence(
+        object(),  # type: ignore[arg-type]
+        settings=_settings(),
+        domain_id="domain-retrieval",
+        question="bounded",
+    )
+
+    assert response == {
+        "result": EVIDENCE_RESULT_FOUND,
+        "evidence": [
+            {
+                "citationLabel": "[1]",
+                "sourceLabel": "manual.pdf",
+                "excerpt": "Canonical excerpt",
+                "kind": "table",
+                "documentRef": "docref-public-1",
+                "documentLabel": "manual.pdf",
+                "anchor": {"pageNumber": 4, "fallback": "page"},
+            }
+        ],
+    }
+    assert "private-source" not in repr(response)
+    assert "private-block" not in repr(response)
+
+
+@pytest.mark.parametrize(
+    ("internal_code", "expected_code"),
+    [
+        ("retrieval_saturated", "retrieval_capacity_unavailable"),
+        ("retrieval_timeout", "retrieval_dependency_unavailable"),
+        ("retrieval_unavailable", "retrieval_dependency_unavailable"),
+        ("retrieval_malformed", "retrieval_dependency_unavailable"),
+    ],
+)
+def test_stateless_projection_normalizes_retrieval_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    internal_code: str,
+    expected_code: str,
+) -> None:
+    def fail(*_args, **_kwargs):
+        raise ScopedRetrievalError(internal_code, "safe internal")
+
+    monkeypatch.setattr(evidence_service, "retrieve_internal_scoped_evidence", fail)
+
+    with pytest.raises(EvidenceRetrievalError) as failure:
+        retrieve_scoped_evidence(
+            object(),  # type: ignore[arg-type]
+            settings=_settings(),
+            domain_id="domain-retrieval",
+            question="bounded",
+        )
+
+    assert failure.value.status_code == 503
+    assert failure.value.code == expected_code
+
+
+def test_domain_health_exception_does_not_escape_safe_boundary() -> None:
+    class _DomainSession:
+        def get(self, _model, _domain_id):
+            return _domain()
+
+        def scalar(self, _statement):
+            return None
+
+    class _ExplodingController:
+        def health(self, _domain):
+            raise RuntimeError("SENTINEL-PRIVATE-HEALTH-EXCEPTION")
+
+    with pytest.raises(EvidenceRetrievalError) as failure:
+        resolve_available_domain(
+            _DomainSession(),  # type: ignore[arg-type]
+            settings=_settings(),
+            domain_id="domain-retrieval",
+            controller=_ExplodingController(),  # type: ignore[arg-type]
+        )
+
+    assert failure.value.code == "domain_runtime_dependency_unavailable"
+    rendered = "".join(traceback.format_exception(failure.value))
+    assert "SENTINEL-PRIVATE-HEALTH-EXCEPTION" not in rendered
