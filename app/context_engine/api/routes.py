@@ -3,11 +3,9 @@ from __future__ import annotations
 from context_engine.services.readiness import ReadinessError, check_readiness
 
 from datetime import datetime
-from email.parser import BytesParser
-from email.policy import default as email_policy
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Body, Depends, Header, Path, Query, Request, Response
+from fastapi import APIRouter, Body, Depends, Header, Path, Query, Request, Response, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select, text
@@ -101,8 +99,13 @@ from context_engine.services.domains import (
 )
 from context_engine.services.evidence import EvidenceRetrievalError, retrieve_scoped_evidence
 from context_engine.services.indexing import SourceIndexError, cancel_source_index, retry_source_index
-from context_engine.services.sources import (
+from context_engine.services.source_upload import (
     MAX_SOURCE_FILE_SIZE_BYTES,
+    UploadValidationError,
+    iter_upload_file,
+    read_upload_stream,
+)
+from context_engine.services.sources import (
     SourceError,
     cancel_source,
     delete_source,
@@ -482,22 +485,15 @@ def _parse_optional_iso(value: str | None) -> datetime | None:
         raise ApiError(422, "validation_error", "Request validation failed.") from exc
 
 
-def _multipart_file_from_request(request: Request, body: bytes) -> tuple[str | None, str | None, bytes]:
-    content_type = request.headers.get("content-type", "")
-    if "multipart/form-data" not in content_type.lower():
-        raise ApiError(422, "validation_error", "Request validation failed.")
-    header = f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode("utf-8")
-    message = BytesParser(policy=email_policy).parsebytes(header + body)
-    if not message.is_multipart():
-        raise ApiError(422, "validation_error", "Request validation failed.")
-    for part in message.iter_parts():
-        disposition = part.get("content-disposition", "")
-        if part.get_param("name", header="content-disposition") == "file" and "form-data" in disposition:
-            payload = part.get_payload(decode=True)
-            if payload is None:
-                raise ApiError(422, "validation_error", "Request validation failed.")
-            return part.get_filename(), part.get_content_type(), payload
-    raise ApiError(422, "validation_error", "Request validation failed.")
+def _content_length_too_large(request: Request) -> bool:
+    raw = request.headers.get("content-length")
+    if raw is None:
+        return False
+    try:
+        # Multipart envelope overhead is small relative to the 25 MiB source cap.
+        return int(raw) > MAX_SOURCE_FILE_SIZE_BYTES + (1024 * 1024)
+    except ValueError:
+        return False
 
 
 @api_router.post("/composer-refs:discover")
@@ -1007,22 +1003,33 @@ async def admin_upload_source(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, object]:
-    filename, content_type, data = _multipart_file_from_request(request, await request.body())
-    if len(data) > MAX_SOURCE_FILE_SIZE_BYTES:
-        raise _source_api_error(SourceError(413, "source_file_too_large", "File is too large."))
+    if _content_length_too_large(request):
+        raise _source_api_error(SourceError(413, "content_rejected", "Uploaded content was rejected."))
+    content_type = request.headers.get("content-type", "")
+    if "multipart/form-data" not in content_type.lower():
+        raise ApiError(422, "validation_error", "Request validation failed.")
+    form = await request.form()
+    upload = form.get("file")
+    if not isinstance(upload, UploadFile):
+        raise ApiError(422, "validation_error", "Request validation failed.")
     try:
+        validated = await read_upload_stream(iter_upload_file(upload), filename=upload.filename)
         source, operation = upload_source_bytes(
             db,
             settings=settings,
             domain_id=domain_id,
-            filename=filename,
-            content_type=content_type,
-            data=data,
+            filename=upload.filename,
+            content_type=validated.content_type,
+            data=validated.data,
             requested_by_user=admin,
             audit_context=_audit_context(request, admin),
         )
+    except UploadValidationError as exc:
+        raise _source_api_error(SourceError(exc.status_code, exc.code, exc.message)) from exc
     except SourceError as exc:
         raise _source_api_error(exc) from exc
+    finally:
+        await upload.close()
     return {"source": safe_source(db, source), "operation": safe_source_operation(operation)}
 
 

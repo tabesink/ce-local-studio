@@ -68,17 +68,16 @@ from context_engine.services.audit import AuditContext, AuditService
 from context_engine.services.auth import iso_utc
 from context_engine.services.indexing import SourceIndexError, cleanup_index_before_source_delete, queue_source_index_after_publish
 from context_engine.services.runtime_config import SecretCrypto, ensure_runtime_settings, is_provider_configured
+from context_engine.services.source_upload import (
+    ALLOWED_SOURCE_CONTENT_TYPES,
+    MAX_SOURCE_FILE_SIZE_BYTES,
+    UploadValidationError,
+    validate_upload_bytes,
+)
 from context_engine.services.structured_logging import safe_log
 
 logger = logging.getLogger(__name__)
 
-MAX_SOURCE_FILE_SIZE_BYTES = 25 * 1024 * 1024
-ALLOWED_SOURCE_CONTENT_TYPES = {
-    "application/pdf",
-    "text/plain",
-    "text/markdown",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-}
 _IMAGE_MIME_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
 _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._ -]+")
 _FORBIDDEN_PREPARED_KEYS = {
@@ -309,24 +308,22 @@ def upload_source_bytes(
     audit_context: AuditContext | None = None,
 ) -> tuple[SourceDocument, SourcePreparationOperation]:
     domain = _domain_or_404(db, domain_id)
-    upload_content_type = (content_type or "application/octet-stream").split(";", 1)[0].strip().lower()
-    if upload_content_type not in ALLOWED_SOURCE_CONTENT_TYPES:
-        raise SourceError(422, "source_file_unsupported", "File type is not supported.")
-    if len(data) > MAX_SOURCE_FILE_SIZE_BYTES:
-        raise SourceError(413, "source_file_too_large", "File is too large.")
-    if not data:
-        raise SourceError(422, "validation_error", "Request validation failed.")
+    try:
+        validated = validate_upload_bytes(data, filename=filename, declared_content_type=content_type)
+    except UploadValidationError as exc:
+        raise SourceError(exc.status_code, exc.code, exc.message) from exc
 
-    original_sha256 = hashlib.sha256(data).hexdigest()
     duplicate = db.scalar(
         select(SourceDocument.id).where(
             SourceDocument.domain_id == domain.id,
-            SourceDocument.original_sha256 == original_sha256,
+            SourceDocument.original_sha256 == validated.sha256,
         )
     )
     if duplicate is not None:
-        raise SourceError(409, "source_duplicate", "Source already exists in this domain.")
+        raise SourceError(409, "duplicate_source", "Source already exists in this domain.")
 
+    # Freeze active parser kind at upload; retries must not rewrite this field.
+    frozen_parser_kind = ensure_runtime_settings(db).active_parser_kind
     source_id = str(uuid.uuid4())
     object_key = new_object_key()
     storage = storage_from_settings(settings)
@@ -337,12 +334,12 @@ def upload_source_bytes(
         public_ref=new_document_public_ref(),
         domain_id=domain.id,
         original_filename=sanitize_original_filename(filename),
-        content_type=upload_content_type,
-        original_sha256=original_sha256,
-        original_size_bytes=len(data),
+        content_type=validated.content_type,
+        original_sha256=validated.sha256,
+        original_size_bytes=validated.size_bytes,
         original_object_key=object_key,
         state=SOURCE_STATE_PENDING,
-        parser_kind=ensure_runtime_settings(db).active_parser_kind,
+        parser_kind=frozen_parser_kind,
         preparation_generation=1,
         version=1,
         created_by_user_id=requested_by_user.id,
@@ -371,7 +368,7 @@ def upload_source_bytes(
                     "operationStatus": operation.status,
                 },
             )
-        storage.store.put_key(object_key, data, content_type=upload_content_type)
+        storage.store.put_key(object_key, validated.data, content_type=validated.content_type)
         object_written = True
         db.commit()
         db.refresh(source)
@@ -381,12 +378,12 @@ def upload_source_bytes(
         db.rollback()
         if object_written:
             storage.delete_source_files(domain.id, source_id, original_object_key=object_key)
-        raise SourceError(409, "source_duplicate", "Source already exists in this domain.") from exc
+        raise SourceError(409, "duplicate_source", "Source already exists in this domain.") from exc
     except (OSError, SourceStorageError, ObjectStorageError) as exc:
         db.rollback()
         if object_written:
             storage.delete_source_files(domain.id, source_id, original_object_key=object_key)
-        raise SourceError(500, "source_storage_unavailable", "Source storage unavailable.") from exc
+        raise SourceError(500, "dependency_unavailable", "Source storage unavailable.") from exc
 
 
 def _public_index_state(source: SourceDocument) -> str:
@@ -555,9 +552,12 @@ def retry_source(
     if source.state != SOURCE_STATE_PENDING:
         raise SourceError(409, "source_state_conflict", "Source state does not allow this operation.")
     if _active_operation(db, source.id) is not None:
-        raise SourceError(409, "source_operation_in_progress", "Source preparation is already in progress.")
+        raise SourceError(409, "operation_conflict", "Source preparation is already in progress.")
+    # Parser kind remains the value frozen at upload; do not re-read runtime defaults.
+    frozen_parser_kind = source.parser_kind
     source.preparation_generation += 1
     source.updated_at = utc_now()
+    source.parser_kind = frozen_parser_kind
     operation = _new_prepare_operation(
         source=source,
         requested_by_user=requested_by_user,
@@ -577,7 +577,7 @@ def retry_source(
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise SourceError(409, "source_operation_in_progress", "Source preparation is already in progress.") from exc
+        raise SourceError(409, "operation_conflict", "Source preparation is already in progress.") from exc
     db.refresh(operation)
     return operation
 

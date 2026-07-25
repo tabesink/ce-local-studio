@@ -10,13 +10,15 @@ from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.engine import Engine, URL, make_url
 from sqlalchemy.exc import IntegrityError
 
 from context_engine.config import Settings
 from context_engine.db import create_db_engine, create_session_factory
 from context_engine.models import (
+    PARSER_DOCLING,
+    PARSER_REDUCTO,
     ROLE_ADMINISTRATOR,
     SOURCE_PREP_STATUS_QUEUED,
     SOURCE_STATE_PENDING,
@@ -27,8 +29,20 @@ from context_engine.services.audit import AuditContext
 from context_engine.services.auth import create_user
 from context_engine.services.domains import create_domain
 from context_engine.services.readiness import SUPPORTED_ALEMBIC_HEAD
-from context_engine.services.runtime_config import SecretCrypto, rotate_provider_credential, seed_runtime_config
-from context_engine.services.sources import new_document_public_ref, safe_source, upload_source_bytes
+from context_engine.services.runtime_config import (
+    SecretCrypto,
+    ensure_runtime_settings,
+    rotate_provider_credential,
+    seed_runtime_config,
+)
+from context_engine.services.sources import (
+    SourceError,
+    cancel_source,
+    new_document_public_ref,
+    retry_source,
+    safe_source,
+    upload_source_bytes,
+)
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 ADMIN_URL_ENV = "CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL"
@@ -172,18 +186,37 @@ def test_p4_01_source_schema_refs_and_object_storage_on_postgresql_16(tmp_path: 
                         audit_context=audit,
                     )
 
-                    payload = b"%PDF-1.4 p4-01 fixture bytes"
+                    with pytest.raises(SourceError) as rejected:
+                        upload_source_bytes(
+                            db,
+                            settings=settings,
+                            domain_id=domain.id,
+                            filename="spoof.pdf",
+                            content_type="application/pdf",
+                            data=b"\x00not-a-pdf-body",
+                            requested_by_user=admin,
+                            audit_context=audit,
+                        )
+                    assert rejected.value.code == "content_rejected"
+                    assert (
+                        db.scalar(select(func.count()).select_from(SourceDocument).where(SourceDocument.domain_id == domain.id))
+                        == 0
+                    )
+
+                    payload = b"%PDF-1.4 p4-02 fixture bytes"
                     source, operation = upload_source_bytes(
                         db,
                         settings=settings,
                         domain_id=domain.id,
                         filename="pump-service-manual.pdf",
-                        content_type="application/pdf",
+                        content_type="application/octet-stream",
                         data=payload,
                         requested_by_user=admin,
                         audit_context=audit,
                     )
                     assert source.state == SOURCE_STATE_PENDING
+                    assert source.content_type == "application/pdf"
+                    assert source.parser_kind == PARSER_DOCLING
                     assert source.public_ref.startswith("doc_")
                     assert source.original_object_key.startswith("obj_")
                     assert source.version == 1
@@ -192,11 +225,45 @@ def test_p4_01_source_schema_refs_and_object_storage_on_postgresql_16(tmp_path: 
                     object_path = storage_root / "objects" / source.original_object_key
                     assert object_path.read_bytes() == payload
 
+                    with pytest.raises(SourceError) as duplicate:
+                        upload_source_bytes(
+                            db,
+                            settings=settings,
+                            domain_id=domain.id,
+                            filename="other-name.pdf",
+                            content_type="application/pdf",
+                            data=payload,
+                            requested_by_user=admin,
+                            audit_context=audit,
+                        )
+                    assert duplicate.value.code == "duplicate_source"
+
                     projection = safe_source(db, source)
                     assert projection["documentRef"] == source.public_ref
                     assert projection["displayName"] == "pump-service-manual.pdf"
                     assert "originalSha256" not in projection
                     assert source.original_object_key not in str(projection.values())
+
+                    runtime = ensure_runtime_settings(db)
+                    runtime.active_parser_kind = PARSER_REDUCTO
+                    db.commit()
+                    cancel_source(
+                        db,
+                        domain_id=domain.id,
+                        source_id=source.id,
+                        audit_context=audit,
+                    )
+                    retry_op = retry_source(
+                        db,
+                        domain_id=domain.id,
+                        source_id=source.id,
+                        requested_by_user=admin,
+                        audit_context=audit,
+                    )
+                    db.refresh(source)
+                    assert ensure_runtime_settings(db).active_parser_kind == PARSER_REDUCTO
+                    assert source.parser_kind == PARSER_DOCLING
+                    assert retry_op.status == SOURCE_PREP_STATUS_QUEUED
 
                     with pytest.raises(IntegrityError):
                         db.add(
@@ -223,7 +290,7 @@ def test_p4_01_source_schema_refs_and_object_storage_on_postgresql_16(tmp_path: 
                                 source_document_id=source.id,
                                 domain_id=domain.id,
                                 status=SOURCE_PREP_STATUS_QUEUED,
-                                preparation_generation_at_start=1,
+                                preparation_generation_at_start=source.preparation_generation,
                             )
                         )
                         db.flush()
