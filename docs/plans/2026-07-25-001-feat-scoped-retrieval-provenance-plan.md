@@ -234,13 +234,13 @@ PostgreSQL concurrency tests use barriers/latches rather than sleeps. If the env
 
 ## Definition of Done
 
-- [ ] U1-U4 are complete with no abandoned or duplicate retrieval scaffold left in the diff.
-- [ ] One server-selected eligible domain is the only retrieval boundary and every adapter call/result is request-isolated.
-- [ ] The service independently enforces admission, one end-to-end deadline, candidate count, and per-candidate/aggregate encoded-byte bounds.
-- [ ] Exact versioned provenance maps only current selected-domain blocks and sources; all malformed, unmapped, cross-domain, duplicate, stale, or fenced candidates are discarded.
-- [ ] Post-call PostgreSQL 16 tests prove stop/delete/replacement fences despite `expire_on_commit=False`.
-- [ ] Questions and raw hits/provider payloads/private IDs do not appear in public responses, persistence, logs, traces, audit, captured real-provider fixtures, snapshots, failure artifacts, or failure text; synthetic private adapter fixtures remain allowed.
-- [ ] P5-02 handoff and P5-03 eligibility regressions remain green.
-- [ ] OpenAPI/DTO/SSE snapshots remain unchanged, or implementation stops for the owning P6-02 contract change.
-- [ ] `docs/_scratch/p6-01-scoped-retrieval-evidence.md` records requirements/cases, changed files, exact commands/results, privacy and concurrency decisions, exclusions, and tested revision.
-- [ ] `docs/master-build-plan.md` marks only P6-01 complete and leaves P6-02/P7/P8/P9 residuals with their approved owners.
+- [x] U1-U4 are complete with no abandoned or duplicate retrieval scaffold left in the diff.
+- [x] One server-selected eligible domain is the only retrieval boundary and every adapter call/result is request-isolated.
+- [x] The service independently enforces admission, one end-to-end deadline, candidate count, and per-candidate/aggregate encoded-byte bounds.
+- [x] Exact versioned provenance maps only current selected-domain blocks and sources; all malformed, unmapped, cross-domain, duplicate, stale, or fenced candidates are discarded.
+- [x] Post-call PostgreSQL 16 tests prove stop/delete/replacement fences despite `expire_on_commit=False`.
+- [x] Questions and raw hits/provider payloads/private IDs do not appear in public responses, persistence, logs, traces, audit, captured real-provider fixtures, snapshots, failure artifacts, or failure text; synthetic private adapter fixtures remain allowed.
+- [x] P5-02 handoff and P5-03 eligibility regressions remain green.
+- [x] OpenAPI/DTO/SSE snapshots remain unchanged, or implementation stops for the owning P6-02 contract change.
+- [x] `docs/_scratch/p6-01-scoped-retrieval-evidence.md` records requirements/cases, changed files, exact commands/results, privacy and concurrency decisions, exclusions, and tested revision.
+- [x] `docs/master-build-plan.md` marks only P6-01 complete and leaves P6-02/P7/P8/P9 residuals with their approved owners.
