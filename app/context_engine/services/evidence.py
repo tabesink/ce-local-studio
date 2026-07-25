@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import threading
+import time
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -16,8 +18,16 @@ from context_engine.models import (
     SourceBlock,
     SourceDocument,
 )
-from context_engine.services.domains import DomainRuntimeController, controller_from_settings, domain_available
-from context_engine.services.indexing import RawRetrievalHit, SourceIndexError, index_client_from_settings, source_is_query_eligible
+from context_engine.services.domains import (
+    DomainRuntimeController,
+    controller_from_settings,
+    domain_available,
+)
+from context_engine.services.indexing import (
+    SourceIndexError,
+    index_client_from_settings,
+    source_is_query_eligible,
+)
 
 EVIDENCE_RESULT_FOUND = "evidence_found"
 EVIDENCE_RESULT_NO_CONTEXT = "no_grounded_context"
@@ -25,6 +35,9 @@ MAX_EVIDENCE_EXCERPT_CHARS = 500
 MAX_SOURCE_LABEL_CHARS = 255
 _CE_BLOCK_TOKEN_RE = re.compile(r"\[CE_BLOCK[^\]]*\]")
 _CE_BLOCK_MARKER_RE = re.compile(r"^\[CE_BLOCK id=([^\]\s]+) order=([1-9]\d*)\]$")
+_RETRIEVAL_GATE_LOCK = threading.Lock()
+_RETRIEVAL_GLOBAL_GATES: dict[int, threading.BoundedSemaphore] = {}
+_RETRIEVAL_DOMAIN_GATES: dict[tuple[int, str], threading.BoundedSemaphore] = {}
 
 
 class EvidenceRetrievalError(Exception):
@@ -56,8 +69,143 @@ class InternalMappedEvidence:
     retrieval_order: int
 
 
-class RetrievalClient(Protocol):
-    def retrieve(self, domain: Domain, *, question: str) -> tuple[RawRetrievalHit, ...]: ...
+@dataclass(frozen=True)
+class ScopedRetrievalCandidate:
+    """One private, bounded dependency candidate."""
+
+    text: str
+
+
+@dataclass(frozen=True)
+class ScopedRetrievalResult:
+    """Closed result envelope returned by the private retrieval port."""
+
+    candidates: tuple[ScopedRetrievalCandidate, ...]
+
+
+class ScopedRetrievalError(Exception):
+    """Safe internal retrieval failure that never includes dependency content."""
+
+    def __init__(self, code: str, message: str) -> None:
+        self.code = code
+        self.message = message
+        super().__init__(message)
+
+
+class ScopedRetrievalPort(Protocol):
+    def retrieve(
+        self,
+        domain: Domain,
+        *,
+        question: str,
+        deadline: float,
+    ) -> ScopedRetrievalResult: ...
+
+
+# Kept as a source-compatible name until the P7 orchestration seam is rewired.
+RetrievalClient = ScopedRetrievalPort
+
+
+def _retrieval_failure(code: str) -> ScopedRetrievalError:
+    messages = {
+        "retrieval_saturated": "Scoped retrieval capacity is unavailable.",
+        "retrieval_timeout": "Scoped retrieval timed out.",
+        "retrieval_unavailable": "Scoped retrieval is unavailable.",
+        "retrieval_malformed": "Scoped retrieval returned an invalid result.",
+    }
+    return ScopedRetrievalError(code, messages[code])
+
+
+def _retrieval_gates(settings: Settings, domain_id: str) -> tuple[threading.BoundedSemaphore, threading.BoundedSemaphore]:
+    global_limit = settings.retrieval_global_concurrency
+    domain_limit = settings.retrieval_per_domain_concurrency
+    with _RETRIEVAL_GATE_LOCK:
+        global_gate = _RETRIEVAL_GLOBAL_GATES.setdefault(global_limit, threading.BoundedSemaphore(global_limit))
+        domain_gate = _RETRIEVAL_DOMAIN_GATES.setdefault(
+            (domain_limit, domain_id),
+            threading.BoundedSemaphore(domain_limit),
+        )
+    return global_gate, domain_gate
+
+
+def _acquire_before(gate: threading.BoundedSemaphore, deadline: float) -> bool:
+    remaining = deadline - time.monotonic()
+    return remaining > 0 and gate.acquire(timeout=remaining)
+
+
+def normalize_scoped_retrieval_result(
+    result: object,
+    *,
+    settings: Settings,
+) -> tuple[ScopedRetrievalCandidate, ...]:
+    if type(result) is not ScopedRetrievalResult or type(result.candidates) is not tuple:
+        raise _retrieval_failure("retrieval_malformed")
+
+    bounded = result.candidates[: settings.retrieval_max_candidates]
+    aggregate_bytes = 0
+    for candidate in bounded:
+        if type(candidate) is not ScopedRetrievalCandidate or type(candidate.text) is not str:
+            raise _retrieval_failure("retrieval_malformed")
+        try:
+            candidate_bytes = len(candidate.text.encode("utf-8"))
+        except UnicodeEncodeError as exc:
+            raise _retrieval_failure("retrieval_malformed") from exc
+        aggregate_bytes += candidate_bytes
+        if (
+            candidate_bytes > settings.retrieval_max_candidate_bytes
+            or aggregate_bytes > settings.retrieval_max_aggregate_bytes
+        ):
+            raise _retrieval_failure("retrieval_malformed")
+    return bounded
+
+
+def retrieve_bounded_candidates(
+    *,
+    settings: Settings,
+    domain: Domain,
+    question: str,
+    client: ScopedRetrievalPort,
+) -> tuple[ScopedRetrievalCandidate, ...]:
+    if not isinstance(question, str) or not question.strip():
+        raise _retrieval_failure("retrieval_malformed")
+
+    deadline = time.monotonic() + settings.retrieval_timeout_seconds
+    global_gate, domain_gate = _retrieval_gates(settings, domain.id)
+    global_acquired = False
+    domain_acquired = False
+    try:
+        global_acquired = _acquire_before(global_gate, deadline)
+        if not global_acquired:
+            raise _retrieval_failure("retrieval_saturated")
+        domain_acquired = _acquire_before(domain_gate, deadline)
+        if not domain_acquired:
+            raise _retrieval_failure("retrieval_saturated")
+        try:
+            result = client.retrieve(domain, question=question, deadline=deadline)
+        except ScopedRetrievalError as exc:
+            if exc.code not in {
+                "retrieval_saturated",
+                "retrieval_timeout",
+                "retrieval_unavailable",
+                "retrieval_malformed",
+            }:
+                raise _retrieval_failure("retrieval_unavailable") from exc
+            raise _retrieval_failure(exc.code) from exc
+        except SourceIndexError as exc:
+            code = "retrieval_timeout" if exc.code == "source_index_timeout" else "retrieval_unavailable"
+            raise _retrieval_failure(code) from exc
+        except TimeoutError as exc:
+            raise _retrieval_failure("retrieval_timeout") from exc
+        except Exception as exc:
+            raise _retrieval_failure("retrieval_unavailable") from exc
+        if time.monotonic() > deadline:
+            raise _retrieval_failure("retrieval_timeout")
+        return normalize_scoped_retrieval_result(result, settings=settings)
+    finally:
+        if domain_acquired:
+            domain_gate.release()
+        if global_acquired:
+            global_gate.release()
 
 
 def parse_ce_block_marker(text: str) -> CEBlockMarker | None:
@@ -136,7 +284,7 @@ def map_retrieval_hits_to_evidence(
     *,
     settings: Settings,
     domain: Domain,
-    hits: tuple[RawRetrievalHit, ...] | list[RawRetrievalHit],
+    hits: tuple[ScopedRetrievalCandidate, ...] | list[ScopedRetrievalCandidate],
     controller: DomainRuntimeController | None = None,
 ) -> list[EvidenceItem]:
     return [
@@ -156,7 +304,7 @@ def map_retrieval_hits_to_internal_evidence(
     *,
     settings: Settings,
     domain: Domain,
-    hits: tuple[RawRetrievalHit, ...] | list[RawRetrievalHit],
+    hits: tuple[ScopedRetrievalCandidate, ...] | list[ScopedRetrievalCandidate],
     controller: DomainRuntimeController | None = None,
 ) -> list[InternalMappedEvidence]:
     controller = controller or controller_from_settings(settings)
@@ -214,8 +362,13 @@ def retrieve_scoped_evidence(
     db.commit()
     client = client or index_client_from_settings(settings, controller)
     try:
-        hits = client.retrieve(domain, question=question)
-    except SourceIndexError as exc:
+        hits = retrieve_bounded_candidates(
+            settings=settings,
+            domain=domain,
+            question=question,
+            client=client,
+        )
+    except (SourceIndexError, ScopedRetrievalError) as exc:
         raise EvidenceRetrievalError(502, "domain_runtime_unavailable", "Knowledge domain runtime is unavailable.") from exc
 
     evidence = map_retrieval_hits_to_evidence(db, settings=settings, domain=domain, hits=hits, controller=controller)

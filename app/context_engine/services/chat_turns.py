@@ -66,11 +66,13 @@ from context_engine.services.evidence import (
     EvidenceRetrievalError,
     InternalMappedEvidence,
     RetrievalClient,
+    ScopedRetrievalError,
     eligible_sources_for_domain,
     map_retrieval_hits_to_internal_evidence,
+    retrieve_bounded_candidates,
     resolve_available_domain,
 )
-from context_engine.services.indexing import SourceIndexError, index_client_from_settings
+from context_engine.services.indexing import index_client_from_settings
 from context_engine.services.prompt_assembly import PromptAssemblyContext, PromptAssemblyService
 from context_engine.services.runtime_config import (
     RuntimeConfigError,
@@ -202,8 +204,13 @@ class P6RetrievalPort:
                 return []
             db.commit()
             client = self._client or index_client_from_settings(settings, controller)
-            hits = client.retrieve(domain, question=question)
-        except SourceIndexError as exc:
+            hits = retrieve_bounded_candidates(
+                settings=settings,
+                domain=domain,
+                question=question,
+                client=client,
+            )
+        except ScopedRetrievalError as exc:
             raise ChatTurnError(502, "domain_runtime_unavailable", "Knowledge domain runtime is unavailable.") from exc
         except EvidenceRetrievalError as exc:
             raise ChatTurnError(exc.status_code, exc.code, exc.message) from exc

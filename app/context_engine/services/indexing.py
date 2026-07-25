@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import threading
+import time
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -35,8 +36,15 @@ from context_engine.models import (
     SourceDocument,
 )
 from context_engine.services.audit import AuditContext, AuditService
-from context_engine.services.domains import DomainRuntimeController, controller_from_settings, domain_available
-from context_engine.services.lightrag_runtime import assert_vendored_lightrag_loaded, ensure_vendored_lightrag_import_path
+from context_engine.services.domains import (
+    DomainRuntimeController,
+    controller_from_settings,
+    domain_available,
+)
+from context_engine.services.lightrag_runtime import (
+    assert_vendored_lightrag_loaded,
+    ensure_vendored_lightrag_import_path,
+)
 from context_engine.services.structured_logging import safe_log
 
 logger = logging.getLogger(__name__)
@@ -76,11 +84,6 @@ class IndexReadiness:
     error_message: str | None = None
 
 
-@dataclass(frozen=True)
-class RawRetrievalHit:
-    text: str
-
-
 class LightRAGClientProtocol(Protocol):
     def submit(self, domain: Domain, *, request_id: str, content_hash: str, rendered_text: str) -> IndexSubmitResult: ...
 
@@ -89,8 +92,6 @@ class LightRAGClientProtocol(Protocol):
     def delete(self, domain: Domain, *, request_id: str) -> None: ...
 
     def is_absent(self, domain: Domain, *, request_id: str) -> bool: ...
-
-    def retrieve(self, domain: Domain, *, question: str) -> tuple[RawRetrievalHit, ...]: ...
 
 
 def _safe_error(code: str, message: str) -> SourceIndexError:
@@ -228,6 +229,39 @@ def _rendered_hit_chunks(rendered_text: str) -> list[dict[str, str]]:
     return chunks
 
 
+def _bounded_adapter_result(texts, settings: Settings):
+    # Import lazily: evidence owns the retrieval port while this adapter also
+    # implements the independent index-lifecycle protocol.
+    from context_engine.services.evidence import (
+        ScopedRetrievalCandidate,
+        ScopedRetrievalError,
+        ScopedRetrievalResult,
+    )
+
+    candidates: list[ScopedRetrievalCandidate] = []
+    aggregate_bytes = 0
+    for text in texts:
+        if len(candidates) >= settings.retrieval_max_candidates:
+            break
+        if type(text) is not str:
+            raise ScopedRetrievalError("retrieval_malformed", "Scoped retrieval returned an invalid result.")
+        try:
+            candidate_bytes = len(text.encode("utf-8"))
+        except UnicodeEncodeError as exc:
+            raise ScopedRetrievalError(
+                "retrieval_malformed",
+                "Scoped retrieval returned an invalid result.",
+            ) from exc
+        aggregate_bytes += candidate_bytes
+        if (
+            candidate_bytes > settings.retrieval_max_candidate_bytes
+            or aggregate_bytes > settings.retrieval_max_aggregate_bytes
+        ):
+            raise ScopedRetrievalError("retrieval_malformed", "Scoped retrieval returned an invalid result.")
+        candidates.append(ScopedRetrievalCandidate(text=text))
+    return ScopedRetrievalResult(candidates=tuple(candidates))
+
+
 class LocalLightRAGIndexClient:
     def __init__(self, settings: Settings, controller: DomainRuntimeController | None = None) -> None:
         self._settings = settings
@@ -295,31 +329,40 @@ class LocalLightRAGIndexClient:
     def is_absent(self, domain: Domain, *, request_id: str) -> bool:
         return not self._record_path(domain, request_id).exists()
 
-    def retrieve(self, domain: Domain, *, question: str) -> tuple[RawRetrievalHit, ...]:
+    def retrieve(self, domain: Domain, *, question: str, deadline: float | None = None):
+        from context_engine.services.evidence import ScopedRetrievalError
+
         if not question.strip() or not self._controller.health(domain).healthy:
-            raise _safe_error("source_index_unavailable", "Source index runtime unavailable.")
+            raise ScopedRetrievalError("retrieval_unavailable", "Scoped retrieval is unavailable.")
+        if deadline is not None and time.monotonic() >= deadline:
+            raise ScopedRetrievalError("retrieval_timeout", "Scoped retrieval timed out.")
         index_dir = self._index_dir(domain)
         if not index_dir.exists():
-            return ()
-        hits: list[RawRetrievalHit] = []
+            return _bounded_adapter_result((), self._settings)
+        texts: list[str] = []
         try:
             record_paths = sorted(index_dir.glob("*.json"))
         except OSError as exc:
-            raise _safe_error("source_index_unavailable", "Source index runtime unavailable.") from exc
+            raise ScopedRetrievalError("retrieval_unavailable", "Scoped retrieval is unavailable.") from exc
         for record_path in record_paths:
+            if deadline is not None and time.monotonic() >= deadline:
+                raise ScopedRetrievalError("retrieval_timeout", "Scoped retrieval timed out.")
             try:
                 record = json.loads(record_path.read_text(encoding="utf-8"))
             except (OSError, ValueError) as exc:
-                raise _safe_error("source_index_unavailable", "Source index runtime unavailable.") from exc
+                raise ScopedRetrievalError("retrieval_unavailable", "Scoped retrieval is unavailable.") from exc
             if record.get("status") != "ready":
                 continue
             chunks = record.get("chunks")
             if not isinstance(chunks, list):
-                continue
+                raise ScopedRetrievalError("retrieval_malformed", "Scoped retrieval returned an invalid result.")
             for chunk in chunks:
-                if isinstance(chunk, dict) and isinstance(chunk.get("text"), str):
-                    hits.append(RawRetrievalHit(text=chunk["text"]))
-        return tuple(hits)
+                if len(texts) >= self._settings.retrieval_max_candidates:
+                    break
+                if not isinstance(chunk, dict) or type(chunk.get("text")) is not str:
+                    raise ScopedRetrievalError("retrieval_malformed", "Scoped retrieval returned an invalid result.")
+                texts.append(chunk["text"])
+        return _bounded_adapter_result(texts, self._settings)
 
     def preserved_block_ids(self, domain: Domain, *, request_id: str) -> tuple[str, ...]:
         record_path = self._record_path(domain, request_id)
@@ -342,15 +385,26 @@ class LightRAGClient:
     def _working_dir(self, domain: Domain) -> Path:
         return Path(self._settings.domain_runtime_root) / domain.id / domain.runtime_instance_id / "lightrag"
 
-    def _run(self, coro):
+    def _run(self, coro, *, deadline: float | None = None):
         # LightRAG 1.4.16 uses module-level shared storage state. Keep native
         # lifecycle calls process-serialized until per-domain concurrency is proven.
         timeout_seconds = max(1, int(self._settings.source_index_timeout_seconds))
-        with _NATIVE_LIGHTRAG_LIFECYCLE_LOCK:
+        call_deadline = deadline or (time.monotonic() + timeout_seconds)
+        remaining = call_deadline - time.monotonic()
+        if remaining <= 0 or not _NATIVE_LIGHTRAG_LIFECYCLE_LOCK.acquire(timeout=remaining):
+            if hasattr(coro, "close"):
+                coro.close()
+            raise SourceIndexError(504, "source_index_timeout", "Source index runtime timed out.")
+        try:
             loop = asyncio.new_event_loop()
             try:
                 asyncio.set_event_loop(loop)
-                return loop.run_until_complete(asyncio.wait_for(coro, timeout=timeout_seconds))
+                remaining = call_deadline - time.monotonic()
+                if remaining <= 0:
+                    if hasattr(coro, "close"):
+                        coro.close()
+                    raise TimeoutError
+                return loop.run_until_complete(asyncio.wait_for(coro, timeout=remaining))
             except TimeoutError as exc:
                 raise SourceIndexError(504, "source_index_timeout", "Source index runtime timed out.") from exc
             finally:
@@ -372,6 +426,8 @@ class LightRAGClient:
                     pass
                 asyncio.set_event_loop(None)
                 loop.close()
+        finally:
+            _NATIVE_LIGHTRAG_LIFECYCLE_LOCK.release()
 
     def _load_runtime(self):
         try:
@@ -534,11 +590,13 @@ class LightRAGClient:
             # which callers would misread as a failed delete.
             raise _safe_error("source_index_unavailable", "Source index runtime unavailable.") from exc
 
-    def retrieve(self, domain: Domain, *, question: str) -> tuple[RawRetrievalHit, ...]:
-        if not question.strip():
-            raise _safe_error("source_index_unavailable", "Source index runtime unavailable.")
+    def retrieve(self, domain: Domain, *, question: str, deadline: float | None = None):
+        from context_engine.services.evidence import ScopedRetrievalError
 
-        async def op() -> tuple[RawRetrievalHit, ...]:
+        if not question.strip():
+            raise ScopedRetrievalError("retrieval_unavailable", "Scoped retrieval is unavailable.")
+
+        async def op():
             rag, runtime = await self._new_rag(domain)
             try:
                 QueryParam = runtime["QueryParam"]
@@ -546,27 +604,39 @@ class LightRAGClient:
             finally:
                 await self._close_rag(rag, runtime)
             if not isinstance(result, dict) or result.get("status") != "success":
-                return ()
+                return _bounded_adapter_result((), self._settings)
             data = result.get("data")
             if not isinstance(data, dict):
-                return ()
+                raise ScopedRetrievalError("retrieval_malformed", "Scoped retrieval returned an invalid result.")
             chunks = data.get("chunks")
             if not isinstance(chunks, list):
-                return ()
-            hits: list[RawRetrievalHit] = []
+                raise ScopedRetrievalError("retrieval_malformed", "Scoped retrieval returned an invalid result.")
+            texts: list[str] = []
+            raw_bytes = 0
             for chunk in chunks:
-                if not isinstance(chunk, dict) or not isinstance(chunk.get("content"), str):
-                    continue
+                if not isinstance(chunk, dict) or type(chunk.get("content")) is not str:
+                    raise ScopedRetrievalError("retrieval_malformed", "Scoped retrieval returned an invalid result.")
+                raw_bytes += len(chunk["content"].encode("utf-8"))
+                if raw_bytes > self._settings.retrieval_max_aggregate_bytes:
+                    raise ScopedRetrievalError("retrieval_malformed", "Scoped retrieval returned an invalid result.")
                 for rendered_chunk in _rendered_hit_chunks(chunk["content"]):
-                    hits.append(RawRetrievalHit(text=rendered_chunk["text"]))
-            return tuple(hits)
+                    texts.append(rendered_chunk["text"])
+                    if len(texts) >= self._settings.retrieval_max_candidates:
+                        break
+                if len(texts) >= self._settings.retrieval_max_candidates:
+                    break
+            return _bounded_adapter_result(texts, self._settings)
 
         try:
-            return self._run(op())
-        except SourceIndexError:
+            return self._run(op(), deadline=deadline)
+        except SourceIndexError as exc:
+            code = "retrieval_timeout" if exc.code == "source_index_timeout" else "retrieval_unavailable"
+            message = "Scoped retrieval timed out." if code == "retrieval_timeout" else "Scoped retrieval is unavailable."
+            raise ScopedRetrievalError(code, message) from exc
+        except ScopedRetrievalError:
             raise
         except Exception as exc:
-            raise _safe_error("source_index_unavailable", "Source index runtime unavailable.") from exc
+            raise ScopedRetrievalError("retrieval_unavailable", "Scoped retrieval is unavailable.") from exc
 
     def preserved_block_ids(self, domain: Domain, *, request_id: str) -> tuple[str, ...]:
         _safe_request_id(request_id)
