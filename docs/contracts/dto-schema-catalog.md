@@ -189,6 +189,31 @@ type ConversationDetailDto = ConversationSummaryDto & { turns: TurnDto[] };
 
 `EvidenceItemDto`, document metadata, and location anchors are exactly those in `document-and-evidence-contract.md`. `AcceptedRefDto.id` is the persisted accepted-ref public ref, never its private row ID. A redacted turn has `assistantAnswer:null`, `evidence:[]`, and `acceptedRefs:[]`.
 
+The standalone retrieval route uses a distinct stateless projection:
+
+```ts
+type RetrievalEvidenceRequestDto = {
+  question: string; // trimmed, 1..2000
+};
+
+type RetrievalEvidenceItemDto = {
+  citationLabel: string;
+  sourceLabel: SafeLabel;
+  excerpt: string; // canonical mapped text, 1..500
+  kind: "text" | "table" | "figure";
+  documentRef: OpaqueRef;
+  documentLabel: SafeLabel;
+  anchor: EvidenceAnchorDto | null;
+};
+
+type RetrievalEvidenceResponseDto = {
+  result: "evidence_found" | "no_grounded_context";
+  evidence: RetrievalEvidenceItemDto[];
+};
+```
+
+`RetrievalEvidenceItemDto` has no evidence ID because the route is read-only and creates no owner-bound turn Evidence row. Citation labels are dense and response-scoped after final block deduplication. A nullable anchor means no page can be proved; persisted `EvidenceItemDto.anchor` remains required.
+
 ## Governed-context DTOs
 
 ```ts
@@ -211,6 +236,7 @@ Phase 1 audit rows, structured log records, service metrics, and dependency chec
 | login | `username` 1..320, `password` 1..1024 |
 | conversation create/rename | optional/title 1..120 |
 | turn start | `clientRequestId` 1..80, `message` 1..4000, `domainId?`, ordered `composerRefTokens?` max 25 |
+| stateless evidence retrieval | `question` trimmed 1..2000; no other fields |
 | domain create | `displayName` 1..120, `embeddingProfileId` |
 | upload | one multipart `file`; no browser-supplied domain/parser/storage fields |
 | list | only filters listed in `http-api-catalog.md`; `limit` 1..100; one opaque cursor |

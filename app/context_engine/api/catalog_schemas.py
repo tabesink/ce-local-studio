@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.json_schema import models_json_schema
 
 
@@ -185,6 +185,33 @@ class EvidenceItemDto(PublicDto):
     anchor: EvidenceAnchorDto
 
 
+class RetrievalEvidenceRequestDto(PublicDto):
+    question: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("question")
+    @classmethod
+    def validate_question(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("question must not be blank")
+        return normalized
+
+
+class RetrievalEvidenceItemDto(PublicDto):
+    citation_label: str = Field(alias="citationLabel", min_length=1, max_length=32)
+    source_label: SafeLabel = Field(alias="sourceLabel")
+    excerpt: str = Field(min_length=1, max_length=500)
+    kind: EvidenceKind
+    document_ref: OpaqueRef = Field(alias="documentRef")
+    document_label: SafeLabel = Field(alias="documentLabel")
+    anchor: EvidenceAnchorDto | None
+
+
+class RetrievalEvidenceResponseDto(PublicDto):
+    result: Literal["evidence_found", "no_grounded_context"]
+    evidence: list[RetrievalEvidenceItemDto]
+
+
 class TurnErrorDto(PublicDto):
     code: str = Field(min_length=1, max_length=120)
     message: SafeMessage
@@ -237,6 +264,9 @@ AUTHORITATIVE_PUBLIC_DTOS = (
     OperationErrorDto,
     OutlineItemDto,
     ProviderSummaryDto,
+    RetrievalEvidenceItemDto,
+    RetrievalEvidenceRequestDto,
+    RetrievalEvidenceResponseDto,
     RuntimeSettingsDto,
     TurnDto,
     TurnErrorDto,

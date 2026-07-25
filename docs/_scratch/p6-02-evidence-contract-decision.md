@@ -2,11 +2,11 @@
 
 Date: 2026-07-25
 
-Status: decision required before implementation
+Status: approved by the user on 2026-07-25
 
-## Decision requested
+## Approved decision
 
-Approve one public contract for the read-only
+The user approved the following public contract for the read-only
 `POST /api/v1/domains/{domainId}/evidence` response before P6-02 changes the
 route, service, generated artifacts, or browser client.
 
@@ -35,7 +35,7 @@ The recommended decision is:
    this stateless retrieval result. The service must not fabricate page 1 or a
    `fallback:"page"` anchor.
 
-The alternative is to remove or defer this standalone endpoint until P7 can
+The rejected alternative was to remove or defer this standalone endpoint until P7 can
 persist owner-bound turn evidence. Making the endpoint persist unattached
 evidence is not recommended because it contradicts its approved no-mutation
 contract and the conversation-owned evidence schema.

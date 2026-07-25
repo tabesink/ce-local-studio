@@ -49,6 +49,12 @@ Chat, conversation detail, and evidence-location responses use the same projecti
 
 Coordinates use the rendered page crop box with origin at top-left. `x`, `y`, `width`, and `height` are decimals in `[0,1]`; width/height are positive; the rectangle must remain within the page. They are presentation hints, not authorization or persistence identities.
 
+### Stateless retrieval Evidence
+
+`POST /domains/{domainId}/evidence` returns `RetrievalEvidenceItemDto`, not the persisted `EvidenceItemDto` above. It has the same safe `citationLabel`, labels, canonical excerpt, kind, document ref, and anchor projection but no `id`. The endpoint creates no Evidence row and its dense citation labels are stable only inside one response; durable citation stability begins when P7 persists turn Evidence.
+
+Its `anchor` is nullable. Text, table, and figure blocks may project a one-based canonical block page; a bounded safe section label is included only when a page is provable. A figure without a block page may use linked Source Image page metadata only when all usable linked image page numbers agree. Conflicting or missing page metadata produces `anchor:null`; the server never fabricates page 1 or a region.
+
 ## Document metadata
 
 `GET /documents/{documentRef}` returns:

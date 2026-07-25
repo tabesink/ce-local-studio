@@ -83,7 +83,7 @@ Document/evidence DTOs and byte-range behavior are normative in `document-and-ev
 
 | Method/path | Role | Success | Contract |
 | --- | --- | --- | --- |
-| `POST /domains/{domainId}/evidence` | M | `200 {result,evidence}` | `{question}` only; bounded safe projection; no mutation |
+| `POST /domains/{domainId}/evidence` | M | `200 RetrievalEvidenceResponseDto` | `RetrievalEvidenceRequestDto`; authenticated membership plus current query eligibility; bounded safe projection; no mutation |
 | `GET /conversations` | O | `200 {conversations,nextCursor}` | current user's rows only |
 | `POST /conversations` | M | `201 {conversation}` | optional `{title}`; key supported |
 | `GET /conversations/{conversationId}` | O | `200 {conversation,turns}` | redacted projections omit answer/evidence |
@@ -95,6 +95,8 @@ Document/evidence DTOs and byte-range behavior are normative in `document-and-ev
 | `POST /composer-refs:discover` | M | `200 {refs}` | domain/conversation-scoped opaque one-use tokens; max 25 |
 
 The server computes the stream-start fingerprint from the normalized message, effective route/domain, and ordered resolved refs; no request fingerprint field is accepted. Same request ID/server-computed fingerprint attaches or replays without provider/retrieval work; different effective input returns `idempotency_conflict` (`M-10`). A domain question without a domain returns `domain_required`; no grounded evidence never falls back to direct LLM.
+
+For `POST /domains/{domainId}/evidence`, mapped candidates retain first-valid order after block deduplication and receive dense response-local citation labels. A valid bounded retrieval with no surviving mapped Evidence returns `200 {"result":"no_grounded_context","evidence":[]}`. The closed failures are: unknown domain `404 not_found`; stopped, deleting, transitioning, runtime-not-ready, or no-eligible-source domain `409 domain_not_query_eligible`; admission saturation `503 capacity_unavailable`; dependency timeout, unavailability, malformed output, or health exception `503 dependency_unavailable`; and invalid input `422 validation_error`. Success and failure are `private, no-store`.
 
 ## Deferred operator surfaces
 

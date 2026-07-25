@@ -1129,6 +1129,40 @@ export interface components {
              */
             status: "ready";
         };
+        /** RetrievalEvidenceItemDto */
+        RetrievalEvidenceItemDto: {
+            anchor: components["schemas"]["EvidenceAnchorDto"] | null;
+            /** Citationlabel */
+            citationLabel: string;
+            /** Documentlabel */
+            documentLabel: string;
+            /** Documentref */
+            documentRef: string;
+            /** Excerpt */
+            excerpt: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "text" | "table" | "figure";
+            /** Sourcelabel */
+            sourceLabel: string;
+        };
+        /** RetrievalEvidenceRequestDto */
+        RetrievalEvidenceRequestDto: {
+            /** Question */
+            question: string;
+        };
+        /** RetrievalEvidenceResponseDto */
+        RetrievalEvidenceResponseDto: {
+            /** Evidence */
+            evidence: components["schemas"]["RetrievalEvidenceItemDto"][];
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "evidence_found" | "no_grounded_context";
+        };
         /** RuntimeSettingsDto */
         RuntimeSettingsDto: {
             /**
