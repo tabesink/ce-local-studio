@@ -17,7 +17,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | P0 | Contract and repository spine | DONE | - | governance, vocabulary, ADRs, API/data/SSE conventions, CI skeleton approved |
 | P1 | Trusted app foundation | DONE | P0 | migrated Postgres, seeded admin, cookie auth, owner/admin guards, health and safe errors, append-only transactional audit pass |
 | P2 | Trusted runtime configuration | DONE | P1 | encrypted credentials, model profiles, parser/synthesis defaults, admin contract tests pass |
-| P3 | Knowledge Domain runtime | IN_PROGRESS | P2 | per-domain runtime boundary, lifecycle operations, leases/generations, readiness proven |
+| P3 | Knowledge Domain runtime | DONE | P2 | per-domain runtime boundary, lifecycle operations, leases/generations, readiness proven |
 | P4 | Source preparation | NOT_STARTED | P3 | upload/storage/parser adapters produce canonical blocks and support retry/cancel/delete |
 | P5 | LightRAG indexing eligibility | NOT_STARTED | P4 | vendored fixture proves idempotent submit, readiness, delete, provenance markers, eligibility |
 | P6 | Scoped Evidence retrieval | NOT_STARTED | P5 | single-domain authorized retrieval maps only valid local blocks to safe Evidence |
@@ -84,7 +84,9 @@ P1-06 closure evidence (2026-07-24): `docs/_scratch/p1-06-audit-inventory.md` re
 | --- | --- | --- | --- |
 | P3-01 | DONE | P2 | domains/domain_operations schema and admin APIs |
 | P3-02 | DONE | P3-01 | runtime controller port plus local/Docker implementations |
-| P3-03 | NOT_STARTED | P3-02 | lease, generation, conflict, readiness and async delete behavior |
+| P3-03 | DONE | P3-02 | lease, generation, conflict, readiness and async delete behavior |
+
+P3-03 closure evidence (2026-07-25): `docs/_scratch/p3-03-domain-leases-inventory.md` records retain/modify/defer decisions. Start/stop keep sync completion with lifecycle leases and generation-fenced state updates; delete supersedes active start/stop; `DomainDeleteWorker` heartbeats leases, reclaims expired/uncertain deletes, and cancels stale-generation completions; uncertain start/stop reconcile via health probe. PostgreSQL 16 proof covers A-03 stale no-op, A-04 stop fence, A-05 supersede, A-10 worker delete, lease reclaim, and stale delete cancel. Results were 11 focused lease/domain/controller tests passing. `docs/_scratch/p3-03-domain-leases-evidence.md` records commands and keeps mid-turn chat A-04 with P7 and index DRIFT-32 with P5-03. DRIFT-12 race half closed.
 
 P3-02 closure evidence (2026-07-25): `docs/_scratch/p3-02-runtime-controller-inventory.md` records the extract into `adapters/domain_runtime_controller.py`. Local/Docker adapters require stable `operation_key`/`control_generation`, return typed `succeeded`/`failed`/`uncertain` results, and map Docker timeouts to `uncertain`. Unit proofs cover local lifecycle records, Docker payload keys, timeout→uncertain, and hard failure; P3-01 PostgreSQL domains suite remains green with `kind=local`. `docs/_scratch/p3-02-runtime-controller-evidence.md` records commands and keeps lease/reconciliation races with P3-03.
 

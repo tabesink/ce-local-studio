@@ -83,6 +83,52 @@ class DomainError(Exception):
         super().__init__(message)
 
 
+def _lease_heartbeat_seconds(lease_seconds: int) -> int:
+    return max(1, lease_seconds // 3)
+
+
+def _assign_operation_lease(
+    operation: DomainOperation,
+    *,
+    owner: str,
+    lease_seconds: int,
+    now=None,
+) -> None:
+    current = now or utc_now()
+    operation.lease_owner = owner
+    operation.lease_expires_at = current + timedelta(seconds=lease_seconds)
+    operation.updated_at = current
+
+
+def _operation_lease_current(
+    operation: DomainOperation,
+    *,
+    owner: str,
+    now=None,
+) -> bool:
+    current = now or utc_now()
+    if operation.lease_owner != owner:
+        return False
+    if operation.lease_expires_at is None or operation.lease_expires_at < current:
+        return False
+    return True
+
+
+def _heartbeat_operation_lease(
+    operation: DomainOperation,
+    *,
+    owner: str,
+    lease_seconds: int,
+    now=None,
+) -> bool:
+    current = now or utc_now()
+    if not _operation_lease_current(operation, owner=owner, now=current):
+        return False
+    operation.lease_expires_at = current + timedelta(seconds=lease_seconds)
+    operation.updated_at = current
+    return True
+
+
 def _mark_operation_uncertain(db: Session, operation: DomainOperation, result: RuntimeControllerResult) -> None:
     now = utc_now()
     operation.message = result.message or "Runtime outcome uncertain; reconciliation required."
@@ -110,6 +156,73 @@ def _raise_for_controller_result(
         result.message or "Runtime unavailable.",
     )
     raise DomainError(503, "dependency_unavailable", "Runtime unavailable.")
+
+
+def _cancel_active_lifecycle_operation(db: Session, domain_id: str, *, message: str) -> DomainOperation | None:
+    active = _active_operation(db, domain_id)
+    if active is None:
+        return None
+    if active.operation_type == DOMAIN_OPERATION_DELETE:
+        raise DomainError(
+            409,
+            "domain_operation_in_progress",
+            "Another operation is already in progress for this domain.",
+        )
+    now = utc_now()
+    active.status = DOMAIN_OPERATION_STATUS_CANCELLED
+    active.message = message
+    active.error_code = None
+    active.error_message = None
+    active.finished_at = now
+    active.updated_at = now
+    active.version += 1
+    active.lease_owner = None
+    active.lease_expires_at = None
+    return active
+
+
+def _apply_fenced_state_transition(
+    db: Session,
+    *,
+    domain: Domain,
+    operation: DomainOperation,
+    settings: Settings,
+    target_state: str,
+    success_message: str,
+    audit_event_name: str,
+    audit_context: AuditContext | None,
+    lease_owner: str,
+) -> DomainOperation:
+    now = utc_now()
+    if not _operation_lease_current(operation, owner=lease_owner, now=now):
+        _cancel_operation(db, operation, "Operation lease lost before completion.")
+        db.refresh(operation)
+        return operation
+
+    updated = update_domain_state_if_current(
+        db,
+        domain_id=domain.id,
+        runtime_instance_id=domain.runtime_instance_id,
+        control_generation=operation.control_generation_at_start,
+        state=target_state,
+        commit=False,
+    )
+    if updated == 0:
+        _cancel_operation(db, operation, "Stale domain generation; completion ignored.")
+        db.refresh(operation)
+        return operation
+
+    operation.lease_owner = None
+    operation.lease_expires_at = None
+    _finish_operation(
+        db,
+        operation,
+        success_message,
+        audit_event_name=audit_event_name,
+        audit_context=audit_context,
+    )
+    db.refresh(operation)
+    return operation
 
 
 def _validate_domain_id(domain_id: str) -> None:
@@ -341,6 +454,12 @@ def start_domain(
         request_id=audit_context.request_id if audit_context is not None else None,
         message="Starting domain.",
     )
+    _assign_operation_lease(
+        operation,
+        owner=settings.domain_lifecycle_worker_id,
+        lease_seconds=settings.domain_lifecycle_lease_seconds,
+        now=now,
+    )
     db.add(operation)
     try:
         db.commit()
@@ -352,21 +471,20 @@ def start_domain(
     result = controller.start(
         domain,
         operation_key=operation.id,
-        control_generation=domain.control_generation,
+        control_generation=operation.control_generation_at_start,
     )
     _raise_for_controller_result(db, operation, result)
-    domain.state = DOMAIN_STATE_RUNNING
-    domain.version += 1
-    domain.updated_at = utc_now()
-    _finish_operation(
+    return _apply_fenced_state_transition(
         db,
-        operation,
-        "Domain started.",
+        domain=domain,
+        operation=operation,
+        settings=settings,
+        target_state=DOMAIN_STATE_RUNNING,
+        success_message="Domain started.",
         audit_event_name=AUDIT_EVENT_DOMAIN_STARTED,
         audit_context=audit_context,
+        lease_owner=settings.domain_lifecycle_worker_id,
     )
-    db.refresh(operation)
-    return operation
 
 
 def stop_domain(
@@ -394,6 +512,12 @@ def stop_domain(
         request_id=audit_context.request_id if audit_context is not None else None,
         message="Stopping domain.",
     )
+    _assign_operation_lease(
+        operation,
+        owner=settings.domain_lifecycle_worker_id,
+        lease_seconds=settings.domain_lifecycle_lease_seconds,
+        now=now,
+    )
     db.add(operation)
     try:
         db.commit()
@@ -405,21 +529,20 @@ def stop_domain(
     result = controller.stop(
         domain,
         operation_key=operation.id,
-        control_generation=domain.control_generation,
+        control_generation=operation.control_generation_at_start,
     )
     _raise_for_controller_result(db, operation, result)
-    domain.state = DOMAIN_STATE_STOPPED
-    domain.version += 1
-    domain.updated_at = utc_now()
-    _finish_operation(
+    return _apply_fenced_state_transition(
         db,
-        operation,
-        "Domain stopped.",
+        domain=domain,
+        operation=operation,
+        settings=settings,
+        target_state=DOMAIN_STATE_STOPPED,
+        success_message="Domain stopped.",
         audit_event_name=AUDIT_EVENT_DOMAIN_STOPPED,
         audit_context=audit_context,
+        lease_owner=settings.domain_lifecycle_worker_id,
     )
-    db.refresh(operation)
-    return operation
 
 
 def enqueue_delete_domain(
@@ -432,10 +555,16 @@ def enqueue_delete_domain(
 ) -> DomainOperation:
     domain = _domain_or_404(db, domain_id)
     _require_domain_version(domain, expected_version)
-    _ensure_no_active_operation(db, domain.id)
     now = utc_now()
 
     def mutate() -> DomainOperation:
+        cancelled = _cancel_active_lifecycle_operation(
+            db,
+            domain.id,
+            message="Superseded by domain delete.",
+        )
+        if cancelled is not None:
+            db.flush()
         domain.state = DOMAIN_STATE_DELETING
         domain.control_generation += 1
         domain.version += 1
@@ -483,6 +612,7 @@ def update_domain_state_if_current(
     runtime_instance_id: str,
     control_generation: int,
     state: str,
+    commit: bool = True,
 ) -> int:
     result = db.execute(
         update(Domain)
@@ -491,9 +621,10 @@ def update_domain_state_if_current(
             Domain.runtime_instance_id == runtime_instance_id,
             Domain.control_generation == control_generation,
         )
-        .values(state=state, updated_at=utc_now())
+        .values(state=state, updated_at=utc_now(), version=Domain.version + 1)
     )
-    db.commit()
+    if commit:
+        db.commit()
     return int(result.rowcount or 0)
 
 
@@ -751,19 +882,127 @@ def domain_operations(db: Session, domain_id: str) -> list[dict[str, Any]]:
     return [safe_domain_operation(operation) for operation in operations]
 
 
+def reconcile_uncertain_lifecycle_operations(db: Session, settings: Settings) -> int:
+    """Probe uncertain start/stop ops and terminalize when runtime state is clear.
+
+    Delete uncertain ops are reclaimed by DomainDeleteWorker via expired leases.
+    """
+    controller = controller_from_settings(settings)
+    now = utc_now()
+    operations = list(
+        db.scalars(
+            select(DomainOperation)
+            .where(
+                DomainOperation.operation_type.in_((DOMAIN_OPERATION_START, DOMAIN_OPERATION_STOP)),
+                DomainOperation.status == DOMAIN_OPERATION_STATUS_RUNNING,
+                DomainOperation.message.is_not(None),
+                func.lower(DomainOperation.message).like("%uncertain%"),
+            )
+            .order_by(DomainOperation.created_at, DomainOperation.id)
+            .limit(20)
+        )
+    )
+    resolved = 0
+    for operation in operations:
+        domain = db.get(Domain, operation.domain_id)
+        if domain is None:
+            _cancel_operation(db, operation, "Domain removed during reconciliation.")
+            resolved += 1
+            continue
+        if domain.control_generation != operation.control_generation_at_start:
+            _cancel_operation(db, operation, "Stale domain generation; reconciliation ignored.")
+            resolved += 1
+            continue
+        health = controller.health(
+            domain,
+            operation_key=operation.id,
+            control_generation=operation.control_generation_at_start,
+        )
+        if health.outcome == CONTROLLER_OUTCOME_UNCERTAIN:
+            _assign_operation_lease(
+                operation,
+                owner=settings.domain_lifecycle_worker_id,
+                lease_seconds=settings.domain_lifecycle_lease_seconds,
+                now=now,
+            )
+            db.commit()
+            continue
+        if operation.operation_type == DOMAIN_OPERATION_START:
+            if health.healthy:
+                _assign_operation_lease(
+                    operation,
+                    owner=settings.domain_lifecycle_worker_id,
+                    lease_seconds=settings.domain_lifecycle_lease_seconds,
+                    now=now,
+                )
+                db.commit()
+                _apply_fenced_state_transition(
+                    db,
+                    domain=domain,
+                    operation=operation,
+                    settings=settings,
+                    target_state=DOMAIN_STATE_RUNNING,
+                    success_message="Domain started after reconciliation.",
+                    audit_event_name=AUDIT_EVENT_DOMAIN_STARTED,
+                    audit_context=AuditContext(actor_kind=AUDIT_ACTOR_WORKER, request_id=operation.request_id),
+                    lease_owner=settings.domain_lifecycle_worker_id,
+                )
+                resolved += 1
+            else:
+                _fail_operation(
+                    db,
+                    operation,
+                    "dependency_unavailable",
+                    "Runtime did not become ready during reconciliation.",
+                )
+                resolved += 1
+        elif operation.operation_type == DOMAIN_OPERATION_STOP:
+            if not health.healthy:
+                _assign_operation_lease(
+                    operation,
+                    owner=settings.domain_lifecycle_worker_id,
+                    lease_seconds=settings.domain_lifecycle_lease_seconds,
+                    now=now,
+                )
+                db.commit()
+                _apply_fenced_state_transition(
+                    db,
+                    domain=domain,
+                    operation=operation,
+                    settings=settings,
+                    target_state=DOMAIN_STATE_STOPPED,
+                    success_message="Domain stopped after reconciliation.",
+                    audit_event_name=AUDIT_EVENT_DOMAIN_STOPPED,
+                    audit_context=AuditContext(actor_kind=AUDIT_ACTOR_WORKER, request_id=operation.request_id),
+                    lease_owner=settings.domain_lifecycle_worker_id,
+                )
+                resolved += 1
+            else:
+                _assign_operation_lease(
+                    operation,
+                    owner=settings.domain_lifecycle_worker_id,
+                    lease_seconds=settings.domain_lifecycle_lease_seconds,
+                    now=now,
+                )
+                db.commit()
+    return resolved
+
+
 class DomainDeleteWorker:
     def __init__(self, settings: Settings, controller: DomainRuntimeController | None = None) -> None:
         self._settings = settings
         self._controller = controller or controller_from_settings(settings)
 
     def run_once(self, db: Session) -> bool:
+        reconcile_uncertain_lifecycle_operations(db, self._settings)
         operation = self._claim_next_operation(db)
         if operation is None:
             return False
 
         domain = db.get(Domain, operation.domain_id)
         if domain is None:
-            # Goal state already reached: finalize instead of leaving the operation RUNNING.
+            if not self._lease_still_owned(db, operation):
+                return True
             _finish_operation(
                 db,
                 operation,
@@ -780,9 +1019,15 @@ class DomainDeleteWorker:
             from context_engine.services.indexing import SourceIndexError
             from context_engine.services.sources import SourceStorageError, purge_domain_sources_local
 
+            if not self._heartbeat(db, operation):
+                return True
             context = AuditContext(actor_kind=AUDIT_ACTOR_WORKER, request_id=operation.request_id)
             redact_turns_for_domain(db, domain.id, audit_context=context)
+            if not self._heartbeat(db, operation):
+                return True
             purge_domain_sources_local(db, self._settings, domain.id, audit_context=context)
+            if not self._heartbeat(db, operation):
+                return True
             delete_result = self._controller.delete(
                 domain,
                 operation_key=operation.id,
@@ -790,31 +1035,42 @@ class DomainDeleteWorker:
             )
             if delete_result.outcome == CONTROLLER_OUTCOME_UNCERTAIN:
                 db.rollback()
-                _mark_operation_uncertain(db, operation, delete_result)
+                fresh = db.get(DomainOperation, operation.id)
+                if fresh is not None:
+                    _mark_operation_uncertain(db, fresh, delete_result)
                 return True
             if delete_result.outcome == CONTROLLER_OUTCOME_FAILED:
                 db.rollback()
-                _fail_operation(
-                    db,
-                    operation,
-                    delete_result.safe_code or "domain_runtime_unavailable",
-                    delete_result.message or "Runtime resources could not be removed.",
-                    audit_event_name=AUDIT_EVENT_DOMAIN_DELETE_FAILED,
-                )
+                fresh = db.get(DomainOperation, operation.id)
+                if fresh is not None and self._lease_still_owned(db, fresh):
+                    _fail_operation(
+                        db,
+                        fresh,
+                        delete_result.safe_code or "domain_runtime_unavailable",
+                        delete_result.message or "Runtime resources could not be removed.",
+                        audit_event_name=AUDIT_EVENT_DOMAIN_DELETE_FAILED,
+                    )
                 return True
         except SourceIndexError as exc:
             db.rollback()
-            _fail_operation(db, operation, exc.code, exc.message, audit_event_name=AUDIT_EVENT_DOMAIN_DELETE_FAILED)
+            fresh = db.get(DomainOperation, operation.id)
+            if fresh is not None and self._lease_still_owned(db, fresh):
+                _fail_operation(db, fresh, exc.code, exc.message, audit_event_name=AUDIT_EVENT_DOMAIN_DELETE_FAILED)
             return True
         except SourceStorageError:
             db.rollback()
-            _fail_operation(
-                db,
-                operation,
-                "source_delete_failed",
-                "Source resources could not be removed.",
-                audit_event_name=AUDIT_EVENT_DOMAIN_DELETE_FAILED,
-            )
+            fresh = db.get(DomainOperation, operation.id)
+            if fresh is not None and self._lease_still_owned(db, fresh):
+                _fail_operation(
+                    db,
+                    fresh,
+                    "source_delete_failed",
+                    "Source resources could not be removed.",
+                    audit_event_name=AUDIT_EVENT_DOMAIN_DELETE_FAILED,
+                )
+            return True
+
+        if not self._lease_still_owned(db, operation):
             return True
 
         current = db.get(Domain, domain.id)
@@ -828,7 +1084,6 @@ class DomainDeleteWorker:
             )
             return True
         if current.runtime_instance_id != runtime_instance_id or current.control_generation != control_generation:
-            # A newer control action superseded this delete; do not touch the current runtime.
             _cancel_operation(db, operation, "Delete superseded by a newer domain operation.")
             return True
         AuditService(db).record(
@@ -838,7 +1093,27 @@ class DomainDeleteWorker:
             target_id=operation.id,
             metadata={"operationType": operation.operation_type, "operationStatus": DOMAIN_OPERATION_STATUS_SUCCEEDED},
         )
+        # Domain row CASCADE removes domain_operations; audit preserves the outcome.
         db.delete(current)
+        db.commit()
+        return True
+
+    def _lease_still_owned(self, db: Session, operation: DomainOperation) -> bool:
+        db.refresh(operation)
+        return _operation_lease_current(
+            operation,
+            owner=self._settings.domain_delete_worker_id,
+        )
+
+    def _heartbeat(self, db: Session, operation: DomainOperation) -> bool:
+        now = utc_now()
+        if not _heartbeat_operation_lease(
+            operation,
+            owner=self._settings.domain_delete_worker_id,
+            lease_seconds=self._settings.domain_delete_lease_seconds,
+            now=now,
+        ):
+            return False
         db.commit()
         return True
 
@@ -865,10 +1140,17 @@ class DomainDeleteWorker:
         if operation is None:
             return None
         operation.status = DOMAIN_OPERATION_STATUS_RUNNING
-        operation.lease_owner = self._settings.domain_delete_worker_id
-        operation.lease_expires_at = now + timedelta(seconds=self._settings.domain_delete_lease_seconds)
+        _assign_operation_lease(
+            operation,
+            owner=self._settings.domain_delete_worker_id,
+            lease_seconds=self._settings.domain_delete_lease_seconds,
+            now=now,
+        )
         operation.started_at = operation.started_at or now
-        operation.message = "Removing runtime resources."
+        if operation.message and "uncertain" in operation.message.lower():
+            operation.message = "Reconciling uncertain delete."
+        else:
+            operation.message = "Removing runtime resources."
         operation.updated_at = now
         db.commit()
         db.refresh(operation)

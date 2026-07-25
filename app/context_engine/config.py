@@ -58,6 +58,10 @@ class Settings:
     domain_controller_timeout_seconds: int = field(default_factory=lambda: _env_int("CE_DOMAIN_CONTROLLER_TIMEOUT_SECONDS", 30))
     domain_delete_worker_id: str = field(default_factory=lambda: _env("CE_DOMAIN_DELETE_WORKER_ID", "domain-delete-worker") or "domain-delete-worker")
     domain_delete_lease_seconds: int = field(default_factory=lambda: _env_int("CE_DOMAIN_DELETE_LEASE_SECONDS", 60))
+    domain_lifecycle_worker_id: str = field(
+        default_factory=lambda: _env("CE_DOMAIN_LIFECYCLE_WORKER_ID", "domain-lifecycle") or "domain-lifecycle"
+    )
+    domain_lifecycle_lease_seconds: int = field(default_factory=lambda: _env_int("CE_DOMAIN_LIFECYCLE_LEASE_SECONDS", 60))
     source_storage_root: str = field(default_factory=lambda: _env("CE_SOURCE_STORAGE_ROOT", ".data/source-storage") or ".data/source-storage")
     domain_storage_limit_bytes: int = field(default_factory=lambda: _env_int("CE_DOMAIN_STORAGE_LIMIT_BYTES", 5 * 1024 * 1024 * 1024))
     source_prep_worker_id: str = field(default_factory=lambda: _env("CE_SOURCE_PREP_WORKER_ID", "source-prep-worker") or "source-prep-worker")
