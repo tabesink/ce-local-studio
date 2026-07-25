@@ -1,21 +1,27 @@
 from __future__ import annotations
 
-import json
 import logging
 import re
-import shutil
-import shlex
-import subprocess
 import uuid
-from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from context_engine.adapters.domain_runtime_controller import (
+    CONTROLLER_OUTCOME_FAILED,
+    CONTROLLER_OUTCOME_SUCCEEDED,
+    CONTROLLER_OUTCOME_UNCERTAIN,
+    DomainControllerError,
+    DomainRuntimeController,
+    LocalDomainRuntimeController,
+    RuntimeControllerResult,
+    RuntimeHealth,
+    controller_from_settings,
+)
 from context_engine.config import Settings
 from context_engine.db import utc_now
 from context_engine.models import (
@@ -56,6 +62,18 @@ logger = logging.getLogger(__name__)
 DOMAIN_ID_PATTERN = r"^[a-z0-9][a-z0-9_-]{1,62}$"
 _DOMAIN_ID_RE = re.compile(DOMAIN_ID_PATTERN)
 
+# Re-export adapter surface for existing service/test imports.
+__all__ = [
+    "DOMAIN_ID_PATTERN",
+    "DomainControllerError",
+    "DomainError",
+    "DomainRuntimeController",
+    "LocalDomainRuntimeController",
+    "RuntimeControllerResult",
+    "RuntimeHealth",
+    "controller_from_settings",
+]
+
 
 class DomainError(Exception):
     def __init__(self, status_code: int, code: str, message: str) -> None:
@@ -65,199 +83,33 @@ class DomainError(Exception):
         super().__init__(message)
 
 
-class DomainControllerError(Exception):
-    pass
+def _mark_operation_uncertain(db: Session, operation: DomainOperation, result: RuntimeControllerResult) -> None:
+    now = utc_now()
+    operation.message = result.message or "Runtime outcome uncertain; reconciliation required."
+    operation.error_code = None
+    operation.error_message = None
+    operation.updated_at = now
+    operation.version += 1
+    db.commit()
 
 
-@dataclass(frozen=True)
-class RuntimeHealth:
-    healthy: bool
-
-
-class DomainRuntimeController(Protocol):
-    uses_docker_socket: bool
-
-    def runtime_dir(self, domain_id: str, runtime_instance_id: str) -> Path: ...
-
-    def provision(self, domain: Domain) -> None: ...
-
-    def start(self, domain: Domain) -> None: ...
-
-    def stop(self, domain: Domain) -> None: ...
-
-    def delete(self, domain: Domain) -> None: ...
-
-    def health(self, domain: Domain) -> RuntimeHealth: ...
-
-    def runtime_name(self, domain: Domain) -> str: ...
-
-
-class LocalDomainRuntimeController:
-    """Private controller boundary used by API/worker tests without Docker access."""
-
-    uses_docker_socket = False
-
-    def __init__(self, settings: Settings) -> None:
-        self._root = Path(settings.domain_runtime_root)
-
-    def runtime_dir(self, domain_id: str, runtime_instance_id: str) -> Path:
-        return self._root / domain_id / runtime_instance_id
-
-    def provision(self, domain: Domain) -> None:
-        runtime_dir = self.runtime_dir(domain.id, domain.runtime_instance_id)
-        try:
-            (runtime_dir / "workspace").mkdir(parents=True, exist_ok=True)
-            (runtime_dir / "logs").mkdir(parents=True, exist_ok=True)
-            runtime_db = runtime_dir / "runtime-db"
-            runtime_db.mkdir(parents=True, exist_ok=True)
-            (runtime_db / "lightrag.sqlite3").touch(exist_ok=True)
-            self._write_record(domain, "stopped")
-        except OSError as exc:
-            raise DomainControllerError("Runtime storage unavailable.") from exc
-
-    def start(self, domain: Domain) -> None:
-        self.provision(domain)
-        try:
-            runtime_dir = self.runtime_dir(domain.id, domain.runtime_instance_id)
-            container_record = {
-                "containerName": self.runtime_name(domain),
-                "runtimeInstanceId": domain.runtime_instance_id,
-                "status": "running",
-                "hostPorts": [],
-            }
-            (runtime_dir / "container.json").write_text(json.dumps(container_record, sort_keys=True), encoding="utf-8")
-            (runtime_dir / "health.json").write_text(json.dumps({"healthy": True}, sort_keys=True), encoding="utf-8")
-            self._write_record(domain, "running")
-        except OSError as exc:
-            raise DomainControllerError("Runtime start failed.") from exc
-
-    def stop(self, domain: Domain) -> None:
-        try:
-            runtime_dir = self.runtime_dir(domain.id, domain.runtime_instance_id)
-            for name in ("container.json", "health.json"):
-                target = runtime_dir / name
-                if target.exists():
-                    target.unlink()
-            if runtime_dir.exists():
-                self._write_record(domain, "stopped")
-        except OSError as exc:
-            raise DomainControllerError("Runtime stop failed.") from exc
-
-    def delete(self, domain: Domain) -> None:
-        try:
-            runtime_dir = self.runtime_dir(domain.id, domain.runtime_instance_id)
-            if runtime_dir.exists():
-                shutil.rmtree(runtime_dir)
-            domain_root = self._root / domain.id
-            if domain_root.exists() and not any(domain_root.iterdir()):
-                domain_root.rmdir()
-        except OSError as exc:
-            raise DomainControllerError("Runtime delete failed.") from exc
-
-    def health(self, domain: Domain) -> RuntimeHealth:
-        runtime_dir = self.runtime_dir(domain.id, domain.runtime_instance_id)
-        container_path = runtime_dir / "container.json"
-        health_path = runtime_dir / "health.json"
-        if not container_path.exists() or not health_path.exists():
-            return RuntimeHealth(healthy=False)
-        try:
-            container = json.loads(container_path.read_text(encoding="utf-8"))
-            health = json.loads(health_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return RuntimeHealth(healthy=False)
-        return RuntimeHealth(healthy=container.get("hostPorts") == [] and health.get("healthy") is True)
-
-    def runtime_name(self, domain: Domain) -> str:
-        return f"ce_domain_{domain.id}_{domain.runtime_instance_id[:12]}"
-
-    def _write_record(self, domain: Domain, status: str) -> None:
-        runtime_dir = self.runtime_dir(domain.id, domain.runtime_instance_id)
-        record = {
-            "runtimeName": self.runtime_name(domain),
-            "runtimeInstanceId": domain.runtime_instance_id,
-            "status": status,
-        }
-        (runtime_dir / "runtime.json").write_text(json.dumps(record, sort_keys=True), encoding="utf-8")
-
-
-class DockerDomainRuntimeController:
-    """Production controller adapter that delegates Docker access to a private command."""
-
-    uses_docker_socket = False
-
-    def __init__(self, settings: Settings) -> None:
-        self._root = Path(settings.domain_runtime_root)
-        self._command = settings.domain_controller_command
-        self._timeout_seconds = settings.domain_controller_timeout_seconds
-
-    def runtime_dir(self, domain_id: str, runtime_instance_id: str) -> Path:
-        return self._root / domain_id / runtime_instance_id
-
-    def provision(self, domain: Domain) -> None:
-        self._run_action("provision", domain)
-
-    def start(self, domain: Domain) -> None:
-        self._run_action("start", domain)
-
-    def stop(self, domain: Domain) -> None:
-        self._run_action("stop", domain)
-
-    def delete(self, domain: Domain) -> None:
-        self._run_action("delete", domain)
-
-    def health(self, domain: Domain) -> RuntimeHealth:
-        try:
-            payload = self._run_action("health", domain)
-        except DomainControllerError:
-            return RuntimeHealth(healthy=False)
-        return RuntimeHealth(healthy=payload.get("healthy") is True)
-
-    def runtime_name(self, domain: Domain) -> str:
-        return f"ce_domain_{domain.id}_{domain.runtime_instance_id[:12]}"
-
-    def _run_action(self, action: str, domain: Domain) -> dict[str, Any]:
-        if not self._command:
-            raise DomainControllerError("Runtime controller command is not configured.")
-        runtime_dir = self.runtime_dir(domain.id, domain.runtime_instance_id)
-        request = {
-            "action": action,
-            "domainId": domain.id,
-            "runtimeInstanceId": domain.runtime_instance_id,
-            "runtimeName": self.runtime_name(domain),
-            "runtimeDir": str(runtime_dir),
-        }
-        try:
-            result = subprocess.run(
-                [*shlex.split(self._command, posix=False), action],
-                input=json.dumps(request),
-                text=True,
-                capture_output=True,
-                timeout=self._timeout_seconds,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            raise DomainControllerError("Runtime controller unavailable.") from exc
-        if result.returncode != 0:
-            raise DomainControllerError("Runtime controller action failed.")
-        stdout = result.stdout.strip()
-        if not stdout:
-            return {}
-        try:
-            parsed = json.loads(stdout)
-        except ValueError as exc:
-            raise DomainControllerError("Runtime controller returned invalid data.") from exc
-        if not isinstance(parsed, dict):
-            raise DomainControllerError("Runtime controller returned invalid data.")
-        return parsed
-
-
-def controller_from_settings(settings: Settings) -> DomainRuntimeController:
-    kind = settings.domain_runtime_controller_kind.strip().lower()
-    if kind == "docker":
-        return DockerDomainRuntimeController(settings)
-    if kind == "local":
-        return LocalDomainRuntimeController(settings)
-    raise DomainControllerError("Runtime controller configuration is invalid.")
+def _raise_for_controller_result(
+    db: Session,
+    operation: DomainOperation,
+    result: RuntimeControllerResult,
+) -> None:
+    if result.outcome == CONTROLLER_OUTCOME_SUCCEEDED:
+        return
+    if result.outcome == CONTROLLER_OUTCOME_UNCERTAIN:
+        _mark_operation_uncertain(db, operation, result)
+        raise DomainError(503, "dependency_unavailable", "Runtime outcome uncertain.")
+    _fail_operation(
+        db,
+        operation,
+        result.safe_code or "dependency_unavailable",
+        result.message or "Runtime unavailable.",
+    )
+    raise DomainError(503, "dependency_unavailable", "Runtime unavailable.")
 
 
 def _validate_domain_id(domain_id: str) -> None:
@@ -446,12 +298,13 @@ def create_domain(
         db.rollback()
         raise DomainError(409, "operation_conflict", "Domain id already exists.") from exc
 
-    try:
-        controller = controller or controller_from_settings(settings)
-        controller.provision(domain)
-    except DomainControllerError as exc:
-        _fail_operation(db, operation, "dependency_unavailable", "Runtime resources could not be prepared.")
-        raise DomainError(503, "dependency_unavailable", "Runtime unavailable.") from exc
+    controller = controller or controller_from_settings(settings)
+    result = controller.provision(
+        domain,
+        operation_key=operation.id,
+        control_generation=domain.control_generation,
+    )
+    _raise_for_controller_result(db, operation, result)
     _finish_operation(
         db,
         operation,
@@ -495,12 +348,13 @@ def start_domain(
         db.rollback()
         raise DomainError(409, "domain_operation_in_progress", "Another operation is already in progress for this domain.") from exc
 
-    try:
-        controller = controller or controller_from_settings(settings)
-        controller.start(domain)
-    except DomainControllerError as exc:
-        _fail_operation(db, operation, "dependency_unavailable", "Runtime did not become ready.")
-        raise DomainError(503, "dependency_unavailable", "Runtime unavailable.") from exc
+    controller = controller or controller_from_settings(settings)
+    result = controller.start(
+        domain,
+        operation_key=operation.id,
+        control_generation=domain.control_generation,
+    )
+    _raise_for_controller_result(db, operation, result)
     domain.state = DOMAIN_STATE_RUNNING
     domain.version += 1
     domain.updated_at = utc_now()
@@ -547,12 +401,13 @@ def stop_domain(
         db.rollback()
         raise DomainError(409, "domain_operation_in_progress", "Another operation is already in progress for this domain.") from exc
 
-    try:
-        controller = controller or controller_from_settings(settings)
-        controller.stop(domain)
-    except DomainControllerError as exc:
-        _fail_operation(db, operation, "dependency_unavailable", "Runtime could not be stopped.")
-        raise DomainError(503, "dependency_unavailable", "Runtime unavailable.") from exc
+    controller = controller or controller_from_settings(settings)
+    result = controller.stop(
+        domain,
+        operation_key=operation.id,
+        control_generation=domain.control_generation,
+    )
+    _raise_for_controller_result(db, operation, result)
     domain.state = DOMAIN_STATE_STOPPED
     domain.version += 1
     domain.updated_at = utc_now()
@@ -928,7 +783,25 @@ class DomainDeleteWorker:
             context = AuditContext(actor_kind=AUDIT_ACTOR_WORKER, request_id=operation.request_id)
             redact_turns_for_domain(db, domain.id, audit_context=context)
             purge_domain_sources_local(db, self._settings, domain.id, audit_context=context)
-            self._controller.delete(domain)
+            delete_result = self._controller.delete(
+                domain,
+                operation_key=operation.id,
+                control_generation=control_generation,
+            )
+            if delete_result.outcome == CONTROLLER_OUTCOME_UNCERTAIN:
+                db.rollback()
+                _mark_operation_uncertain(db, operation, delete_result)
+                return True
+            if delete_result.outcome == CONTROLLER_OUTCOME_FAILED:
+                db.rollback()
+                _fail_operation(
+                    db,
+                    operation,
+                    delete_result.safe_code or "domain_runtime_unavailable",
+                    delete_result.message or "Runtime resources could not be removed.",
+                    audit_event_name=AUDIT_EVENT_DOMAIN_DELETE_FAILED,
+                )
+                return True
         except SourceIndexError as exc:
             db.rollback()
             _fail_operation(db, operation, exc.code, exc.message, audit_event_name=AUDIT_EVENT_DOMAIN_DELETE_FAILED)
@@ -940,16 +813,6 @@ class DomainDeleteWorker:
                 operation,
                 "source_delete_failed",
                 "Source resources could not be removed.",
-                audit_event_name=AUDIT_EVENT_DOMAIN_DELETE_FAILED,
-            )
-            return True
-        except DomainControllerError:
-            db.rollback()
-            _fail_operation(
-                db,
-                operation,
-                "domain_runtime_unavailable",
-                "Runtime resources could not be removed.",
                 audit_event_name=AUDIT_EVENT_DOMAIN_DELETE_FAILED,
             )
             return True

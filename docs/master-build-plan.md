@@ -83,8 +83,10 @@ P1-06 closure evidence (2026-07-24): `docs/_scratch/p1-06-audit-inventory.md` re
 | Task | Status | Depends on | Deliverable |
 | --- | --- | --- | --- |
 | P3-01 | DONE | P2 | domains/domain_operations schema and admin APIs |
-| P3-02 | NOT_STARTED | P3-01 | runtime controller port plus local/Docker implementations |
+| P3-02 | DONE | P3-01 | runtime controller port plus local/Docker implementations |
 | P3-03 | NOT_STARTED | P3-02 | lease, generation, conflict, readiness and async delete behavior |
+
+P3-02 closure evidence (2026-07-25): `docs/_scratch/p3-02-runtime-controller-inventory.md` records the extract into `adapters/domain_runtime_controller.py`. Local/Docker adapters require stable `operation_key`/`control_generation`, return typed `succeeded`/`failed`/`uncertain` results, and map Docker timeouts to `uncertain`. Unit proofs cover local lifecycle records, Docker payload keys, timeout→uncertain, and hard failure; P3-01 PostgreSQL domains suite remains green with `kind=local`. `docs/_scratch/p3-02-runtime-controller-evidence.md` records commands and keeps lease/reconciliation races with P3-03.
 
 P3-01 closure evidence (2026-07-25): `docs/_scratch/p3-01-domains-admin-inventory.md` records retain/modify/replace/add decisions. Alembic head `e3a1c8d04f21` adds positive `version` on `domains`/`domain_operations`. Closed `AdminDomainDto`/`OperationDto`/`DomainSummaryDto` projections replace lifted `available`/`storageSummary` shapes. DRIFT-12 projection half: start/stop return `202 {operation}`; GET detail `ETag`; DELETE `If-Match` `428`/`409 stale_revision`. PostgreSQL 16 proof covers A-03 create→stopped→start generation bump, start conflict, member `queryEligible`, and HTTP `201`/`202` closed envelopes. Results were 54 focused domain/runtime-config/foundation/audit/schema/health/DTO/contract tests passing; generated OpenAPI/TypeScript regenerated. `docs/_scratch/p3-01-domains-admin-evidence.md` records commands and keeps controller port with P3-02, lease/authoritative-refresh races with P3-03, and Settings UI adoption with P9-04.
 | P4-01 | NOT_STARTED | P3 | source_documents/preparation_operations schema, opaque public document refs and secure storage adapter |
