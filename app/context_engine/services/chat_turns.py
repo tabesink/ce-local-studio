@@ -67,13 +67,9 @@ from context_engine.services.evidence import (
     InternalMappedEvidence,
     ScopedRetrievalError,
     ScopedRetrievalPort,
-    eligible_sources_for_domain,
-    freeze_retrieval_scope,
-    map_retrieval_hits_to_internal_evidence,
     resolve_available_domain,
-    retrieve_bounded_candidates,
+    retrieve_internal_scoped_evidence,
 )
-from context_engine.services.indexing import index_client_from_settings
 from context_engine.services.prompt_assembly import (
     PromptAssemblyContext,
     PromptAssemblyService,
@@ -198,36 +194,21 @@ class P6RetrievalPort:
         if intent not in RETRIEVAL_INTENTS:
             raise OrchestrationPolicyError("Retrieval operation is not allowed.")
         try:
-            domain, controller = resolve_available_domain(
+            result = retrieve_internal_scoped_evidence(
                 db,
                 settings=settings,
                 domain_id=domain_id,
-                controller=self._controller,
-            )
-            eligible_sources = eligible_sources_for_domain(
-                db,
-                domain=domain,
-            )
-            if not eligible_sources:
-                return []
-            frozen_scope = freeze_retrieval_scope(domain, eligible_sources)
-            db.commit()
-            client = self._client or index_client_from_settings(settings, controller)
-            hits = retrieve_bounded_candidates(
-                settings=settings,
-                domain=domain,
                 question=question,
-                client=client,
+                client=self._client,
+                controller=self._controller,
             )
         except ScopedRetrievalError as exc:
             raise ChatTurnError(502, "domain_runtime_unavailable", "Knowledge domain runtime is unavailable.") from exc
         except EvidenceRetrievalError as exc:
             raise ChatTurnError(exc.status_code, exc.code, exc.message) from exc
-        return map_retrieval_hits_to_internal_evidence(
-            db,
-            hits=hits,
-            frozen_scope=frozen_scope,
-        )
+        if not result.had_eligible_sources:
+            return []
+        return list(result.evidence)
 
 
 def _validation_error() -> ChatTurnError:

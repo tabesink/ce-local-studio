@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
@@ -231,11 +232,18 @@ def test_native_adapter_timeout_fails_closed() -> None:
         await asyncio.sleep(5)
         return "never"
 
+    started = time.monotonic()
     with pytest.raises(SourceIndexError) as timed_out:
-        client._run(slow())
+        client._run(slow(), deadline=started + 0.02)
     assert timed_out.value.code == "source_index_timeout"
     assert "timed out" in timed_out.value.message.lower()
     assert "traceback" not in timed_out.value.message.lower()
+    assert time.monotonic() - started < 0.2
+
+    async def immediate():
+        return "released"
+
+    assert client._run(immediate(), deadline=time.monotonic() + 0.2) == "released"
 
 
 def test_native_retrieval_preserves_schema_v2_candidate_without_rewriting() -> None:
