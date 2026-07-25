@@ -63,3 +63,8 @@ cd app/client && npm run generate:api
 - Member document/content routes remain with P6/P9.
 - Frontend documents adapter still omits If-Match (P9).
 - Broad audit allowlist / privacy scan breadth remains with P8-01.
+- Failed cleanup recovery is via admin re-DELETE (new queued op), not worker
+  reclaim of FAILED rows (avoids one-active uniqueness stall).
+- Postgres suite does not yet race cancel↔delete or assert composer-token
+  expiry / turn redaction inside the delete fence (unit/service path covered;
+  deepen under P8/P12).

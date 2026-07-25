@@ -1288,6 +1288,9 @@ class SourceDeleteWorker:
             select(SourcePreparationOperation)
             .where(
                 SourcePreparationOperation.operation_type == SOURCE_PREP_OPERATION_DELETE,
+                # Do not reclaim FAILED: admin re-DELETE queues a new op. Claiming
+                # FAILED→RUNNING while a newer QUEUED exists would violate the
+                # one-active unique index and stall cleanup.
                 or_(
                     SourcePreparationOperation.status == SOURCE_PREP_STATUS_QUEUED,
                     (
@@ -1295,7 +1298,6 @@ class SourceDeleteWorker:
                         & (SourcePreparationOperation.lease_expires_at.is_not(None))
                         & (SourcePreparationOperation.lease_expires_at < now)
                     ),
-                    SourcePreparationOperation.status == SOURCE_PREP_STATUS_FAILED,
                 ),
             )
             .order_by(SourcePreparationOperation.created_at, SourcePreparationOperation.id)
