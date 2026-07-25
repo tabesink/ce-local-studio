@@ -304,24 +304,31 @@ def _default_docling_convert(original_bytes: bytes, content_type: str | None, fi
     except ImportError as exc:
         raise ParserAdapterError("parser_unavailable", "Parser is not available.", 503) from exc
 
+    import os
     import tempfile
     from pathlib import Path
 
     suffix = Path(filename or "source.bin").suffix or ".bin"
+    # delete=False: Windows cannot reopen a still-open NamedTemporaryFile path.
+    fd, temp_name = tempfile.mkstemp(suffix=suffix)
     try:
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as handle:
+        with os.fdopen(fd, "wb") as handle:
             handle.write(original_bytes)
-            handle.flush()
-            converter = DocumentConverter()
-            result = converter.convert(handle.name)
-            document = getattr(result, "document", result)
-            return _docling_payload_from_document(document)
+        converter = DocumentConverter()
+        result = converter.convert(temp_name)
+        document = getattr(result, "document", result)
+        return _docling_payload_from_document(document)
     except ParserAdapterError:
         raise
     except TimeoutError as exc:
         raise ParserAdapterError("parser_timeout", "Parser timed out.", 504) from exc
     except Exception as exc:  # noqa: BLE001 - adapter boundary maps vendor failures
         raise ParserAdapterError("parser_unavailable", "Parser failed.", 502) from exc
+    finally:
+        try:
+            os.unlink(temp_name)
+        except OSError:
+            pass
 
 
 def _default_reducto_transport(request: ParserRequest, timeout_seconds: float) -> dict[str, Any]:

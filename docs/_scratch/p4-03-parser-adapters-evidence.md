@@ -23,9 +23,15 @@ Status: DONE - implemented and proven 2026-07-25
 - Alembic head `a8d3f1c62e90` adds `source_images.object_key`; publish stores
   image bytes via the governed object-store port and atomically replaces
   blocks/images.
-- Preparation worker heartbeats under one-third lease; publish requires
-  matching lease owner, unexpired lease, and preparation generation.
-  Cancel/fail clears lease fields.
+- Preparation worker heartbeats on a side session at `lease_seconds // 3`
+  during parse; defaults require `source_prep_lease_seconds` (180) >
+  `source_parser_timeout_seconds` (120).
+- Publish finalizes with conditional SQL (CAS) on operation
+  owner/expiry/generation and source pending/generation; reclaim after
+  soft checks cannot win the terminal write. Cancel/fail clears lease fields.
+- Migration backfill invents `legacy_img_*` keys without byte copy; greenfield
+  and re-prepare are the supported paths (legacy FS trees still removed by
+  `rmtree` on delete).
 
 ## Proof-first evidence
 
@@ -51,6 +57,10 @@ python -m pytest tests/test_postgres_source_preparation.py tests/test_postgres_s
 ## Residuals / deferred
 
 - Outline/retry/cancel/delete closed envelopes → P4-04.
+- Source delete still removes object bytes before DB commit (dual-write);
+  harden with outbox/tombstone in P4-04 delete workflow.
+- Legacy image byte migration into object keys (re-prepare or copy) if
+  populated DBs retain pre-P4-03 FS images.
 - Synthesis provider stand-ins → P7-03 (remaining DRIFT-22 half).
 - Installing optional `parsers` extras (`docling`, `reductoai`) for live
   worker environments; CI uses injectable fixtures without network.

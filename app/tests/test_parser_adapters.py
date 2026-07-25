@@ -4,6 +4,7 @@ import hashlib
 
 import pytest
 
+from context_engine.config import Settings
 from context_engine.adapters.parsers import (
     DoclingDocumentParser,
     ParserAdapterError,
@@ -153,6 +154,20 @@ def test_reducto_adapter_requires_credential_and_maps_transport_errors() -> None
         )
     )
     assert prepared.blocks[0].canonical_markdown == "Grounded answer source."
+
+
+def test_settings_require_prep_lease_longer_than_parser_timeout() -> None:
+    with pytest.raises(ValueError, match="source_prep_lease_seconds must exceed"):
+        Settings(
+            testing=True,
+            public_origin="http://ce.example.test",
+            internal_hosts="testserver",
+            trusted_bff_peers="testclient",
+            csrf_signing_key="MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+            session_cookie_secure=False,
+            source_prep_lease_seconds=60,
+            source_parser_timeout_seconds=120,
+        )
 
 
 def test_validate_prepared_source_rejects_hash_mismatch() -> None:

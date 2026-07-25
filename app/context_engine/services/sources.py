@@ -5,12 +5,13 @@ import logging
 import re
 import secrets
 import shutil
+import threading
 import uuid
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -728,6 +729,50 @@ def _resolve_parser_credential(db: Session, settings: Settings, parser_kind: str
     return SecretCrypto.from_settings(settings).decrypt_secret(provider.credential_ciphertext)
 
 
+def _cas_finalize_preparation(
+    db: Session,
+    *,
+    operation_id: str,
+    source_id: str,
+    owner: str,
+    preparation_generation: int,
+    now,
+) -> bool:
+    operation_updated = db.execute(
+        update(SourcePreparationOperation)
+        .where(
+            SourcePreparationOperation.id == operation_id,
+            SourcePreparationOperation.status == SOURCE_PREP_STATUS_RUNNING,
+            SourcePreparationOperation.lease_owner == owner,
+            SourcePreparationOperation.lease_expires_at.is_not(None),
+            SourcePreparationOperation.lease_expires_at >= now,
+            SourcePreparationOperation.preparation_generation_at_start == preparation_generation,
+        )
+        .values(
+            status=SOURCE_PREP_STATUS_SUCCEEDED,
+            message="Preparation succeeded.",
+            error_code=None,
+            error_message=None,
+            lease_owner=None,
+            lease_expires_at=None,
+            finished_at=now,
+            updated_at=now,
+        )
+    )
+    if int(operation_updated.rowcount or 0) != 1:
+        return False
+    source_updated = db.execute(
+        update(SourceDocument)
+        .where(
+            SourceDocument.id == source_id,
+            SourceDocument.state == SOURCE_STATE_PENDING,
+            SourceDocument.preparation_generation == preparation_generation,
+        )
+        .values(state=SOURCE_STATE_PREPARED, updated_at=now)
+    )
+    return int(source_updated.rowcount or 0) == 1
+
+
 def publish_prepared_source(
     db: Session,
     settings: Settings,
@@ -758,37 +803,41 @@ def publish_prepared_source(
         if image.object_key
     ]
     storage = storage_from_settings(settings)
-    db.execute(delete(SourceImage).where(SourceImage.source_document_id == source.id))
-    db.execute(delete(SourceBlock).where(SourceBlock.source_document_id == source.id))
-    blocks_by_order: dict[int, SourceBlock] = {}
-    for prepared_block in sorted(prepared.blocks, key=lambda block: block.source_order):
-        block = SourceBlock(
-            id=str(uuid.uuid4()),
-            source_document_id=source.id,
-            domain_id=source.domain_id,
-            source_order=prepared_block.source_order,
-            kind=prepared_block.kind,
-            canonical_markdown=prepared_block.canonical_markdown,
-            heading_level=prepared_block.heading_level,
-            page_start=prepared_block.page_start,
-            page_end=prepared_block.page_end,
-            section_path=json.dumps(prepared_block.section_path),
-            created_at=now,
-        )
-        db.add(block)
-        blocks_by_order[prepared_block.source_order] = block
-    db.flush()
     written_image_keys: list[str] = []
+    preparation_generation = operation.preparation_generation_at_start
     try:
         for prepared_image in prepared.images:
-            block = blocks_by_order[prepared_image.source_order]
             object_key = storage.write_image(prepared_image.bytes_data, content_type=prepared_image.mime_type)
             written_image_keys.append(object_key)
+
+        db.execute(delete(SourceImage).where(SourceImage.source_document_id == source.id))
+        db.execute(delete(SourceBlock).where(SourceBlock.source_document_id == source.id))
+        blocks_by_order: dict[int, SourceBlock] = {}
+        for prepared_block in sorted(prepared.blocks, key=lambda block: block.source_order):
+            block = SourceBlock(
+                id=str(uuid.uuid4()),
+                source_document_id=source.id,
+                domain_id=source.domain_id,
+                source_order=prepared_block.source_order,
+                kind=prepared_block.kind,
+                canonical_markdown=prepared_block.canonical_markdown,
+                heading_level=prepared_block.heading_level,
+                page_start=prepared_block.page_start,
+                page_end=prepared_block.page_end,
+                section_path=json.dumps(prepared_block.section_path),
+                created_at=now,
+            )
+            db.add(block)
+            blocks_by_order[prepared_block.source_order] = block
+        db.flush()
+        image_key_iter = iter(written_image_keys)
+        for prepared_image in prepared.images:
+            block = blocks_by_order[prepared_image.source_order]
             image = SourceImage(
                 id=str(uuid.uuid4()),
                 source_document_id=source.id,
                 source_block_id=block.id,
-                object_key=object_key,
+                object_key=next(image_key_iter),
                 content_hash=prepared_image.content_hash,
                 mime_type=prepared_image.mime_type,
                 alt_text=prepared_image.alt_text,
@@ -796,17 +845,29 @@ def publish_prepared_source(
                 created_at=now,
             )
             db.add(image)
-        source.state = SOURCE_STATE_PREPARED
-        source.updated_at = now
+
+        now = utc_now()
+        if not _cas_finalize_preparation(
+            db,
+            operation_id=operation.id,
+            source_id=source.id,
+            owner=owner,
+            preparation_generation=preparation_generation,
+            now=now,
+        ):
+            db.rollback()
+            if written_image_keys:
+                storage.delete_object_keys(written_image_keys)
+            return False
+
+        db.expire_all()
+        source = db.get(SourceDocument, source.id)
+        if source is None:
+            db.rollback()
+            if written_image_keys:
+                storage.delete_object_keys(written_image_keys)
+            return False
         queue_source_index_after_publish(db, source)
-        operation.status = SOURCE_PREP_STATUS_SUCCEEDED
-        operation.message = "Preparation succeeded."
-        operation.error_code = None
-        operation.error_message = None
-        operation.lease_owner = None
-        operation.lease_expires_at = None
-        operation.finished_at = now
-        operation.updated_at = now
         db.commit()
     except Exception:
         db.rollback()
@@ -853,16 +914,22 @@ class SourcePreparationWorker:
             parser = self._parsers.get(source.parser_kind)
             if parser is None:
                 raise ParserAdapterError("parser_not_ready", "Parser is not configured.", 409)
-            prepared = parser.parse(
-                ParserRequest(
+            prepared = self._parse_with_lease_heartbeat(
+                operation_id=operation.id,
+                owner=owner,
+                lease_seconds=lease_seconds,
+                parser=parser,
+                request=ParserRequest(
                     source_document_id=source.id,
                     parser_kind=source.parser_kind,
                     original_bytes=original,
                     content_type=source.content_type,
                     filename=source.original_filename,
                     credential=credential,
-                )
+                ),
             )
+            if prepared is None:
+                return True
             if not _heartbeat_prep_lease(db, operation, owner=owner, lease_seconds=lease_seconds):
                 return True
             publish_prepared_source(
@@ -883,6 +950,48 @@ class SourcePreparationWorker:
             if current is not None and _prep_lease_current(current, owner=owner):
                 _fail_operation(db, current, "source_preparation_invalid", "Prepared source did not pass validation.")
         return True
+
+    def _parse_with_lease_heartbeat(
+        self,
+        *,
+        operation_id: str,
+        owner: str,
+        lease_seconds: int,
+        parser: DocumentParser,
+        request: ParserRequest,
+    ) -> PreparedSource | None:
+        from context_engine.db import create_db_engine, create_session_factory
+
+        stop = threading.Event()
+        lost = threading.Event()
+        heartbeat_seconds = _lease_heartbeat_seconds(lease_seconds)
+        engine = create_db_engine(self._settings)
+        session_factory = create_session_factory(engine)
+
+        def _beat() -> None:
+            while not stop.wait(heartbeat_seconds):
+                with session_factory() as beat_db:
+                    current = beat_db.get(SourcePreparationOperation, operation_id)
+                    if current is None or not _heartbeat_prep_lease(
+                        beat_db,
+                        current,
+                        owner=owner,
+                        lease_seconds=lease_seconds,
+                    ):
+                        lost.set()
+                        return
+
+        thread = threading.Thread(target=_beat, name="source-prep-lease-heartbeat", daemon=True)
+        thread.start()
+        try:
+            prepared = parser.parse(request)
+        finally:
+            stop.set()
+            thread.join(timeout=max(1, heartbeat_seconds))
+            engine.dispose()
+        if lost.is_set():
+            return None
+        return prepared
 
     def _claim_next_operation(self, db: Session) -> SourcePreparationOperation | None:
         now = utc_now()

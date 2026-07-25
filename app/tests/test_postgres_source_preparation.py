@@ -35,6 +35,7 @@ from context_engine.models import (
     SOURCE_STATE_PREPARED,
     SourceBlock,
     SourceImage,
+    SourcePreparationOperation,
 )
 from context_engine.services.audit import AuditContext
 from context_engine.services.auth import create_user
@@ -313,6 +314,62 @@ def test_p4_03_publish_fence_and_atomic_blocks_on_postgresql_16(tmp_path: Path) 
                     assert late is False
                     db.refresh(source_c)
                     assert source_c.state == SOURCE_STATE_PENDING
+
+                    # CAS fence: reclaim after soft checks / during image staging must no-op.
+                    source_d, operation_d = upload_source_bytes(
+                        db,
+                        settings=settings_b,
+                        domain_id=domain.id,
+                        filename="manual-d.pdf",
+                        content_type="application/pdf",
+                        data=b"%PDF-1.4 p4-03 fourth fixture",
+                        requested_by_user=admin,
+                        audit_context=audit,
+                    )
+                    operation_d.status = SOURCE_PREP_STATUS_RUNNING
+                    operation_d.lease_owner = "prep-worker-a"
+                    operation_d.lease_expires_at = utc_now() + timedelta(seconds=30)
+                    operation_d.started_at = utc_now()
+                    db.commit()
+
+                    storage = storage_from_settings(settings_a)
+                    original_write = storage.write_image
+
+                    def reclaim_then_write(data: bytes, *, content_type: str | None = None) -> str:
+                        with session_factory() as race_db:
+                            raced = race_db.get(SourcePreparationOperation, operation_d.id)
+                            assert raced is not None
+                            raced.lease_owner = "prep-worker-b"
+                            raced.lease_expires_at = utc_now() + timedelta(seconds=30)
+                            raced.updated_at = utc_now()
+                            race_db.commit()
+                        return original_write(data, content_type=content_type)
+
+                    storage.write_image = reclaim_then_write  # type: ignore[method-assign]
+                    import context_engine.services.sources as sources_mod
+
+                    original_storage_factory = sources_mod.storage_from_settings
+                    sources_mod.storage_from_settings = lambda _settings: storage  # type: ignore[assignment]
+                    try:
+                        cas_denied = publish_prepared_source(
+                            db,
+                            settings_a,
+                            operation_d.id,
+                            _sample_prepared(source_d.id),
+                            lease_owner="prep-worker-a",
+                        )
+                    finally:
+                        sources_mod.storage_from_settings = original_storage_factory
+                    assert cas_denied is False
+                    db.expire_all()
+                    db.refresh(source_d)
+                    db.refresh(operation_d)
+                    assert source_d.state == SOURCE_STATE_PENDING
+                    assert operation_d.status == SOURCE_PREP_STATUS_RUNNING
+                    assert operation_d.lease_owner == "prep-worker-b"
+                    assert (
+                        db.scalar(select(SourceBlock).where(SourceBlock.source_document_id == source_d.id)) is None
+                    )
                 finally:
                     db.close()
             finally:
