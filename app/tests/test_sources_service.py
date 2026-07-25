@@ -121,6 +121,20 @@ def test_public_index_state_maps_internal_vocabulary() -> None:
     )
 
 
+def test_safe_source_includes_index_allowed_actions() -> None:
+    ready = _source(index_state=SOURCE_INDEX_STATE_READY)
+    projection = safe_source(_SessionStub(None), ready)
+    actions = {row["action"]: row["enabled"] for row in projection["allowedActions"]}
+    assert actions["indexRetry"] is True
+    assert actions["indexCancel"] is True
+
+    queued = _source(index_state=SOURCE_INDEX_STATE_QUEUED)
+    queued_projection = safe_source(_SessionStub(None), queued)
+    queued_actions = {row["action"]: row["enabled"] for row in queued_projection["allowedActions"]}
+    assert queued_actions["indexRetry"] is False
+    assert queued_actions["indexCancel"] is True
+
+
 def test_new_document_public_ref_is_opaque() -> None:
     ref = new_document_public_ref()
     assert ref.startswith("doc_")

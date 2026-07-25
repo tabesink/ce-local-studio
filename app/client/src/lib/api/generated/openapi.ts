@@ -697,6 +697,11 @@ export interface components {
             /** Sources */
             sources: components["schemas"]["AdminSourceDto"][];
         };
+        /** AdminSourceMutationResponse */
+        AdminSourceMutationResponse: {
+            operation: components["schemas"]["OperationDto"];
+            source: components["schemas"]["AdminSourceDto"];
+        };
         /** AdminSourceOperationsResponse */
         AdminSourceOperationsResponse: {
             /** Nextcursor */
@@ -1574,7 +1579,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AdminSourceMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1606,7 +1611,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AdminSourceMutationResponse"];
                 };
             };
             /** @description Validation Error */

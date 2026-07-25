@@ -19,7 +19,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | P2 | Trusted runtime configuration | DONE | P1 | encrypted credentials, model profiles, parser/synthesis defaults, admin contract tests pass |
 | P3 | Knowledge Domain runtime | DONE | P2 | per-domain runtime boundary, lifecycle operations, leases/generations, readiness proven |
 | P4 | Source preparation | DONE | P3 | upload/storage/parser adapters produce canonical blocks and support retry/cancel/delete |
-| P5 | LightRAG indexing eligibility | NOT_STARTED | P4 | vendored fixture proves idempotent submit, readiness, delete, provenance markers, eligibility |
+| P5 | LightRAG indexing eligibility | DONE | P4 | vendored fixture proves idempotent submit, readiness, delete, provenance markers, eligibility |
 | P6 | Scoped Evidence retrieval | NOT_STARTED | P5 | single-domain authorized retrieval maps only valid local blocks to safe Evidence |
 | P7 | Durable grounded streaming chat | NOT_STARTED | P6 | conversation ownership, intent gate, bounded RAG, SSE, idempotent replay, redaction pass |
 | P8 | Operational safety and Phase 1 gate | NOT_STARTED | P1-P7 | transactional audit writes, allowlisted logs, request/trace correlation, health, privacy scans, and resilience evidence pass |
@@ -103,13 +103,15 @@ P4-04 closure evidence (2026-07-25): `docs/_scratch/p4-04-source-outline-delete-
 P5-01 closure evidence (2026-07-25): `docs/_scratch/p5-01-index-state-claim-inventory.md` records retain/modify/defer decisions. Internal index CHECK vocabulary retained; public mapping stays with P4-01. `SourceIndexWorker._claim_next_source` assigns lease owner/expiry on queued→submitting, expired submitting reclaim, and accepted readiness when lease absent/expired; unexpired leases are not double-claimed. PostgreSQL 16 proof covers schema columns/CHECKs/`ix_source_documents_domain_index_state`, claim/reclaim, accepted lease skip/reclaim, and generation/request fence no-ops. Results were 1 focused PostgreSQL index-claim test passing. `docs/_scratch/p5-01-index-state-claim-evidence.md` records commands and keeps renderer/adapter with P5-02 and submit/poll/eligibility with P5-03.
 
 P5-02 closure evidence (2026-07-25): `docs/_scratch/p5-02-lightrag-renderer-adapter-inventory.md` records retain/modify/defer decisions. `LIGHTRAG_HANDOFF_SCHEMA_VERSION=1` and `render_blocks_to_lightrag_handoff` pin CE_SOURCE/CE_BLOCK provenance markers and content-hash identity. Local LightRAG adapter fixtures prove idempotent submit, hash conflict, readiness, delete/absence, and preserved block IDs. Native `_run` bounds lifecycle work with `CE_SOURCE_INDEX_TIMEOUT_SECONDS` and maps overrun to `504 source_index_timeout` (DRIFT-27 timeout half). Results were 4 focused renderer/adapter unit tests passing. `docs/_scratch/p5-02-lightrag-renderer-adapter-evidence.md` records commands and keeps index HTTP/eligibility with P5-03.
+
+P5-03 closure evidence (2026-07-25): `docs/_scratch/p5-03-index-eligibility-inventory.md` records retain/modify/defer decisions. Closed index retry/cancel `AdminSourceDto` envelopes map service codes to approved ErrorCodes. Worker heartbeats leases; timeout leaves `submitting` uncertain then readiness-probes before re-submit (DRIFT-32); not-ready accepted polls use lease-expiry backoff (DRIFT-28). `source_is_query_eligible` requires domain available + prepared + ready + current request identity. PostgreSQL 16 proof covers submit→ready→eligible, backoff skip, HTTP `202`/`409`/`200`, and cancel non-eligibility. Results were 6 unit + 1 PostgreSQL index-eligibility tests passing; OpenAPI/TypeScript regenerated. `docs/_scratch/p5-03-index-eligibility-evidence.md` records commands and keeps native process-lock concurrency, Idempotency-Key store, and member routes with later owners.
 | P4-01 | DONE | P3 | source_documents/preparation_operations schema, opaque public document refs and secure storage adapter |
 | P4-02 | DONE | P4-01 | upload validation, domain deduplication and parser-kind freeze |
 | P4-03 | DONE | P4-02 | Docling/Reducto adapters and canonical blocks/images transaction |
 | P4-04 | DONE | P4-03 | outline, operation, retry/cancel and delete APIs |
 | P5-01 | DONE | P4 | index state/generation fields and worker claim loop |
 | P5-02 | DONE | P5-01 | versioned canonical-block renderer and vendored LightRAG adapter |
-| P5-03 | NOT_STARTED | P5-02 | submit/poll/retry/cancel/delete and query-eligibility service |
+| P5-03 | DONE | P5-02 | submit/poll/retry/cancel/delete and query-eligibility service |
 | P6-01 | NOT_STARTED | P5 | scoped retrieval port and raw-hit provenance mapper |
 | P6-02 | NOT_STARTED | P6-01 | authorized safe Evidence DTO, ordering, excerpt limits and failure mapping |
 

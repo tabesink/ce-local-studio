@@ -29,7 +29,6 @@ from context_engine.models import (
     SOURCE_INDEX_STATE_QUEUED,
     SOURCE_INDEX_STATE_READY,
     SOURCE_INDEX_STATE_SUBMITTING,
-    SOURCE_STATE_DELETING,
     SOURCE_STATE_PREPARED,
     Domain,
     SourceBlock,
@@ -43,6 +42,7 @@ from context_engine.services.structured_logging import safe_log
 logger = logging.getLogger(__name__)
 
 LIGHTRAG_HANDOFF_SCHEMA_VERSION = "1"
+SOURCE_INDEX_UNCERTAIN_CODE = "source_index_uncertain"
 _RENDER_HEADER_RE = re.compile(r"^\[CE_BLOCK id=([^\] ]+) order=(\d+)\]$", re.MULTILINE)
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,96}$")
 _NATIVE_LIGHTRAG_LIFECYCLE_LOCK = threading.RLock()
@@ -778,6 +778,69 @@ def _worker_result_is_current(source: SourceDocument, generation: int, request_i
     )
 
 
+def _lease_heartbeat_seconds(lease_seconds: int) -> int:
+    return max(1, lease_seconds // 3)
+
+
+def _index_lease_current(
+    source: SourceDocument,
+    *,
+    owner: str,
+    now=None,
+) -> bool:
+    current = now or utc_now()
+    if source.index_lease_owner != owner:
+        return False
+    if source.index_lease_expires_at is None or source.index_lease_expires_at < current:
+        return False
+    return True
+
+
+def _heartbeat_index_lease(
+    db: Session,
+    source: SourceDocument,
+    *,
+    owner: str,
+    lease_seconds: int,
+    now=None,
+) -> bool:
+    current = now or utc_now()
+    db.refresh(source)
+    if not _index_lease_current(source, owner=owner, now=current):
+        return False
+    if source.index_state in {SOURCE_INDEX_STATE_CANCELLING, SOURCE_INDEX_STATE_CANCELLED}:
+        return False
+    source.index_lease_expires_at = current + timedelta(seconds=lease_seconds)
+    source.index_updated_at = current
+    source.updated_at = current
+    db.commit()
+    db.refresh(source)
+    return True
+
+
+def schedule_index_poll_backoff(
+    db: Session,
+    *,
+    source_id: str,
+    generation: int,
+    request_id: str,
+    backoff_seconds: int,
+) -> bool:
+    """Persist not-ready poll backoff via lease-expiry gating (DRIFT-28)."""
+    source = db.get(SourceDocument, source_id)
+    if source is None or not _worker_result_is_current(source, generation, request_id):
+        return False
+    if source.index_state not in {SOURCE_INDEX_STATE_SUBMITTING, SOURCE_INDEX_STATE_ACCEPTED}:
+        return False
+    now = utc_now()
+    source.index_lease_owner = None
+    source.index_lease_expires_at = now + timedelta(seconds=max(1, backoff_seconds))
+    source.index_updated_at = now
+    source.updated_at = now
+    db.commit()
+    return True
+
+
 def mark_index_accepted_if_current(
     db: Session,
     *,
@@ -837,6 +900,30 @@ def mark_index_failed_if_current(db: Session, *, source_id: str, generation: int
     return True
 
 
+def mark_index_uncertain_if_current(
+    db: Session,
+    *,
+    source_id: str,
+    generation: int,
+    request_id: str,
+    backoff_seconds: int,
+    message: str = "Source index runtime outcome uncertain; reconciliation required.",
+) -> bool:
+    """Leave submitting non-terminal after unknown remote timeout (DRIFT-32)."""
+    source = db.get(SourceDocument, source_id)
+    if source is None or source.index_state != SOURCE_INDEX_STATE_SUBMITTING or not _worker_result_is_current(source, generation, request_id):
+        return False
+    now = utc_now()
+    source.index_error_code = SOURCE_INDEX_UNCERTAIN_CODE
+    source.index_error_message = message
+    source.index_lease_owner = None
+    source.index_lease_expires_at = now + timedelta(seconds=max(1, backoff_seconds))
+    source.index_updated_at = now
+    source.updated_at = now
+    db.commit()
+    return True
+
+
 class SourceIndexWorker:
     def __init__(self, settings: Settings, client: LightRAGClientProtocol | None = None) -> None:
         self._settings = settings
@@ -851,6 +938,9 @@ class SourceIndexWorker:
             return True
         generation = source.index_generation
         request_id = source.index_request_id
+        owner = self._settings.source_index_worker_id
+        lease_seconds = self._settings.source_index_lease_seconds
+        backoff_seconds = self._settings.source_index_poll_backoff_seconds
         if not request_id:
             # Without a request id the submission can never progress; fail the
             # source instead of leaving it SUBMITTING until the lease expires.
@@ -866,40 +956,211 @@ class SourceIndexWorker:
             return True
 
         if source.index_state == SOURCE_INDEX_STATE_SUBMITTING:
-            try:
-                rendered = render_lightrag_input(db, source)
-                if rendered.content_hash != source.index_content_hash:
-                    raise SourceIndexError(409, "source_index_conflict", "Source index request conflict.")
-                result = self._client.submit(domain, request_id=request_id, content_hash=rendered.content_hash, rendered_text=rendered.text)
-            except SourceIndexError as exc:
-                db.rollback()
-                mark_index_failed_if_current(db, source_id=source.id, generation=generation, request_id=request_id, code=exc.code, message=exc.message)
-                return True
+            return self._run_submitting(
+                db,
+                source=source,
+                domain=domain,
+                generation=generation,
+                request_id=request_id,
+                owner=owner,
+                lease_seconds=lease_seconds,
+                backoff_seconds=backoff_seconds,
+            )
+
+        if source.index_state == SOURCE_INDEX_STATE_ACCEPTED:
+            return self._run_accepted(
+                db,
+                source=source,
+                domain=domain,
+                generation=generation,
+                request_id=request_id,
+                owner=owner,
+                lease_seconds=lease_seconds,
+                backoff_seconds=backoff_seconds,
+            )
+
+        return True
+
+    def _run_submitting(
+        self,
+        db: Session,
+        *,
+        source: SourceDocument,
+        domain: Domain,
+        generation: int,
+        request_id: str,
+        owner: str,
+        lease_seconds: int,
+        backoff_seconds: int,
+    ) -> bool:
+        if not _heartbeat_index_lease(db, source, owner=owner, lease_seconds=lease_seconds):
+            return True
+
+        # Probe first: timeout/reclaim may have already landed the remote handoff.
+        readiness = self._client.readiness(domain, request_id=request_id)
+        if readiness.ready:
+            remote_id = source.index_remote_document_id or _private_remote_id(request_id)
+            if mark_index_accepted_if_current(
+                db,
+                source_id=source.id,
+                generation=generation,
+                request_id=request_id,
+                remote_document_id=remote_id,
+            ):
+                mark_index_ready_if_current(db, source_id=source.id, generation=generation, request_id=request_id)
+            return True
+        if not readiness.failed:
+            remote_id = source.index_remote_document_id or _private_remote_id(request_id)
             mark_index_accepted_if_current(
                 db,
                 source_id=source.id,
                 generation=generation,
                 request_id=request_id,
-                remote_document_id=result.remote_document_id,
+                remote_document_id=remote_id,
+            )
+            return True
+        if readiness.error_code not in {None, "source_index_missing"}:
+            mark_index_failed_if_current(
+                db,
+                source_id=source.id,
+                generation=generation,
+                request_id=request_id,
+                code=readiness.error_code or "source_index_failed",
+                message=readiness.error_message or "Source index failed.",
             )
             return True
 
-        if source.index_state == SOURCE_INDEX_STATE_ACCEPTED:
-            readiness = self._client.readiness(domain, request_id=request_id)
-            if readiness.failed:
+        try:
+            result = self._submit_with_lease_heartbeat(
+                db,
+                source_id=source.id,
+                domain=domain,
+                request_id=request_id,
+                owner=owner,
+                lease_seconds=lease_seconds,
+            )
+        except SourceIndexError as exc:
+            db.rollback()
+            if exc.code == "source_index_timeout":
+                mark_index_uncertain_if_current(
+                    db,
+                    source_id=source.id,
+                    generation=generation,
+                    request_id=request_id,
+                    backoff_seconds=backoff_seconds,
+                    message=exc.message,
+                )
+            else:
                 mark_index_failed_if_current(
                     db,
                     source_id=source.id,
                     generation=generation,
                     request_id=request_id,
-                    code=readiness.error_code or "source_index_failed",
-                    message=readiness.error_message or "Source index failed.",
+                    code=exc.code,
+                    message=exc.message,
                 )
-            elif readiness.ready:
-                mark_index_ready_if_current(db, source_id=source.id, generation=generation, request_id=request_id)
             return True
-
+        if result is None:
+            return True
+        mark_index_accepted_if_current(
+            db,
+            source_id=source.id,
+            generation=generation,
+            request_id=request_id,
+            remote_document_id=result.remote_document_id,
+        )
         return True
+
+    def _run_accepted(
+        self,
+        db: Session,
+        *,
+        source: SourceDocument,
+        domain: Domain,
+        generation: int,
+        request_id: str,
+        owner: str,
+        lease_seconds: int,
+        backoff_seconds: int,
+    ) -> bool:
+        if not _heartbeat_index_lease(db, source, owner=owner, lease_seconds=lease_seconds):
+            return True
+        readiness = self._client.readiness(domain, request_id=request_id)
+        if readiness.failed:
+            mark_index_failed_if_current(
+                db,
+                source_id=source.id,
+                generation=generation,
+                request_id=request_id,
+                code=readiness.error_code or "source_index_failed",
+                message=readiness.error_message or "Source index failed.",
+            )
+        elif readiness.ready:
+            mark_index_ready_if_current(db, source_id=source.id, generation=generation, request_id=request_id)
+        else:
+            schedule_index_poll_backoff(
+                db,
+                source_id=source.id,
+                generation=generation,
+                request_id=request_id,
+                backoff_seconds=backoff_seconds,
+            )
+        return True
+
+    def _submit_with_lease_heartbeat(
+        self,
+        db: Session,
+        *,
+        source_id: str,
+        domain: Domain,
+        request_id: str,
+        owner: str,
+        lease_seconds: int,
+    ) -> IndexSubmitResult | None:
+        source = db.get(SourceDocument, source_id)
+        if source is None:
+            return None
+        rendered = render_lightrag_input(db, source)
+        if rendered.content_hash != source.index_content_hash:
+            raise SourceIndexError(409, "source_index_conflict", "Source index request conflict.")
+
+        from context_engine.db import create_db_engine, create_session_factory
+
+        stop = threading.Event()
+        lost = threading.Event()
+        heartbeat_seconds = _lease_heartbeat_seconds(lease_seconds)
+        engine = create_db_engine(self._settings)
+        session_factory = create_session_factory(engine)
+
+        def _beat() -> None:
+            while not stop.wait(heartbeat_seconds):
+                with session_factory() as beat_db:
+                    current = beat_db.get(SourceDocument, source_id)
+                    if current is None or not _heartbeat_index_lease(
+                        beat_db,
+                        current,
+                        owner=owner,
+                        lease_seconds=lease_seconds,
+                    ):
+                        lost.set()
+                        return
+
+        thread = threading.Thread(target=_beat, name="source-index-lease-heartbeat", daemon=True)
+        thread.start()
+        try:
+            result = self._client.submit(
+                domain,
+                request_id=request_id,
+                content_hash=rendered.content_hash,
+                rendered_text=rendered.text,
+            )
+        finally:
+            stop.set()
+            thread.join(timeout=max(1, heartbeat_seconds))
+            engine.dispose()
+        if lost.is_set():
+            return None
+        return result
 
     def _claim_next_source(self, db: Session) -> SourceDocument | None:
         now = utc_now()
@@ -928,6 +1189,8 @@ class SourceIndexWorker:
             return None
         if source.index_state == SOURCE_INDEX_STATE_QUEUED:
             source.index_state = SOURCE_INDEX_STATE_SUBMITTING
+            source.index_error_code = None
+            source.index_error_message = None
         source.index_lease_owner = self._settings.source_index_worker_id
         source.index_lease_expires_at = now + timedelta(seconds=self._settings.source_index_lease_seconds)
         source.index_updated_at = now
@@ -959,7 +1222,5 @@ def source_is_query_eligible(
     if source.domain_id != domain.id or source.state != SOURCE_STATE_PREPARED:
         return False
     if source.index_state != SOURCE_INDEX_STATE_READY:
-        return False
-    if source.state == SOURCE_STATE_DELETING or source.index_state in {SOURCE_INDEX_STATE_CANCELLING, SOURCE_INDEX_STATE_CANCELLED}:
         return False
     return _current_request_identity(source)

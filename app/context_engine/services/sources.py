@@ -366,6 +366,26 @@ def _public_index_state(source: SourceDocument) -> str:
 def _source_allowed_actions(source: SourceDocument, active: SourcePreparationOperation | None) -> list[dict[str, Any]]:
     busy = active is not None
     deleting = source.state == SOURCE_STATE_DELETING
+    index_in_flight = source.index_state in {
+        SOURCE_INDEX_STATE_QUEUED,
+        SOURCE_INDEX_STATE_SUBMITTING,
+        SOURCE_INDEX_STATE_CANCELLING,
+    }
+    index_retry_enabled = (
+        not deleting
+        and not busy
+        and source.state == SOURCE_STATE_PREPARED
+        and not index_in_flight
+    )
+    index_cancel_enabled = (
+        not deleting
+        and source.state == SOURCE_STATE_PREPARED
+        and source.index_state
+        not in {
+            SOURCE_INDEX_STATE_NOT_REQUESTED,
+            SOURCE_INDEX_STATE_CANCELLED,
+        }
+    )
 
     def action(name: str, enabled: bool, reason: str | None = None) -> dict[str, Any]:
         payload: dict[str, Any] = {"action": name, "enabled": enabled}
@@ -380,17 +400,23 @@ def _source_allowed_actions(source: SourceDocument, active: SourcePreparationOpe
             action("cancel", False, reason),
             # Re-queue cleanup when a prior delete op failed/finished without row removal.
             action("delete", not busy, reason if busy else None),
+            action("indexRetry", False, reason),
+            action("indexCancel", False, reason),
         ]
     if busy:
         return [
             action("retry", False, "source_operation_in_progress"),
             action("cancel", active.operation_type == SOURCE_PREP_OPERATION_PREPARE, "source_operation_not_active"),
             action("delete", True),
+            action("indexRetry", False, "source_operation_in_progress"),
+            action("indexCancel", index_cancel_enabled, "source_state_conflict"),
         ]
     return [
         action("retry", source.state == SOURCE_STATE_PENDING, "source_state_conflict"),
         action("cancel", False, "source_operation_not_active"),
         action("delete", True),
+        action("indexRetry", index_retry_enabled, "source_state_conflict"),
+        action("indexCancel", index_cancel_enabled, "source_state_conflict"),
     ]
 
 

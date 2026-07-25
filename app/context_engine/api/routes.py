@@ -493,8 +493,26 @@ def _source_api_error(exc: SourceError) -> ApiError:
     return ApiError(exc.status_code, exc.code, exc.message)
 
 
+_SOURCE_INDEX_HTTP_ERROR_MAP: dict[str, tuple[int, str]] = {
+    "domain_not_found": (404, "not_found"),
+    "source_not_found": (404, "not_found"),
+    "domain_state_conflict": (409, "domain_state_conflict"),
+    "source_state_conflict": (409, "operation_conflict"),
+    "source_index_in_progress": (409, "operation_conflict"),
+    "source_index_conflict": (409, "operation_conflict"),
+    "source_index_input_invalid": (422, "validation_error"),
+    "source_index_unavailable": (503, "dependency_unavailable"),
+    "source_index_timeout": (504, "dependency_unavailable"),
+    "source_index_delete_failed": (502, "dependency_unavailable"),
+}
+
+
 def _source_index_api_error(exc: SourceIndexError) -> ApiError:
-    return ApiError(exc.status_code, exc.code, exc.message)
+    mapped = _SOURCE_INDEX_HTTP_ERROR_MAP.get(exc.code)
+    if mapped is None:
+        return ApiError(exc.status_code, "dependency_unavailable", exc.message)
+    status_code, code = mapped
+    return ApiError(status_code, code, exc.message)
 
 
 def _evidence_api_error(exc: EvidenceRetrievalError) -> ApiError:
@@ -1135,7 +1153,11 @@ def admin_source_operations(
         raise _source_api_error(exc) from exc
 
 
-@api_router.post("/admin/domains/{domainId}/sources/{sourceId}/index/retry", status_code=202)
+@api_router.post(
+    "/admin/domains/{domainId}/sources/{sourceId}/index/retry",
+    status_code=202,
+    response_model=AdminSourceMutationResponse,
+)
 def admin_retry_source_index(
     request: Request,
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
@@ -1158,7 +1180,10 @@ def admin_retry_source_index(
     return _private_json_response({"source": projection}, status_code=202, etag=strong_etag(int(projection["version"])))
 
 
-@api_router.post("/admin/domains/{domainId}/sources/{sourceId}/index/cancel")
+@api_router.post(
+    "/admin/domains/{domainId}/sources/{sourceId}/index/cancel",
+    response_model=AdminSourceMutationResponse,
+)
 def admin_cancel_source_index(
     request: Request,
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
