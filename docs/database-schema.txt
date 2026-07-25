@@ -131,6 +131,7 @@ source_blocks
 source_images
   id PK; source_document_id FK source_documents.id CASCADE
   source_block_id FK source_blocks.id CASCADE
+  object_key varchar(128) NOT NULL UNIQUE INDEX
   content_hash varchar(64); mime_type varchar(80); alt_text varchar(500) NULL
   page_number NULL CHECK >=1; created_at
   INDEX(source_document_id, source_block_id)

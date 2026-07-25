@@ -66,6 +66,7 @@ class Settings:
     domain_storage_limit_bytes: int = field(default_factory=lambda: _env_int("CE_DOMAIN_STORAGE_LIMIT_BYTES", 5 * 1024 * 1024 * 1024))
     source_prep_worker_id: str = field(default_factory=lambda: _env("CE_SOURCE_PREP_WORKER_ID", "source-prep-worker") or "source-prep-worker")
     source_prep_lease_seconds: int = field(default_factory=lambda: _env_int("CE_SOURCE_PREP_LEASE_SECONDS", 60))
+    source_parser_timeout_seconds: int = field(default_factory=lambda: _env_int("CE_SOURCE_PARSER_TIMEOUT_SECONDS", 120))
     source_index_worker_id: str = field(default_factory=lambda: _env("CE_SOURCE_INDEX_WORKER_ID", "source-index-worker") or "source-index-worker")
     source_index_lease_seconds: int = field(default_factory=lambda: _env_int("CE_SOURCE_INDEX_LEASE_SECONDS", 60))
     lightrag_client_kind: str = field(default_factory=lambda: _env("CE_LIGHTRAG_CLIENT_KIND", "native") or "native")
