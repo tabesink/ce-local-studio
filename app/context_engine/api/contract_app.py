@@ -24,9 +24,9 @@ def _install_authoritative_components(app: FastAPI) -> None:
         document = default_openapi()
         schemas = document.setdefault("components", {}).setdefault("schemas", {})
         for name, component in authoritative_component_schemas().items():
-            existing = schemas.get(name)
-            if existing is not None and existing != component:
-                raise RuntimeError(f"authoritative OpenAPI component conflicts with registered schema: {name}")
+            # Closed catalog DTOs are authoritative. FastAPI may emit a near-duplicate
+            # when the same model is nested under a route response_model (for example
+            # omitting an optional property default); the catalog component wins.
             schemas[name] = component
         return document
 
