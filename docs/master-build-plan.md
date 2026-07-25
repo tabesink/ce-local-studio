@@ -112,8 +112,22 @@ P5-03 closure evidence (2026-07-25): `docs/_scratch/p5-03-index-eligibility-inve
 | P5-01 | DONE | P4 | index state/generation fields and worker claim loop |
 | P5-02 | DONE | P5-01 | versioned canonical-block renderer and vendored LightRAG adapter |
 | P5-03 | DONE | P5-02 | submit/poll/retry/cancel/delete and query-eligibility service |
-| P6-01 | NOT_STARTED | P5 | scoped retrieval port and raw-hit provenance mapper |
+| P6-01 | DONE | P5 | scoped retrieval port and raw-hit provenance mapper |
 | P6-02 | NOT_STARTED | P6-01 | authorized safe Evidence DTO, ordering, excerpt limits and failure mapping |
+
+P6-01 closure evidence (2026-07-25): `docs/_scratch/p6-01-scoped-retrieval-inventory.md`
+records the retain/modify/defer boundary. Index lifecycle and scoped retrieval
+now use separate private protocols with bounded admission, one deadline,
+candidate count, and UTF-8 byte budgets. The schema-v2 LightRAG handoff keeps a
+document `CE_SOURCE` header and gives every block a self-contained exact
+provenance marker. Retrieval freezes domain/source generations and index
+identities before provider work; one joined post-call query maps only current
+selected-domain canonical blocks. Barrier-driven PostgreSQL 16 proof covers
+stop/restart, reindex/new-ready, delete, and preparation-replacement fences.
+Results were 31 focused/regression tests plus the exact Ruff, generated-contract,
+and 64-file phase-scope gates passing.
+`docs/_scratch/p6-01-scoped-retrieval-evidence.md` records commands, privacy,
+schema-v2 reindex rollout, and keeps public Evidence projection with P6-02.
 
 ### P7-P8 - Chat and operational safety
 

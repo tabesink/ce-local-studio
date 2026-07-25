@@ -3,6 +3,7 @@ artifact_contract: ce-unified-plan/v1
 artifact_readiness: implementation-ready
 product_contract_source: ce-plan-bootstrap
 execution: code
+phase_compatibility: phase-1-active
 title: Scoped Retrieval Provenance - Plan
 type: feat
 date: 2026-07-25
