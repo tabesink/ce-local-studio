@@ -48,7 +48,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 ADMIN_URL_ENV = "CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL"
 OPT_IN_ENV = "CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS"
 DATABASE_NAME_PATTERN = re.compile(r"^ce_p401_[a-z0-9_]+$")
-HEAD_REVISION = "a8d3f1c62e90"
+HEAD_REVISION = "b5c8e2d19f47"
 
 pytestmark = pytest.mark.postgresql
 
@@ -251,6 +251,7 @@ def test_p4_01_source_schema_refs_and_object_storage_on_postgresql_16(tmp_path: 
                         db,
                         domain_id=domain.id,
                         source_id=source.id,
+                        expected_version=source.version,
                         audit_context=audit,
                     )
                     retry_op = retry_source(

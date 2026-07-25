@@ -55,7 +55,8 @@ SOURCE_STATE_PREPARED = "prepared"
 SOURCE_STATE_DELETING = "deleting"
 SOURCE_STATES = (SOURCE_STATE_PENDING, SOURCE_STATE_PREPARED, SOURCE_STATE_DELETING)
 SOURCE_PREP_OPERATION_PREPARE = "prepare"
-SOURCE_PREP_OPERATION_TYPES = (SOURCE_PREP_OPERATION_PREPARE,)
+SOURCE_PREP_OPERATION_DELETE = "delete"
+SOURCE_PREP_OPERATION_TYPES = (SOURCE_PREP_OPERATION_PREPARE, SOURCE_PREP_OPERATION_DELETE)
 SOURCE_PREP_STATUS_QUEUED = "queued"
 SOURCE_PREP_STATUS_RUNNING = "running"
 SOURCE_PREP_STATUS_SUCCEEDED = "succeeded"
@@ -179,6 +180,9 @@ AUDIT_EVENT_SOURCE_UPLOADED = "source.uploaded"
 AUDIT_EVENT_SOURCE_PREPARATION_RETRIED = "source.preparation_retried"
 AUDIT_EVENT_SOURCE_PREPARATION_CANCELLED = "source.preparation_cancelled"
 AUDIT_EVENT_SOURCE_DELETED = "source.deleted"
+AUDIT_EVENT_SOURCE_DELETE_QUEUED = "source.delete_queued"
+AUDIT_EVENT_SOURCE_DELETE_SUCCEEDED = "source.delete_succeeded"
+AUDIT_EVENT_SOURCE_DELETE_FAILED = "source.delete_failed"
 AUDIT_EVENT_SOURCE_INDEX_RETRY_QUEUED = "source.index_retry_queued"
 AUDIT_EVENT_SOURCE_INDEX_CANCELLED = "source.index_cancelled"
 AUDIT_EVENT_CHAT_TURN_REDACTED = "chat.turn_redacted"
@@ -201,6 +205,9 @@ AUDIT_EVENT_NAMES = (
     AUDIT_EVENT_SOURCE_PREPARATION_RETRIED,
     AUDIT_EVENT_SOURCE_PREPARATION_CANCELLED,
     AUDIT_EVENT_SOURCE_DELETED,
+    AUDIT_EVENT_SOURCE_DELETE_QUEUED,
+    AUDIT_EVENT_SOURCE_DELETE_SUCCEEDED,
+    AUDIT_EVENT_SOURCE_DELETE_FAILED,
     AUDIT_EVENT_SOURCE_INDEX_RETRY_QUEUED,
     AUDIT_EVENT_SOURCE_INDEX_CANCELLED,
     AUDIT_EVENT_CHAT_TURN_REDACTED,
@@ -488,7 +495,7 @@ class SourceDocument(Base):
 class SourcePreparationOperation(Base):
     __tablename__ = "source_preparation_operations"
     __table_args__ = (
-        CheckConstraint("operation_type in ('prepare')", name="ck_source_preparation_operations_type"),
+        CheckConstraint("operation_type in ('prepare', 'delete')", name="ck_source_preparation_operations_type"),
         CheckConstraint(
             "status in ('queued', 'running', 'succeeded', 'failed', 'cancelled')",
             name="ck_source_preparation_operations_status",

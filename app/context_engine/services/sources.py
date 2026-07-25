@@ -32,13 +32,20 @@ from context_engine.adapters.parsers import (
 from context_engine.config import Settings
 from context_engine.db import utc_now
 from context_engine.models import (
-    AUDIT_EVENT_SOURCE_DELETED,
+    AUDIT_ACTOR_WORKER,
+    AUDIT_EVENT_SOURCE_DELETE_FAILED,
+    AUDIT_EVENT_SOURCE_DELETE_QUEUED,
+    AUDIT_EVENT_SOURCE_DELETE_SUCCEEDED,
     AUDIT_EVENT_SOURCE_PREPARATION_CANCELLED,
     AUDIT_EVENT_SOURCE_PREPARATION_RETRIED,
     AUDIT_EVENT_SOURCE_UPLOADED,
+    COMPOSER_REF_KIND_SOURCE,
     DOMAIN_STATE_DELETING,
     PARSER_REDUCTO,
     PROVIDER_REDUCTO,
+    SOURCE_BLOCK_KIND_FIGURE,
+    SOURCE_BLOCK_KIND_TABLE,
+    SOURCE_BLOCK_KIND_TEXT,
     SOURCE_INDEX_STATE_ACCEPTED,
     SOURCE_INDEX_STATE_CANCELLING,
     SOURCE_INDEX_STATE_CANCELLED,
@@ -48,6 +55,7 @@ from context_engine.models import (
     SOURCE_INDEX_STATE_READY,
     SOURCE_INDEX_STATE_SUBMITTING,
     SOURCE_PREP_ACTIVE_STATUSES,
+    SOURCE_PREP_OPERATION_DELETE,
     SOURCE_PREP_OPERATION_PREPARE,
     SOURCE_PREP_STATUS_CANCELLED,
     SOURCE_PREP_STATUS_FAILED,
@@ -57,6 +65,7 @@ from context_engine.models import (
     SOURCE_STATE_DELETING,
     SOURCE_STATE_PENDING,
     SOURCE_STATE_PREPARED,
+    ComposerRefToken,
     Domain,
     ProviderConfig,
     SourceBlock,
@@ -65,7 +74,7 @@ from context_engine.models import (
     SourcePreparationOperation,
     User,
 )
-from context_engine.services.audit import AuditContext, AuditService
+from context_engine.services.audit import AuditContext, AuditService, commit_protected_mutation
 from context_engine.services.auth import iso_utc
 from context_engine.services.indexing import SourceIndexError, cleanup_index_before_source_delete, queue_source_index_after_publish
 from context_engine.services.runtime_config import SecretCrypto, ensure_runtime_settings, is_provider_configured
@@ -207,6 +216,11 @@ def _source_or_404(db: Session, domain_id: str, source_id: str) -> SourceDocumen
     if source is None or source.domain_id != domain_id:
         raise SourceError(404, "source_not_found", "Source not found.")
     return source
+
+
+def _require_source_version(source: SourceDocument, expected_version: int) -> None:
+    if source.version != expected_version:
+        raise SourceError(409, "stale_revision", "Resource version is stale.")
 
 
 def _active_operation(db: Session, source_id: str) -> SourcePreparationOperation | None:
@@ -364,13 +378,14 @@ def _source_allowed_actions(source: SourceDocument, active: SourcePreparationOpe
         return [
             action("retry", False, reason),
             action("cancel", False, reason),
-            action("delete", False, reason),
+            # Re-queue cleanup when a prior delete op failed/finished without row removal.
+            action("delete", not busy, reason if busy else None),
         ]
     if busy:
         return [
             action("retry", False, "source_operation_in_progress"),
-            action("cancel", True),
-            action("delete", False, "source_operation_in_progress"),
+            action("cancel", active.operation_type == SOURCE_PREP_OPERATION_PREPARE, "source_operation_not_active"),
+            action("delete", True),
         ]
     return [
         action("retry", source.state == SOURCE_STATE_PENDING, "source_state_conflict"),
@@ -400,16 +415,26 @@ def safe_source(db: Session, source: SourceDocument) -> dict[str, Any]:
 
 
 def safe_source_operation(operation: SourcePreparationOperation) -> dict[str, Any]:
+    error = None
+    if operation.error_code is not None or operation.error_message is not None:
+        error = {
+            "code": operation.error_code or "internal_error",
+            "message": operation.error_message or operation.message or "Operation failed.",
+        }
     return {
         "id": operation.id,
+        "targetKind": "source",
+        "targetRef": operation.source_document_id,
         "operationType": operation.operation_type,
         "status": operation.status,
+        "generation": operation.preparation_generation_at_start,
         "message": operation.message,
-        "errorCode": operation.error_code,
-        "errorMessage": operation.error_message,
+        "error": error,
+        "requestedAt": iso_utc(operation.created_at),
         "startedAt": iso_utc(operation.started_at) if operation.started_at is not None else None,
         "finishedAt": iso_utc(operation.finished_at) if operation.finished_at is not None else None,
-        "createdAt": iso_utc(operation.created_at),
+        "version": operation.version,
+        "allowedActions": [],
     }
 
 
@@ -443,17 +468,20 @@ def source_operations(db: Session, domain_id: str, source_id: str) -> list[dict[
     return [safe_source_operation(operation) for operation in operations]
 
 
-def _outline_title(block: SourceBlock) -> str | None:
+def _outline_label(block: SourceBlock, *, fallback: str) -> str:
     try:
         section_path = json.loads(block.section_path or "[]")
     except ValueError:
         section_path = []
     if section_path:
-        return str(section_path[-1])[:120]
-    if block.heading_level is not None:
+        label = str(section_path[-1]).strip()
+        if label:
+            return label[:255]
+    if block.heading_level is not None and block.canonical_markdown:
         first_line = block.canonical_markdown.splitlines()[0].strip().lstrip("#").strip()
-        return first_line[:120] or None
-    return None
+        if first_line:
+            return first_line[:255]
+    return fallback
 
 
 def source_outline(db: Session, domain_id: str, source_id: str) -> list[dict[str, Any]]:
@@ -466,21 +494,35 @@ def source_outline(db: Session, domain_id: str, source_id: str) -> list[dict[str
             .order_by(SourceBlock.source_order)
         )
     )
+    image_alt_by_block = {
+        image.source_block_id: (image.alt_text or "").strip()
+        for image in db.scalars(select(SourceImage).where(SourceImage.source_document_id == source_id))
+    }
     items: list[dict[str, Any]] = []
     for block in blocks:
-        try:
-            section_path = json.loads(block.section_path or "[]")
-        except ValueError:
-            section_path = []
+        if block.kind == SOURCE_BLOCK_KIND_TEXT:
+            if block.heading_level is None:
+                continue
+            kind = "heading"
+            label = _outline_label(block, fallback="Heading")
+            level = block.heading_level
+        elif block.kind == SOURCE_BLOCK_KIND_FIGURE:
+            kind = "figure"
+            alt = image_alt_by_block.get(block.id) or ""
+            label = alt[:255] if alt else _outline_label(block, fallback="Figure")
+            level = None
+        elif block.kind == SOURCE_BLOCK_KIND_TABLE:
+            kind = "table"
+            label = _outline_label(block, fallback="Table")
+            level = None
+        else:
+            continue
         items.append(
             {
-                "sourceOrder": block.source_order,
-                "kind": block.kind,
-                "headingLevel": block.heading_level,
-                "title": _outline_title(block),
-                "pageStart": block.page_start,
-                "pageEnd": block.page_end,
-                "sectionPath": section_path,
+                "kind": kind,
+                "label": label,
+                "level": level,
+                "pageNumber": block.page_start,
             }
         )
     return items
@@ -502,8 +544,10 @@ def retry_source(
         raise SourceError(409, "operation_conflict", "Source preparation is already in progress.")
     # Parser kind remains the value frozen at upload; do not re-read runtime defaults.
     frozen_parser_kind = source.parser_kind
+    now = utc_now()
     source.preparation_generation += 1
-    source.updated_at = utc_now()
+    source.version += 1
+    source.updated_at = now
     source.parser_kind = frozen_parser_kind
     operation = _new_prepare_operation(
         source=source,
@@ -534,17 +578,20 @@ def cancel_source(
     *,
     domain_id: str,
     source_id: str,
+    expected_version: int,
     audit_context: AuditContext | None = None,
 ) -> SourcePreparationOperation:
     _domain_or_404(db, domain_id)
     source = _source_or_404(db, domain_id, source_id)
-    if source.state == SOURCE_STATE_PREPARED:
+    _require_source_version(source, expected_version)
+    if source.state in {SOURCE_STATE_PREPARED, SOURCE_STATE_DELETING}:
         raise SourceError(409, "source_state_conflict", "Source state does not allow this operation.")
     operation = _active_operation(db, source.id)
-    if operation is None:
+    if operation is None or operation.operation_type != SOURCE_PREP_OPERATION_PREPARE:
         raise SourceError(409, "source_state_conflict", "Source state does not allow this operation.")
     now = utc_now()
     source.preparation_generation += 1
+    source.version += 1
     source.updated_at = now
     operation.status = SOURCE_PREP_STATUS_CANCELLED
     operation.message = "Preparation cancelled."
@@ -553,6 +600,7 @@ def cancel_source(
     operation.lease_owner = None
     operation.lease_expires_at = None
     operation.finished_at = now
+    operation.version += 1
     operation.updated_at = now
     if audit_context is not None:
         AuditService(db).record(
@@ -572,55 +620,96 @@ def _cancel_active_operation_for_delete(db: Session, source: SourceDocument, now
     if operation is None:
         return
     operation.status = SOURCE_PREP_STATUS_CANCELLED
-    operation.message = "Preparation cancelled."
+    operation.message = "Superseded by source delete."
     operation.error_code = None
     operation.error_message = None
     operation.lease_owner = None
     operation.lease_expires_at = None
     operation.finished_at = now
+    operation.version += 1
     operation.updated_at = now
 
 
-def delete_source(
+def _expire_composer_tokens_for_source(db: Session, source_id: str, now) -> None:
+    tokens = list(
+        db.scalars(
+            select(ComposerRefToken).where(
+                ComposerRefToken.ref_kind == COMPOSER_REF_KIND_SOURCE,
+                ComposerRefToken.target_id == source_id,
+                ComposerRefToken.expires_at > now,
+            )
+        )
+    )
+    for token in tokens:
+        token.expires_at = now
+
+
+def enqueue_delete_source(
     db: Session,
     *,
-    settings: Settings,
     domain_id: str,
     source_id: str,
+    expected_version: int,
+    requested_by_user: User,
     audit_context: AuditContext | None = None,
-) -> None:
+) -> SourcePreparationOperation:
     _domain_or_404(db, domain_id)
     source = _source_or_404(db, domain_id, source_id)
+    _require_source_version(source, expected_version)
+    if _active_operation(db, source.id) is not None and source.state == SOURCE_STATE_DELETING:
+        raise SourceError(409, "operation_conflict", "Source deletion is already in progress.")
     from context_engine.services.chat_turns import redact_turns_for_source
 
-    redact_turns_for_source(db, source.id, audit_context=audit_context)
     now = utc_now()
-    source.state = SOURCE_STATE_DELETING
-    source.preparation_generation += 1
-    source.updated_at = now
-    _cancel_active_operation_for_delete(db, source, now)
-    cleanup_index_before_source_delete(db, settings=settings, source=source)
-    image_object_keys = [
-        image.object_key
-        for image in db.scalars(select(SourceImage).where(SourceImage.source_document_id == source.id))
-        if image.object_key
-    ]
-    storage_from_settings(settings).delete_source_files(
-        domain_id,
-        source_id,
-        original_object_key=source.original_object_key,
-        image_object_keys=image_object_keys,
-    )
-    db.delete(source)
-    if audit_context is not None:
-        AuditService(db).record(
-            AUDIT_EVENT_SOURCE_DELETED,
-            context=audit_context,
-            target_kind="source_document",
-            target_id=source_id,
-            metadata={"sourceState": SOURCE_STATE_DELETING, "indexState": source.index_state},
+
+    def mutate() -> SourcePreparationOperation:
+        _cancel_active_operation_for_delete(db, source, now)
+        db.flush()
+        source.state = SOURCE_STATE_DELETING
+        source.preparation_generation += 1
+        source.version += 1
+        source.updated_at = now
+        redact_turns_for_source(db, source.id, audit_context=audit_context, commit=False)
+        _expire_composer_tokens_for_source(db, source.id, now)
+        operation = SourcePreparationOperation(
+            id=str(uuid.uuid4()),
+            source_document_id=source.id,
+            domain_id=source.domain_id,
+            operation_type=SOURCE_PREP_OPERATION_DELETE,
+            status=SOURCE_PREP_STATUS_QUEUED,
+            preparation_generation_at_start=source.preparation_generation,
+            requested_by_user_id=requested_by_user.id,
+            request_id=audit_context.request_id if audit_context is not None else None,
+            message="Delete queued.",
+            created_at=now,
+            updated_at=now,
         )
-    db.commit()
+        db.add(operation)
+        return operation
+
+    try:
+        if audit_context is not None:
+            operation = commit_protected_mutation(
+                db,
+                mutate,
+                event_name=AUDIT_EVENT_SOURCE_DELETE_QUEUED,
+                context=audit_context,
+                target_kind="source_document",
+                target_id=source.id,
+                metadata={
+                    "operationType": SOURCE_PREP_OPERATION_DELETE,
+                    "operationStatus": SOURCE_PREP_STATUS_QUEUED,
+                    "sourceState": SOURCE_STATE_DELETING,
+                },
+            )
+        else:
+            operation = mutate()
+            db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise SourceError(409, "operation_conflict", "Source deletion is already in progress.") from exc
+    db.refresh(operation)
+    return operation
 
 
 def purge_domain_sources_local(
@@ -634,18 +723,26 @@ def purge_domain_sources_local(
     from context_engine.services.chat_turns import redact_turns_for_source
 
     now = utc_now()
+    pending_cleanup: list[tuple[SourceDocument, list[str]]] = []
     for source in sources:
-        redact_turns_for_source(db, source.id, audit_context=audit_context)
+        redact_turns_for_source(db, source.id, audit_context=audit_context, commit=False)
+        _expire_composer_tokens_for_source(db, source.id, now)
         source.state = SOURCE_STATE_DELETING
         source.preparation_generation += 1
+        source.version += 1
         source.updated_at = now
         _cancel_active_operation_for_delete(db, source, now)
-        cleanup_index_before_source_delete(db, settings=settings, source=source)
         image_object_keys = [
             image.object_key
             for image in db.scalars(select(SourceImage).where(SourceImage.source_document_id == source.id))
             if image.object_key
         ]
+        pending_cleanup.append((source, image_object_keys))
+    # Fence retrieval/redaction before any remote/object cleanup (DRIFT-29).
+    db.flush()
+
+    for source, image_object_keys in pending_cleanup:
+        cleanup_index_before_source_delete(db, settings=settings, source=source)
         storage.delete_source_files(
             source.domain_id,
             source.id,
@@ -1026,6 +1123,200 @@ class SourcePreparationWorker:
         safe_log(
             logger,
             "source_preparation_worker.claimed",
+            request_id=operation.request_id,
+            domain_id=operation.domain_id,
+            source_id=operation.source_document_id,
+            operation_id=operation.id,
+            outcome="succeeded",
+        )
+        return operation
+
+
+class SourceDeleteWorker:
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
+
+    def run_once(self, db: Session) -> bool:
+        operation = self._claim_next_operation(db)
+        if operation is None:
+            return False
+
+        owner = self._settings.source_delete_worker_id
+        lease_seconds = self._settings.source_delete_lease_seconds
+        source = db.get(SourceDocument, operation.source_document_id)
+        if source is None:
+            if not _prep_lease_current(operation, owner=owner):
+                return True
+            self._finish_missing_source(db, operation)
+            return True
+
+        generation = operation.preparation_generation_at_start
+        domain_id = source.domain_id
+        source_id = source.id
+        original_object_key = source.original_object_key
+        try:
+            if not _heartbeat_prep_lease(db, operation, owner=owner, lease_seconds=lease_seconds):
+                return True
+            image_object_keys = [
+                image.object_key
+                for image in db.scalars(select(SourceImage).where(SourceImage.source_document_id == source.id))
+                if image.object_key
+            ]
+            cleanup_index_before_source_delete(db, settings=self._settings, source=source)
+            if not _heartbeat_prep_lease(db, operation, owner=owner, lease_seconds=lease_seconds):
+                return True
+            storage_from_settings(self._settings).delete_source_files(
+                domain_id,
+                source_id,
+                original_object_key=original_object_key,
+                image_object_keys=image_object_keys,
+            )
+        except SourceIndexError as exc:
+            db.rollback()
+            current = db.get(SourcePreparationOperation, operation.id)
+            if current is not None and _prep_lease_current(current, owner=owner):
+                self._fail_delete(db, current, exc.code, exc.message)
+            return True
+        except (SourceStorageError, ObjectStorageError, OSError):
+            db.rollback()
+            current = db.get(SourcePreparationOperation, operation.id)
+            if current is not None and _prep_lease_current(current, owner=owner):
+                self._fail_delete(
+                    db,
+                    current,
+                    "source_delete_failed",
+                    "Source resources could not be removed.",
+                )
+            return True
+
+        current_op = db.get(SourcePreparationOperation, operation.id)
+        if current_op is None or not _prep_lease_current(current_op, owner=owner):
+            return True
+        current_source = db.get(SourceDocument, source_id)
+        if current_source is None:
+            self._finish_missing_source(db, current_op)
+            return True
+        if (
+            current_source.state != SOURCE_STATE_DELETING
+            or current_source.preparation_generation != generation
+        ):
+            now = utc_now()
+            current_op.status = SOURCE_PREP_STATUS_CANCELLED
+            current_op.message = "Delete superseded by a newer source operation."
+            current_op.lease_owner = None
+            current_op.lease_expires_at = None
+            current_op.finished_at = now
+            current_op.updated_at = now
+            db.commit()
+            return True
+
+        AuditService(db).record(
+            AUDIT_EVENT_SOURCE_DELETE_SUCCEEDED,
+            context=AuditContext(actor_kind=AUDIT_ACTOR_WORKER, request_id=current_op.request_id),
+            target_kind="source_preparation_operation",
+            target_id=current_op.id,
+            metadata={
+                "operationType": current_op.operation_type,
+                "operationStatus": SOURCE_PREP_STATUS_SUCCEEDED,
+            },
+        )
+        # Source row CASCADE removes preparation operations; audit preserves outcome.
+        db.delete(current_source)
+        db.commit()
+        return True
+
+    def _fail_delete(
+        self,
+        db: Session,
+        operation: SourcePreparationOperation,
+        code: str,
+        message: str,
+    ) -> None:
+        now = utc_now()
+        operation.status = SOURCE_PREP_STATUS_FAILED
+        operation.message = message
+        operation.error_code = code
+        operation.error_message = message
+        operation.lease_owner = None
+        operation.lease_expires_at = None
+        operation.finished_at = now
+        operation.updated_at = now
+        AuditService(db).record(
+            AUDIT_EVENT_SOURCE_DELETE_FAILED,
+            context=AuditContext(actor_kind=AUDIT_ACTOR_WORKER, request_id=operation.request_id),
+            target_kind="source_preparation_operation",
+            target_id=operation.id,
+            metadata={"operationType": operation.operation_type, "operationStatus": SOURCE_PREP_STATUS_FAILED},
+        )
+        db.commit()
+        safe_log(
+            logger,
+            "source_delete_worker.failed",
+            request_id=operation.request_id,
+            domain_id=operation.domain_id,
+            source_id=operation.source_document_id,
+            operation_id=operation.id,
+            safe_error_code=code,
+            outcome="failed",
+        )
+
+    def _finish_missing_source(self, db: Session, operation: SourcePreparationOperation) -> None:
+        now = utc_now()
+        operation.status = SOURCE_PREP_STATUS_SUCCEEDED
+        operation.message = "Source already removed."
+        operation.error_code = None
+        operation.error_message = None
+        operation.lease_owner = None
+        operation.lease_expires_at = None
+        operation.finished_at = now
+        operation.updated_at = now
+        AuditService(db).record(
+            AUDIT_EVENT_SOURCE_DELETE_SUCCEEDED,
+            context=AuditContext(actor_kind=AUDIT_ACTOR_WORKER, request_id=operation.request_id),
+            target_kind="source_preparation_operation",
+            target_id=operation.id,
+            metadata={
+                "operationType": operation.operation_type,
+                "operationStatus": SOURCE_PREP_STATUS_SUCCEEDED,
+            },
+        )
+        db.commit()
+
+    def _claim_next_operation(self, db: Session) -> SourcePreparationOperation | None:
+        now = utc_now()
+        operation = db.scalar(
+            select(SourcePreparationOperation)
+            .where(
+                SourcePreparationOperation.operation_type == SOURCE_PREP_OPERATION_DELETE,
+                or_(
+                    SourcePreparationOperation.status == SOURCE_PREP_STATUS_QUEUED,
+                    (
+                        (SourcePreparationOperation.status == SOURCE_PREP_STATUS_RUNNING)
+                        & (SourcePreparationOperation.lease_expires_at.is_not(None))
+                        & (SourcePreparationOperation.lease_expires_at < now)
+                    ),
+                    SourcePreparationOperation.status == SOURCE_PREP_STATUS_FAILED,
+                ),
+            )
+            .order_by(SourcePreparationOperation.created_at, SourcePreparationOperation.id)
+            .with_for_update(skip_locked=True)
+        )
+        if operation is None:
+            return None
+        operation.status = SOURCE_PREP_STATUS_RUNNING
+        operation.lease_owner = self._settings.source_delete_worker_id
+        operation.lease_expires_at = now + timedelta(seconds=self._settings.source_delete_lease_seconds)
+        operation.started_at = operation.started_at or now
+        operation.message = "Removing source resources."
+        operation.error_code = None
+        operation.error_message = None
+        operation.finished_at = None
+        operation.updated_at = now
+        db.commit()
+        db.refresh(operation)
+        safe_log(
+            logger,
+            "source_delete_worker.claimed",
             request_id=operation.request_id,
             domain_id=operation.domain_id,
             source_id=operation.source_document_id,

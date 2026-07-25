@@ -127,6 +127,13 @@ class AdminSourceDto(PublicDto):
     allowed_actions: list[AllowedAction] = Field(alias="allowedActions")
 
 
+class OutlineItemDto(PublicDto):
+    kind: Literal["heading", "figure", "table"]
+    label: SafeLabel
+    level: int | None = Field(default=None, ge=1)
+    page_number: int | None = Field(default=None, alias="pageNumber", ge=1)
+
+
 class DocumentSummaryDto(PublicDto):
     ref: OpaqueRef
     label: SafeLabel
@@ -228,6 +235,7 @@ AUTHORITATIVE_PUBLIC_DTOS = (
     ModelProfileDto,
     OperationDto,
     OperationErrorDto,
+    OutlineItemDto,
     ProviderSummaryDto,
     RuntimeSettingsDto,
     TurnDto,

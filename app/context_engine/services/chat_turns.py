@@ -1306,7 +1306,13 @@ def _sanitize_turn_events_for_redaction(db: Session, turn: ConversationTurn) -> 
         row.payload_digest = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
 
 
-def _redact_turns(db: Session, turns: list[ConversationTurn], audit_context: AuditContext | None = None) -> int:
+def _redact_turns(
+    db: Session,
+    turns: list[ConversationTurn],
+    audit_context: AuditContext | None = None,
+    *,
+    commit: bool = True,
+) -> int:
     now = utc_now()
     changed = 0
     for turn in turns:
@@ -1350,7 +1356,7 @@ def _redact_turns(db: Session, turns: list[ConversationTurn], audit_context: Aud
             commit=False,
         )
         changed += 1
-    if changed:
+    if changed and commit:
         db.commit()
     return changed
 
@@ -1359,6 +1365,8 @@ def redact_turns_for_source(
     db: Session,
     source_document_id: str,
     audit_context: AuditContext | None = None,
+    *,
+    commit: bool = True,
 ) -> int:
     turns_by_id = {
         turn.id: turn
@@ -1376,7 +1384,7 @@ def redact_turns_for_source(
         .order_by(ConversationTurn.created_at, ConversationTurn.id)
     ).unique():
         turns_by_id[turn.id] = turn
-    return _redact_turns(db, list(turns_by_id.values()), audit_context)
+    return _redact_turns(db, list(turns_by_id.values()), audit_context, commit=commit)
 
 
 def redact_turns_for_domain(db: Session, domain_id: str, audit_context: AuditContext | None = None) -> int:

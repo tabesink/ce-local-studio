@@ -13,9 +13,11 @@ from sqlalchemy.orm import Session
 
 from context_engine.api.catalog_schemas import (
     AdminDomainDto,
+    AdminSourceDto,
     DomainSummaryDto,
     ModelProfileDto,
     OperationDto,
+    OutlineItemDto,
     ProviderSummaryDto,
     RuntimeSettingsDto,
 )
@@ -108,7 +110,7 @@ from context_engine.services.source_upload import (
 from context_engine.services.sources import (
     SourceError,
     cancel_source,
-    delete_source,
+    enqueue_delete_source,
     list_sources,
     retry_source,
     safe_source,
@@ -221,6 +223,45 @@ class DomainOperationMutationResponse(BaseModel):
 class AdminDomainOperationsResponse(BaseModel):
     operations: list[OperationDto]
     next_cursor: str | None = Field(alias="nextCursor")
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class AdminSourceMutationResponse(BaseModel):
+    source: AdminSourceDto
+    operation: OperationDto
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class AdminSourceDetailResponse(BaseModel):
+    source: AdminSourceDto
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class AdminSourceListResponse(BaseModel):
+    sources: list[AdminSourceDto]
+    next_cursor: str | None = Field(default=None, alias="nextCursor")
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class AdminSourceOutlineResponse(BaseModel):
+    items: list[OutlineItemDto]
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class AdminSourceOperationsResponse(BaseModel):
+    operations: list[OperationDto]
+    next_cursor: str | None = Field(alias="nextCursor")
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class SourceOperationMutationResponse(BaseModel):
+    operation: OperationDto
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -1030,56 +1071,66 @@ async def admin_upload_source(
         raise _source_api_error(exc) from exc
     finally:
         await upload.close()
-    return {"source": safe_source(db, source), "operation": safe_source_operation(operation)}
+    return _private_json_response(
+        {"source": safe_source(db, source), "operation": safe_source_operation(operation)},
+        status_code=201,
+        etag=strong_etag(operation.version),
+    )
 
 
-@api_router.get("/admin/domains/{domainId}/sources")
+@api_router.get("/admin/domains/{domainId}/sources", response_model=AdminSourceListResponse)
 def admin_list_sources(
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
-) -> dict[str, object]:
+) -> JSONResponse:
     try:
-        return {"sources": list_sources(db, domain_id)}
+        return _private_json_response({"sources": list_sources(db, domain_id), "nextCursor": None})
     except SourceError as exc:
         raise _source_api_error(exc) from exc
 
 
-@api_router.get("/admin/domains/{domainId}/sources/{sourceId}")
+@api_router.get("/admin/domains/{domainId}/sources/{sourceId}", response_model=AdminSourceDetailResponse)
 def admin_get_source(
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
     source_id: Annotated[str, Path(alias="sourceId", min_length=1, max_length=36)],
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
-) -> dict[str, object]:
+) -> JSONResponse:
     try:
-        return {"source": source_detail(db, domain_id, source_id)}
+        source = source_detail(db, domain_id, source_id)
     except SourceError as exc:
         raise _source_api_error(exc) from exc
+    return _private_json_response({"source": source}, etag=strong_etag(int(source["version"])))
 
 
-@api_router.get("/admin/domains/{domainId}/sources/{sourceId}/outline")
+@api_router.get("/admin/domains/{domainId}/sources/{sourceId}/outline", response_model=AdminSourceOutlineResponse)
 def admin_get_source_outline(
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
     source_id: Annotated[str, Path(alias="sourceId", min_length=1, max_length=36)],
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
-) -> dict[str, object]:
+) -> JSONResponse:
     try:
-        return {"items": source_outline(db, domain_id, source_id)}
+        return _private_json_response({"items": source_outline(db, domain_id, source_id)})
     except SourceError as exc:
         raise _source_api_error(exc) from exc
 
 
-@api_router.get("/admin/domains/{domainId}/sources/{sourceId}/operations")
+@api_router.get(
+    "/admin/domains/{domainId}/sources/{sourceId}/operations",
+    response_model=AdminSourceOperationsResponse,
+)
 def admin_source_operations(
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
     source_id: Annotated[str, Path(alias="sourceId", min_length=1, max_length=36)],
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
-) -> dict[str, object]:
+) -> JSONResponse:
     try:
-        return {"operations": source_operations(db, domain_id, source_id)}
+        return _private_json_response(
+            {"operations": source_operations(db, domain_id, source_id), "nextCursor": None}
+        )
     except SourceError as exc:
         raise _source_api_error(exc) from exc
 
@@ -1092,7 +1143,7 @@ def admin_retry_source_index(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> dict[str, object]:
+) -> JSONResponse:
     try:
         source = retry_source_index(
             db,
@@ -1103,7 +1154,8 @@ def admin_retry_source_index(
         )
     except SourceIndexError as exc:
         raise _source_index_api_error(exc) from exc
-    return {"source": safe_source(db, source)}
+    projection = safe_source(db, source)
+    return _private_json_response({"source": projection}, status_code=202, etag=strong_etag(int(projection["version"])))
 
 
 @api_router.post("/admin/domains/{domainId}/sources/{sourceId}/index/cancel")
@@ -1114,7 +1166,7 @@ def admin_cancel_source_index(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> dict[str, object]:
+) -> JSONResponse:
     try:
         source = cancel_source_index(
             db,
@@ -1125,17 +1177,22 @@ def admin_cancel_source_index(
         )
     except SourceIndexError as exc:
         raise _source_index_api_error(exc) from exc
-    return {"source": safe_source(db, source)}
+    projection = safe_source(db, source)
+    return _private_json_response({"source": projection}, etag=strong_etag(int(projection["version"])))
 
 
-@api_router.post("/admin/domains/{domainId}/sources/{sourceId}/retry", status_code=202)
+@api_router.post(
+    "/admin/domains/{domainId}/sources/{sourceId}/retry",
+    status_code=202,
+    response_model=SourceOperationMutationResponse,
+)
 def admin_retry_source(
     request: Request,
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
     source_id: Annotated[str, Path(alias="sourceId", min_length=1, max_length=36)],
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
-) -> dict[str, object]:
+) -> JSONResponse:
     try:
         operation = retry_source(
             db,
@@ -1146,51 +1203,76 @@ def admin_retry_source(
         )
     except SourceError as exc:
         raise _source_api_error(exc) from exc
-    return {"operation": safe_source_operation(operation)}
+    return _private_json_response(
+        {"operation": safe_source_operation(operation)},
+        status_code=202,
+        etag=strong_etag(operation.version),
+    )
 
 
-@api_router.post("/admin/domains/{domainId}/sources/{sourceId}/cancel")
+@api_router.post(
+    "/admin/domains/{domainId}/sources/{sourceId}/cancel",
+    response_model=SourceOperationMutationResponse,
+)
 def admin_cancel_source(
     request: Request,
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
     source_id: Annotated[str, Path(alias="sourceId", min_length=1, max_length=36)],
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
-) -> dict[str, object]:
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+) -> JSONResponse:
     try:
+        expected_version = parse_if_match_version(if_match)
         operation = cancel_source(
             db,
             domain_id=domain_id,
             source_id=source_id,
+            expected_version=expected_version,
             audit_context=_audit_context(request, admin),
         )
+    except RuntimeConfigError as exc:
+        raise _runtime_config_api_error(exc) from exc
     except SourceError as exc:
         raise _source_api_error(exc) from exc
-    return {"operation": safe_source_operation(operation)}
+    return _private_json_response(
+        {"operation": safe_source_operation(operation)},
+        etag=strong_etag(operation.version),
+    )
 
 
-@api_router.delete("/admin/domains/{domainId}/sources/{sourceId}", status_code=204)
+@api_router.delete(
+    "/admin/domains/{domainId}/sources/{sourceId}",
+    status_code=202,
+    response_model=SourceOperationMutationResponse,
+)
 def admin_delete_source(
     request: Request,
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
     source_id: Annotated[str, Path(alias="sourceId", min_length=1, max_length=36)],
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
-    settings: Settings = Depends(get_settings),
-) -> Response:
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+) -> JSONResponse:
     try:
-        delete_source(
+        expected_version = parse_if_match_version(if_match)
+        operation = enqueue_delete_source(
             db,
-            settings=settings,
             domain_id=domain_id,
             source_id=source_id,
+            expected_version=expected_version,
+            requested_by_user=admin,
             audit_context=_audit_context(request, admin),
         )
+    except RuntimeConfigError as exc:
+        raise _runtime_config_api_error(exc) from exc
     except SourceError as exc:
         raise _source_api_error(exc) from exc
-    except SourceIndexError as exc:
-        raise _source_index_api_error(exc) from exc
-    return Response(status_code=204)
+    return _private_json_response(
+        {"operation": safe_source_operation(operation)},
+        status_code=202,
+        etag=strong_etag(operation.version),
+    )
 
 
 @api_router.post("/domains/{domainId}/evidence", response_model=EvidenceResponse)

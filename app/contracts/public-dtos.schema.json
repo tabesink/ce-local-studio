@@ -1020,6 +1020,58 @@
       "title": "OperationErrorDto",
       "type": "object"
     },
+    "OutlineItemDto": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "heading",
+            "figure",
+            "table"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "level": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Level"
+        },
+        "pageNumber": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pagenumber"
+        }
+      },
+      "required": [
+        "kind",
+        "label"
+      ],
+      "title": "OutlineItemDto",
+      "type": "object"
+    },
     "ProviderSummaryDto": {
       "additionalProperties": false,
       "properties": {

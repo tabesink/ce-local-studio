@@ -113,12 +113,12 @@ source_documents
 
 source_preparation_operations
   id PK; source_document_id FK source_documents.id CASCADE
-  domain_id FK domains.id CASCADE; operation_type='prepare'
+  domain_id FK domains.id CASCADE; operation_type CHECK IN ('prepare','delete')
   status closed operation set; preparation_generation_at_start CHECK >=1
   requested_by_user_id FK users.id SET NULL; request_id INDEX
   safe message/error fields; lease fields; version integer DEFAULT 1 CHECK >=1
   started/finished/created/updated timestamps
-  indexes by domain/source creation; one active preparation per source
+  indexes by domain/source creation; one active prepare-or-delete operation per source
 
 source_blocks
   id PK; source_document_id FK source_documents.id CASCADE

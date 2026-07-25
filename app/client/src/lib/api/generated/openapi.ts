@@ -646,6 +646,10 @@ export interface components {
             activeOperation: components["schemas"]["OperationDto"] | null;
             domain: components["schemas"]["AdminDomainDto"];
         };
+        /** AdminSourceDetailResponse */
+        AdminSourceDetailResponse: {
+            source: components["schemas"]["AdminSourceDto"];
+        };
         /** AdminSourceDto */
         AdminSourceDto: {
             /** Activeoperationid */
@@ -685,6 +689,25 @@ export interface components {
             updatedAt: string;
             /** Version */
             version: number;
+        };
+        /** AdminSourceListResponse */
+        AdminSourceListResponse: {
+            /** Nextcursor */
+            nextCursor?: string | null;
+            /** Sources */
+            sources: components["schemas"]["AdminSourceDto"][];
+        };
+        /** AdminSourceOperationsResponse */
+        AdminSourceOperationsResponse: {
+            /** Nextcursor */
+            nextCursor: string | null;
+            /** Operations */
+            operations: components["schemas"]["OperationDto"][];
+        };
+        /** AdminSourceOutlineResponse */
+        AdminSourceOutlineResponse: {
+            /** Items */
+            items: components["schemas"]["OutlineItemDto"][];
         };
         /** AllowedAction */
         AllowedAction: {
@@ -1051,6 +1074,26 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** OutlineItemDto */
+        OutlineItemDto: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "heading" | "figure" | "table";
+            /** Label */
+            label: string;
+            /**
+             * Level
+             * @default null
+             */
+            level: number | null;
+            /**
+             * Pagenumber
+             * @default null
+             */
+            pageNumber: number | null;
+        };
         /** ProviderCredentialRequest */
         ProviderCredentialRequest: {
             /** Credential */
@@ -1116,6 +1159,10 @@ export interface components {
             /** Providers */
             providers: components["schemas"]["ProviderSummaryDto"][];
             runtimeSettings: components["schemas"]["RuntimeSettingsDto"];
+        };
+        /** SourceOperationMutationResponse */
+        SourceOperationMutationResponse: {
+            operation: components["schemas"]["OperationDto"];
         };
         /** TurnDto */
         TurnDto: {
@@ -1355,9 +1402,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AdminSourceListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1429,9 +1474,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AdminSourceDetailResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1448,7 +1491,9 @@ export interface operations {
     admin_delete_source_api_v1_admin_domains__domainId__sources__sourceId__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
             path: {
                 domainId: string;
                 sourceId: string;
@@ -1458,11 +1503,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            204: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SourceOperationMutationResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -1478,7 +1525,9 @@ export interface operations {
     admin_cancel_source_api_v1_admin_domains__domainId__sources__sourceId__cancel_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
             path: {
                 domainId: string;
                 sourceId: string;
@@ -1493,9 +1542,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SourceOperationMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1527,9 +1574,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -1561,9 +1606,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -1595,9 +1638,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AdminSourceOperationsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1629,9 +1670,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AdminSourceOutlineResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1663,9 +1702,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SourceOperationMutationResponse"];
                 };
             };
             /** @description Validation Error */

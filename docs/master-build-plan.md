@@ -18,7 +18,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | P1 | Trusted app foundation | DONE | P0 | migrated Postgres, seeded admin, cookie auth, owner/admin guards, health and safe errors, append-only transactional audit pass |
 | P2 | Trusted runtime configuration | DONE | P1 | encrypted credentials, model profiles, parser/synthesis defaults, admin contract tests pass |
 | P3 | Knowledge Domain runtime | DONE | P2 | per-domain runtime boundary, lifecycle operations, leases/generations, readiness proven |
-| P4 | Source preparation | IN_PROGRESS | P3 | upload/storage/parser adapters produce canonical blocks and support retry/cancel/delete |
+| P4 | Source preparation | DONE | P3 | upload/storage/parser adapters produce canonical blocks and support retry/cancel/delete |
 | P5 | LightRAG indexing eligibility | NOT_STARTED | P4 | vendored fixture proves idempotent submit, readiness, delete, provenance markers, eligibility |
 | P6 | Scoped Evidence retrieval | NOT_STARTED | P5 | single-domain authorized retrieval maps only valid local blocks to safe Evidence |
 | P7 | Durable grounded streaming chat | NOT_STARTED | P6 | conversation ownership, intent gate, bounded RAG, SSE, idempotent replay, redaction pass |
@@ -97,10 +97,12 @@ P4-01 closure evidence (2026-07-25): `docs/_scratch/p4-01-source-storage-invento
 P4-02 closure evidence (2026-07-25): `docs/_scratch/p4-02-upload-validation-inventory.md` records replace/modify decisions for DRIFT-13. Chunked `UploadFile` ingest replaces `request.body()` buffering; magic/structure sniff ignores declared MIME; DOCX uncompressed/ratio bombs and oversize emit `content_rejected` with zero partial rows; domain hash collisions emit `duplicate_source`; retry keeps upload-frozen `parser_kind` after runtime parser change. Results were 12 unit + 7 PostgreSQL/source-upload tests passing. `docs/_scratch/p4-02-upload-validation-evidence.md` records commands and keeps real parsers with P4-03 and outline/delete APIs with P4-04.
 
 P4-03 closure evidence (2026-07-25): `docs/_scratch/p4-03-parser-adapters-inventory.md` records replace/modify/add decisions for DRIFT-22 parser half and DRIFT-30. `DocumentParser` port plus Docling/Reducto adapters fail closed with typed timeout/auth/malformed errors; normalizer fixtures prove privacy (no job/URL leakage). Alembic head `a8d3f1c62e90` adds `source_images.object_key`; publish atomically replaces blocks/images via the object-store port under lease-owner/expiry/generation fences with prep heartbeat. Results were 18 focused unit tests and 2 PostgreSQL prep/source schema tests passing. `docs/_scratch/p4-03-parser-adapters-evidence.md` records commands and keeps outline/delete APIs with P4-04 and synthesis stand-ins with P7-03.
+
+P4-04 closure evidence (2026-07-25): `docs/_scratch/p4-04-source-outline-delete-inventory.md` records replace/modify decisions for DRIFT-29 and closed outline/`OperationDto` envelopes. Alembic head `b5c8e2d19f47` allows `prepare|delete` source ops and delete audit events. Outline omits canonical text; cancel requires `If-Match`; delete returns `202 {operation}` after fence/redact/token-expiry/audit intent; `SourceDeleteWorker` performs leased object/index cleanup. Results were 5 unit + 3 PostgreSQL source API/schema/prep tests passing; OpenAPI/TypeScript regenerated. `docs/_scratch/p4-04-source-outline-delete-evidence.md` records commands and keeps Idempotency-Key transport, index envelopes (P5), member routes (P6/P9), and Settings/documents UI If-Match (P9).
 | P4-01 | DONE | P3 | source_documents/preparation_operations schema, opaque public document refs and secure storage adapter |
 | P4-02 | DONE | P4-01 | upload validation, domain deduplication and parser-kind freeze |
 | P4-03 | DONE | P4-02 | Docling/Reducto adapters and canonical blocks/images transaction |
-| P4-04 | NOT_STARTED | P4-03 | outline, operation, retry/cancel and delete APIs |
+| P4-04 | DONE | P4-03 | outline, operation, retry/cancel and delete APIs |
 | P5-01 | NOT_STARTED | P4 | index state/generation fields and worker claim loop |
 | P5-02 | NOT_STARTED | P5-01 | versioned canonical-block renderer and vendored LightRAG adapter |
 | P5-03 | NOT_STARTED | P5-02 | submit/poll/retry/cancel/delete and query-eligibility service |

@@ -245,6 +245,19 @@
         "title": "AdminDomainStatusResponse",
         "type": "object"
       },
+      "AdminSourceDetailResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/AdminSourceDto"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "AdminSourceDetailResponse",
+        "type": "object"
+      },
       "AdminSourceDto": {
         "additionalProperties": false,
         "properties": {
@@ -370,6 +383,80 @@
           "allowedActions"
         ],
         "title": "AdminSourceDto",
+        "type": "object"
+      },
+      "AdminSourceListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/AdminSourceDto"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sources"
+        ],
+        "title": "AdminSourceListResponse",
+        "type": "object"
+      },
+      "AdminSourceOperationsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/OperationDto"
+            },
+            "title": "Operations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "operations",
+          "nextCursor"
+        ],
+        "title": "AdminSourceOperationsResponse",
+        "type": "object"
+      },
+      "AdminSourceOutlineResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OutlineItemDto"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "AdminSourceOutlineResponse",
         "type": "object"
       },
       "AllowedAction": {
@@ -1581,6 +1668,58 @@
         "title": "OperationErrorDto",
         "type": "object"
       },
+      "OutlineItemDto": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "heading",
+              "figure",
+              "table"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Level"
+          },
+          "pageNumber": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Pagenumber"
+          }
+        },
+        "required": [
+          "kind",
+          "label"
+        ],
+        "title": "OutlineItemDto",
+        "type": "object"
+      },
       "ProviderCredentialRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1789,6 +1928,19 @@
           "runtimeSettings"
         ],
         "title": "RuntimeSettingsSnapshotResponse",
+        "type": "object"
+      },
+      "SourceOperationMutationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/OperationDto"
+          }
+        },
+        "required": [
+          "operation"
+        ],
+        "title": "SourceOperationMutationResponse",
         "type": "object"
       },
       "TurnDto": {
@@ -2239,9 +2391,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin List Sources Api V1 Admin Domains  Domainid  Sources Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AdminSourceListResponse"
                 }
               }
             },
@@ -2344,10 +2494,33 @@
               "title": "Sourceid",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
           }
         ],
         "responses": {
-          "204": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceOperationMutationResponse"
+                }
+              }
+            },
             "description": "Successful Response"
           },
           "422": {
@@ -2393,9 +2566,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Get Source Api V1 Admin Domains  Domainid  Sources  Sourceid  Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AdminSourceDetailResponse"
                 }
               }
             },
@@ -2439,6 +2610,22 @@
               "title": "Sourceid",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
           }
         ],
         "responses": {
@@ -2446,9 +2633,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Cancel Source Api V1 Admin Domains  Domainid  Sources  Sourceid  Cancel Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SourceOperationMutationResponse"
                 }
               }
             },
@@ -2498,11 +2683,7 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Cancel Source Index Api V1 Admin Domains  Domainid  Sources  Sourceid  Index Cancel Post",
-                  "type": "object"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -2551,11 +2732,7 @@
           "202": {
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Retry Source Index Api V1 Admin Domains  Domainid  Sources  Sourceid  Index Retry Post",
-                  "type": "object"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -2605,9 +2782,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Source Operations Api V1 Admin Domains  Domainid  Sources  Sourceid  Operations Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AdminSourceOperationsResponse"
                 }
               }
             },
@@ -2658,9 +2833,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Get Source Outline Api V1 Admin Domains  Domainid  Sources  Sourceid  Outline Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AdminSourceOutlineResponse"
                 }
               }
             },
@@ -2711,9 +2884,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Retry Source Api V1 Admin Domains  Domainid  Sources  Sourceid  Retry Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SourceOperationMutationResponse"
                 }
               }
             },

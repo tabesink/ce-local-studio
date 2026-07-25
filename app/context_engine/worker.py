@@ -12,7 +12,7 @@ from context_engine.db import create_db_engine, create_session_factory
 from context_engine.services.domains import DomainDeleteWorker
 from context_engine.services.indexing import SourceIndexWorker
 from context_engine.services.runtime_config import validate_config_encryption_key
-from context_engine.services.sources import SourcePreparationWorker
+from context_engine.services.sources import SourceDeleteWorker, SourcePreparationWorker
 from context_engine.services.structured_logging import configure_json_logging, safe_log
 
 logger = logging.getLogger(__name__)
@@ -22,6 +22,17 @@ WORKER_HEARTBEAT_FILENAME = ".ce-worker-heartbeat"
 
 class _RunOnceWorker(Protocol):
     def run_once(self, db: Any) -> bool: ...
+
+
+class _CompositeDeleteWorker:
+    """Prefer source cleanup, then domain delete, in one worker slot."""
+
+    def __init__(self, settings: Settings) -> None:
+        self._source = SourceDeleteWorker(settings)
+        self._domain = DomainDeleteWorker(settings)
+
+    def run_once(self, db: Any) -> bool:
+        return bool(self._source.run_once(db) or self._domain.run_once(db))
 
 
 def touch_worker_heartbeat(path: Path | str) -> None:
@@ -45,7 +56,7 @@ def build_workers(settings: Settings) -> dict[str, _RunOnceWorker]:
     return {
         "prep": SourcePreparationWorker(settings),
         "index": SourceIndexWorker(settings),
-        "delete": DomainDeleteWorker(settings),
+        "delete": _CompositeDeleteWorker(settings),
     }
 
 
