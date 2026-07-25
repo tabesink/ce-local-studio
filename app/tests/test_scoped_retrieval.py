@@ -211,8 +211,6 @@ def test_exact_schema_v2_mapping_uses_one_query_canonical_content_and_dense_firs
 
     mapped = map_retrieval_hits_to_internal_evidence(
         db,  # type: ignore[arg-type]
-        settings=_settings(),
-        domain=_domain(),
         hits=[
             ScopedRetrievalCandidate(text="[CE_BLOCK id=block-legacy order=1]\nlegacy"),
             ScopedRetrievalCandidate(

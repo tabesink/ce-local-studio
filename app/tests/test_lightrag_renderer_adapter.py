@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
@@ -42,7 +43,7 @@ class _BlockSession:
     def __init__(self, blocks: list[SourceBlock]) -> None:
         self._blocks = blocks
 
-    def scalars(self, _statement):  # noqa: ANN001
+    def scalars(self, _statement):
         return self._blocks
 
 
@@ -100,7 +101,7 @@ def test_renderer_emits_versioned_handoff_with_provenance_markers() -> None:
     assert f"{marker_b}\nSecond block" in rendered.text
     assert rendered.block_ids == ("block-a", "block-b")
     assert _rendered_block_ids(rendered.text) == ["block-a", "block-b"]
-    assert rendered.content_hash == __import__("hashlib").sha256(rendered.text.encode("utf-8")).hexdigest()
+    assert rendered.content_hash == hashlib.sha256(rendered.text.encode()).hexdigest()
 
     via_db = render_lightrag_input(_BlockSession(blocks), source)
     assert via_db == rendered

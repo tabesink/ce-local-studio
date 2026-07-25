@@ -23,12 +23,12 @@ from context_engine.models import (
 from context_engine.services.domains import (
     DomainRuntimeController,
     controller_from_settings,
-    domain_available,
 )
 from context_engine.services.indexing import (
+    LIGHTRAG_HANDOFF_SCHEMA_VERSION,
     SourceIndexError,
     index_client_from_settings,
-    source_is_query_eligible,
+    source_has_current_index_identity,
 )
 
 EVIDENCE_RESULT_FOUND = "evidence_found"
@@ -37,12 +37,21 @@ MAX_EVIDENCE_EXCERPT_CHARS = 500
 MAX_SOURCE_LABEL_CHARS = 255
 _RESERVED_PROVENANCE_TOKEN_RE = re.compile(r"\[CE_(?:SOURCE|BLOCK)\b")
 _CE_BLOCK_MARKER_RE = re.compile(
-    r"^\[CE_BLOCK schema=2 source_id=([^\]\s]+) source_sha256=([^\]\s]{64}) "
+    rf"^\[CE_BLOCK schema={re.escape(LIGHTRAG_HANDOFF_SCHEMA_VERSION)} "
+    r"source_id=([^\]\s]+) source_sha256=([^\]\s]{64}) "
     r"block_id=([^\]\s]+) order=([1-9]\d*)\]$"
 )
 _RETRIEVAL_GATE_LOCK = threading.Lock()
 _RETRIEVAL_GLOBAL_GATES: dict[int, threading.BoundedSemaphore] = {}
-_RETRIEVAL_DOMAIN_GATES: dict[tuple[int, str], threading.BoundedSemaphore] = {}
+
+
+@dataclass
+class _DomainGateEntry:
+    gate: threading.BoundedSemaphore
+    users: int = 0
+
+
+_RETRIEVAL_DOMAIN_GATES: dict[tuple[int, str], _DomainGateEntry] = {}
 
 
 class EvidenceRetrievalError(Exception):
@@ -127,10 +136,6 @@ class ScopedRetrievalPort(Protocol):
     ) -> ScopedRetrievalResult: ...
 
 
-# Kept as a source-compatible name until the P7 orchestration seam is rewired.
-RetrievalClient = ScopedRetrievalPort
-
-
 def _retrieval_failure(code: str) -> ScopedRetrievalError:
     messages = {
         "retrieval_saturated": "Scoped retrieval capacity is unavailable.",
@@ -141,16 +146,28 @@ def _retrieval_failure(code: str) -> ScopedRetrievalError:
     return ScopedRetrievalError(code, messages[code])
 
 
-def _retrieval_gates(settings: Settings, domain_id: str) -> tuple[threading.BoundedSemaphore, threading.BoundedSemaphore]:
+def _retrieval_gates(
+    settings: Settings,
+    domain_id: str,
+) -> tuple[threading.BoundedSemaphore, tuple[int, str], _DomainGateEntry]:
     global_limit = settings.retrieval_global_concurrency
     domain_limit = settings.retrieval_per_domain_concurrency
+    domain_key = (domain_limit, domain_id)
     with _RETRIEVAL_GATE_LOCK:
         global_gate = _RETRIEVAL_GLOBAL_GATES.setdefault(global_limit, threading.BoundedSemaphore(global_limit))
-        domain_gate = _RETRIEVAL_DOMAIN_GATES.setdefault(
-            (domain_limit, domain_id),
-            threading.BoundedSemaphore(domain_limit),
+        domain_entry = _RETRIEVAL_DOMAIN_GATES.setdefault(
+            domain_key,
+            _DomainGateEntry(threading.BoundedSemaphore(domain_limit)),
         )
-    return global_gate, domain_gate
+        domain_entry.users += 1
+    return global_gate, domain_key, domain_entry
+
+
+def _release_domain_gate_reference(domain_key: tuple[int, str], domain_entry: _DomainGateEntry) -> None:
+    with _RETRIEVAL_GATE_LOCK:
+        domain_entry.users -= 1
+        if domain_entry.users == 0 and _RETRIEVAL_DOMAIN_GATES.get(domain_key) is domain_entry:
+            del _RETRIEVAL_DOMAIN_GATES[domain_key]
 
 
 def _acquire_before(gate: threading.BoundedSemaphore, deadline: float) -> bool:
@@ -195,15 +212,16 @@ def retrieve_bounded_candidates(
         raise _retrieval_failure("retrieval_malformed")
 
     deadline = time.monotonic() + settings.retrieval_timeout_seconds
-    global_gate, domain_gate = _retrieval_gates(settings, domain.id)
+    global_gate, domain_key, domain_entry = _retrieval_gates(settings, domain.id)
+    domain_gate = domain_entry.gate
     global_acquired = False
     domain_acquired = False
     try:
-        global_acquired = _acquire_before(global_gate, deadline)
-        if not global_acquired:
-            raise _retrieval_failure("retrieval_saturated")
         domain_acquired = _acquire_before(domain_gate, deadline)
         if not domain_acquired:
+            raise _retrieval_failure("retrieval_saturated")
+        global_acquired = _acquire_before(global_gate, deadline)
+        if not global_acquired:
             raise _retrieval_failure("retrieval_saturated")
         try:
             result = client.retrieve(domain, question=question, deadline=deadline)
@@ -231,6 +249,7 @@ def retrieve_bounded_candidates(
             domain_gate.release()
         if global_acquired:
             global_gate.release()
+        _release_domain_gate_reference(domain_key, domain_entry)
 
 
 def parse_ce_block_marker(text: str) -> CEBlockMarker | None:
@@ -287,7 +306,7 @@ def resolve_available_domain(
     if domain.state != DOMAIN_STATE_RUNNING or _active_domain_operation_exists(db, domain.id):
         raise EvidenceRetrievalError(409, "domain_state_conflict", "Domain lifecycle state does not allow this operation.")
     controller = controller or controller_from_settings(settings)
-    if not domain_available(db, domain, controller):
+    if not controller.health(domain).healthy:
         raise EvidenceRetrievalError(502, "domain_runtime_unavailable", "Knowledge domain runtime is unavailable.")
     return domain, controller
 
@@ -295,18 +314,22 @@ def resolve_available_domain(
 def eligible_sources_for_domain(
     db: Session,
     *,
-    settings: Settings,
     domain: Domain,
-    controller: DomainRuntimeController,
 ) -> list[SourceDocument]:
     sources = list(
         db.scalars(
             select(SourceDocument)
-            .where(SourceDocument.domain_id == domain.id)
+            .where(
+                SourceDocument.domain_id == domain.id,
+                SourceDocument.state == SOURCE_STATE_PREPARED,
+                SourceDocument.index_state == SOURCE_INDEX_STATE_READY,
+                SourceDocument.index_request_id.is_not(None),
+                SourceDocument.index_content_hash.is_not(None),
+            )
             .order_by(SourceDocument.created_at, SourceDocument.id)
         )
     )
-    return [source for source in sources if source_is_query_eligible(db, source, domain, settings=settings, controller=controller)]
+    return [source for source in sources if source_has_current_index_identity(source)]
 
 
 def freeze_retrieval_scope(
@@ -338,20 +361,14 @@ def freeze_retrieval_scope(
 def map_retrieval_hits_to_evidence(
     db: Session,
     *,
-    settings: Settings,
-    domain: Domain,
     hits: tuple[ScopedRetrievalCandidate, ...] | list[ScopedRetrievalCandidate],
-    controller: DomainRuntimeController | None = None,
-    frozen_scope: FrozenRetrievalScope | None = None,
+    frozen_scope: FrozenRetrievalScope,
 ) -> list[EvidenceItem]:
     return [
         EvidenceItem(excerpt=item.excerpt, source_label=item.source_label)
         for item in map_retrieval_hits_to_internal_evidence(
             db,
-            settings=settings,
-            domain=domain,
             hits=hits,
-            controller=controller,
             frozen_scope=frozen_scope,
         )
     ]
@@ -360,33 +377,22 @@ def map_retrieval_hits_to_evidence(
 def map_retrieval_hits_to_internal_evidence(
     db: Session,
     *,
-    settings: Settings,
-    domain: Domain,
     hits: tuple[ScopedRetrievalCandidate, ...] | list[ScopedRetrievalCandidate],
-    controller: DomainRuntimeController | None = None,
-    frozen_scope: FrozenRetrievalScope | None = None,
+    frozen_scope: FrozenRetrievalScope,
 ) -> list[InternalMappedEvidence]:
-    controller = controller or controller_from_settings(settings)
-    if frozen_scope is None:
-        current_sources = eligible_sources_for_domain(
-            db,
-            settings=settings,
-            domain=domain,
-            controller=controller,
-        )
-        frozen_scope = freeze_retrieval_scope(domain, current_sources)
     if not frozen_scope.sources:
         return []
 
-    parsed_candidates: list[tuple[ScopedRetrievalCandidate, CEBlockMarker]] = []
+    parsed_markers: list[CEBlockMarker] = []
     for hit in hits:
         marker = parse_ce_block_marker(hit.text)
         if marker is None:
             continue
-        parsed_candidates.append((hit, marker))
-    if not parsed_candidates:
+        parsed_markers.append(marker)
+    if not parsed_markers:
         return []
 
+    candidate_source_ids = {marker.source_id for marker in parsed_markers}
     frozen_rows = [
         (
             frozen.source_document_id,
@@ -397,8 +403,11 @@ def map_retrieval_hits_to_internal_evidence(
             frozen.original_sha256,
         )
         for frozen in frozen_scope.sources
+        if frozen.source_document_id in candidate_source_ids
     ]
-    block_ids = tuple({marker.block_id for _, marker in parsed_candidates})
+    if not frozen_rows:
+        return []
+    block_ids = tuple({marker.block_id for marker in parsed_markers})
     active_operation = exists(
         select(DomainOperation.id).where(
             DomainOperation.domain_id == Domain.id,
@@ -435,7 +444,7 @@ def map_retrieval_hits_to_internal_evidence(
 
     evidence: list[InternalMappedEvidence] = []
     seen_blocks: set[str] = set()
-    for _hit, marker in parsed_candidates:
+    for marker in parsed_markers:
         if marker.block_id in seen_blocks:
             continue
         current = current_by_block_id.get(marker.block_id)
@@ -470,11 +479,11 @@ def retrieve_scoped_evidence(
     settings: Settings,
     domain_id: str,
     question: str,
-    client: RetrievalClient | None = None,
+    client: ScopedRetrievalPort | None = None,
     controller: DomainRuntimeController | None = None,
 ) -> dict[str, object]:
     domain, controller = resolve_available_domain(db, settings=settings, domain_id=domain_id, controller=controller)
-    eligible_sources = eligible_sources_for_domain(db, settings=settings, domain=domain, controller=controller)
+    eligible_sources = eligible_sources_for_domain(db, domain=domain)
     if not eligible_sources:
         raise EvidenceRetrievalError(
             409,
@@ -497,10 +506,7 @@ def retrieve_scoped_evidence(
 
     evidence = map_retrieval_hits_to_evidence(
         db,
-        settings=settings,
-        domain=domain,
         hits=hits,
-        controller=controller,
         frozen_scope=frozen_scope,
     )
     if not evidence:
