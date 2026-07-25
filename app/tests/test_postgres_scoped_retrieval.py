@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import threading
@@ -25,12 +26,17 @@ from context_engine.models import (
     SourceDocument,
 )
 from context_engine.services.evidence import (
+    EVIDENCE_RESULT_FOUND,
     EVIDENCE_RESULT_NO_CONTEXT,
+    EvidenceRetrievalError,
     ScopedRetrievalCandidate,
     ScopedRetrievalResult,
     retrieve_scoped_evidence,
 )
-from context_engine.services.indexing import compute_index_request_id
+from context_engine.services.indexing import (
+    compute_index_request_id,
+    render_lightrag_input,
+)
 from context_engine.services.runtime_config import seed_runtime_config
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -103,6 +109,26 @@ class _BarrierClient:
         return ScopedRetrievalResult(candidates=(ScopedRetrievalCandidate(text=self._candidate),))
 
 
+class _StaticClient:
+    def __init__(self, candidate: str) -> None:
+        self._candidate = candidate
+        self.calls = 0
+
+    def retrieve(self, domain: Domain, *, question: str, deadline: float) -> ScopedRetrievalResult:
+        self.calls += 1
+        return ScopedRetrievalResult(candidates=(ScopedRetrievalCandidate(text=self._candidate),))
+
+
+class _ConcurrentClient:
+    def __init__(self, barrier: threading.Barrier, candidate: str) -> None:
+        self._barrier = barrier
+        self._candidate = candidate
+
+    def retrieve(self, domain: Domain, *, question: str, deadline: float) -> ScopedRetrievalResult:
+        self._barrier.wait()
+        return ScopedRetrievalResult(candidates=(ScopedRetrievalCandidate(text=self._candidate),))
+
+
 @pytest.mark.parametrize("fence", ["stop_restart", "reindex_ready", "delete", "replace"])
 def test_p6_01_post_call_snapshot_rejects_committed_fences(tmp_path: Path, fence: str) -> None:
     """C-01: a committed lifecycle/source fence during retrieval cannot map stale provenance."""
@@ -157,11 +183,6 @@ def test_p6_01_post_call_snapshot_rejects_committed_fences(tmp_path: Path, fence
                     )
                     db.add(source)
                     db.flush()
-                    source.index_request_id = compute_index_request_id(
-                        source.id,
-                        source.index_generation,
-                        source.index_content_hash or "",
-                    )
                     block = SourceBlock(
                         source_document_id=source.id,
                         domain_id=domain.id,
@@ -170,6 +191,13 @@ def test_p6_01_post_call_snapshot_rejects_committed_fences(tmp_path: Path, fence
                         canonical_markdown="Current canonical content",
                     )
                     db.add(block)
+                    db.flush()
+                    source.index_content_hash = render_lightrag_input(db, source).content_hash
+                    source.index_request_id = compute_index_request_id(
+                        source.id,
+                        source.index_generation,
+                        source.index_content_hash,
+                    )
                     db.commit()
                     marker = (
                         f"[CE_BLOCK schema=2 source_id={source.id} source_sha256={source.original_sha256} "
@@ -239,6 +267,195 @@ def test_p6_01_post_call_snapshot_rejects_committed_fences(tmp_path: Path, fence
                 assert not retrieval_thread.is_alive()
                 assert failures == []
                 assert results == [{"result": EVIDENCE_RESULT_NO_CONTEXT, "evidence": []}]
+            finally:
+                engine.dispose()
+    finally:
+        admin_engine.dispose()
+
+
+def test_p6_01_postgresql_success_schema_rollout_and_concurrent_isolation(tmp_path: Path) -> None:
+    """C-01/C-02: current v2 rows map; v1/wrong-domain rows fail closed; calls stay isolated."""
+    admin_url = _required_admin_url()
+    admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
+    try:
+        _assert_postgresql_16(admin_engine)
+        with _disposable_database(admin_engine, admin_url, "mapping") as database_url:
+            config = Config(str(APP_ROOT / "alembic.ini"))
+            config.set_main_option("script_location", str(APP_ROOT / "migrations"))
+            config.set_main_option(
+                "sqlalchemy.url",
+                database_url.render_as_string(hide_password=False).replace("%", "%%"),
+            )
+            command.upgrade(config, "head")
+            settings = Settings(
+                database_url=database_url.render_as_string(hide_password=False),
+                testing=True,
+                domain_runtime_controller_kind="local",
+                domain_runtime_root=str(tmp_path / "runtimes"),
+            )
+            engine = create_db_engine(settings)
+            sessions = create_session_factory(engine)
+            try:
+                with sessions() as db:
+                    seed_runtime_config(db)
+                    domain = Domain(
+                        id="domain-mapping",
+                        display_name="Scoped Retrieval",
+                        state=DOMAIN_STATE_RUNNING,
+                        embedding_profile_id="openai-embedding-default",
+                        runtime_instance_id="runtime-current",
+                        control_generation=2,
+                    )
+                    db.add(domain)
+                    db.flush()
+                    source = SourceDocument(
+                        domain_id=domain.id,
+                        public_ref=f"docref-{uuid4().hex[:12]}",
+                        original_filename="manual.pdf",
+                        content_type="application/pdf",
+                        original_sha256="b" * 64,
+                        original_size_bytes=128,
+                        original_object_key=f"obj/{uuid4().hex}",
+                        state=SOURCE_STATE_PREPARED,
+                        parser_kind="docling",
+                        preparation_generation=2,
+                        index_state=SOURCE_INDEX_STATE_READY,
+                        index_generation=4,
+                        index_updated_at=utc_now(),
+                    )
+                    db.add(source)
+                    db.flush()
+                    blocks = [
+                        SourceBlock(
+                            source_document_id=source.id,
+                            domain_id=domain.id,
+                            source_order=order,
+                            kind="text",
+                            canonical_markdown=f"Canonical content {order}",
+                        )
+                        for order in (1, 2)
+                    ]
+                    db.add_all(blocks)
+                    db.flush()
+                    v2_hash = render_lightrag_input(db, source).content_hash
+                    source.index_content_hash = v2_hash
+                    source.index_request_id = compute_index_request_id(
+                        source.id,
+                        source.index_generation,
+                        v2_hash,
+                    )
+                    db.commit()
+                    domain_id = domain.id
+                    source_id = source.id
+                    source_sha256 = source.original_sha256
+                    block_ids = tuple(block.id for block in blocks)
+
+                markers = tuple(
+                    f"[CE_BLOCK schema=2 source_id={source_id} source_sha256={source_sha256} "
+                    f"block_id={block_id} order={order}]\nprivate candidate {order}"
+                    for order, block_id in enumerate(block_ids, start=1)
+                )
+                with sessions() as db:
+                    found = retrieve_scoped_evidence(
+                        db,
+                        settings=settings,
+                        domain_id=domain_id,
+                        question="current",
+                        client=_StaticClient(markers[0]),
+                        controller=_HealthyController(),  # type: ignore[arg-type]
+                    )
+                assert found == {
+                    "result": EVIDENCE_RESULT_FOUND,
+                    "evidence": [{"excerpt": "Canonical content 1", "sourceLabel": "manual.pdf"}],
+                }
+
+                wrong_domain = markers[0].replace(f"source_id={source_id}", "source_id=another-domain-source")
+                with sessions() as db:
+                    no_context = retrieve_scoped_evidence(
+                        db,
+                        settings=settings,
+                        domain_id=domain_id,
+                        question="wrong domain",
+                        client=_StaticClient(wrong_domain),
+                        controller=_HealthyController(),  # type: ignore[arg-type]
+                    )
+                assert no_context == {"result": EVIDENCE_RESULT_NO_CONTEXT, "evidence": []}
+
+                legacy_text = (
+                    f"[CE_SOURCE schema=1 source_id={source_id} sha256={source_sha256}]\n\n"
+                    f"[CE_BLOCK id={block_ids[0]} order=1]\nCanonical content 1\n\n"
+                    f"[CE_BLOCK id={block_ids[1]} order=2]\nCanonical content 2"
+                )
+                legacy_hash = hashlib.sha256(legacy_text.encode("utf-8")).hexdigest()
+                with sessions() as db:
+                    current_source = db.get(SourceDocument, source_id)
+                    assert current_source is not None
+                    current_source.index_content_hash = legacy_hash
+                    current_source.index_request_id = compute_index_request_id(
+                        current_source.id,
+                        current_source.index_generation,
+                        legacy_hash,
+                    )
+                    db.commit()
+                legacy_client = _StaticClient(markers[0])
+                with sessions() as db, pytest.raises(EvidenceRetrievalError) as legacy:
+                    retrieve_scoped_evidence(
+                        db,
+                        settings=settings,
+                        domain_id=domain_id,
+                        question="legacy",
+                        client=legacy_client,
+                        controller=_HealthyController(),  # type: ignore[arg-type]
+                    )
+                assert legacy.value.code == "domain_no_eligible_sources"
+                assert legacy_client.calls == 0
+
+                with sessions() as db:
+                    current_source = db.get(SourceDocument, source_id)
+                    assert current_source is not None
+                    current_source.index_content_hash = v2_hash
+                    current_source.index_request_id = compute_index_request_id(
+                        current_source.id,
+                        current_source.index_generation,
+                        v2_hash,
+                    )
+                    db.commit()
+
+                barrier = threading.Barrier(2)
+                results: dict[str, dict[str, object]] = {}
+                failures: list[BaseException] = []
+
+                def run_call(label: str, marker: str) -> None:
+                    try:
+                        with sessions() as db:
+                            results[label] = retrieve_scoped_evidence(
+                                db,
+                                settings=settings,
+                                domain_id=domain_id,
+                                question=label,
+                                client=_ConcurrentClient(barrier, marker),
+                                controller=_HealthyController(),  # type: ignore[arg-type]
+                            )
+                    except BaseException as exc:  # noqa: BLE001  # pragma: no cover - surfaced after join
+                        failures.append(exc)
+
+                threads = [
+                    threading.Thread(target=run_call, args=(f"call-{index}", marker), daemon=True)
+                    for index, marker in enumerate(markers, start=1)
+                ]
+                for thread in threads:
+                    thread.start()
+                for thread in threads:
+                    thread.join(timeout=10)
+                    assert not thread.is_alive()
+
+                assert failures == []
+                assert results["call-1"]["evidence"] == [
+                    {"excerpt": "Canonical content 1", "sourceLabel": "manual.pdf"}
+                ]
+                assert results["call-2"]["evidence"] == [
+                    {"excerpt": "Canonical content 2", "sourceLabel": "manual.pdf"}
+                ]
             finally:
                 engine.dispose()
     finally:

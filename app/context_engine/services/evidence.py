@@ -28,6 +28,7 @@ from context_engine.services.indexing import (
     LIGHTRAG_HANDOFF_SCHEMA_VERSION,
     SourceIndexError,
     index_client_from_settings,
+    render_blocks_to_lightrag_handoff,
     source_has_current_index_identity,
 )
 
@@ -101,6 +102,12 @@ class FrozenRetrievalScope:
     control_generation: int
     runtime_instance_id: str
     sources: tuple[FrozenSourceIdentity, ...]
+
+
+@dataclass(frozen=True)
+class InternalScopedRetrievalResult:
+    had_eligible_sources: bool
+    evidence: tuple[InternalMappedEvidence, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -190,8 +197,10 @@ def normalize_scoped_retrieval_result(
             raise _retrieval_failure("retrieval_malformed")
         try:
             candidate_bytes = len(candidate.text.encode("utf-8"))
-        except UnicodeEncodeError as exc:
-            raise _retrieval_failure("retrieval_malformed") from exc
+        except UnicodeEncodeError:
+            candidate_bytes = None
+        if candidate_bytes is None:
+            raise _retrieval_failure("retrieval_malformed")
         aggregate_bytes += candidate_bytes
         if (
             candidate_bytes > settings.retrieval_max_candidate_bytes
@@ -199,6 +208,33 @@ def normalize_scoped_retrieval_result(
         ):
             raise _retrieval_failure("retrieval_malformed")
     return bounded
+
+
+def _call_scoped_retrieval(
+    client: ScopedRetrievalPort,
+    domain: Domain,
+    *,
+    question: str,
+    deadline: float,
+) -> tuple[object | None, str | None]:
+    try:
+        return client.retrieve(domain, question=question, deadline=deadline), None
+    except ScopedRetrievalError as exc:
+        if exc.code in {
+            "retrieval_saturated",
+            "retrieval_timeout",
+            "retrieval_unavailable",
+            "retrieval_malformed",
+        }:
+            return None, exc.code
+        return None, "retrieval_unavailable"
+    except SourceIndexError as exc:
+        code = "retrieval_timeout" if exc.code == "source_index_timeout" else "retrieval_unavailable"
+        return None, code
+    except TimeoutError:
+        return None, "retrieval_timeout"
+    except Exception:  # noqa: BLE001 - dependency failures cross a closed safe-error boundary
+        return None, "retrieval_unavailable"
 
 
 def retrieve_bounded_candidates(
@@ -223,24 +259,14 @@ def retrieve_bounded_candidates(
         global_acquired = _acquire_before(global_gate, deadline)
         if not global_acquired:
             raise _retrieval_failure("retrieval_saturated")
-        try:
-            result = client.retrieve(domain, question=question, deadline=deadline)
-        except ScopedRetrievalError as exc:
-            if exc.code not in {
-                "retrieval_saturated",
-                "retrieval_timeout",
-                "retrieval_unavailable",
-                "retrieval_malformed",
-            }:
-                raise _retrieval_failure("retrieval_unavailable") from exc
-            raise _retrieval_failure(exc.code) from exc
-        except SourceIndexError as exc:
-            code = "retrieval_timeout" if exc.code == "source_index_timeout" else "retrieval_unavailable"
-            raise _retrieval_failure(code) from exc
-        except TimeoutError as exc:
-            raise _retrieval_failure("retrieval_timeout") from exc
-        except Exception as exc:
-            raise _retrieval_failure("retrieval_unavailable") from exc
+        result, failure_code = _call_scoped_retrieval(
+            client,
+            domain,
+            question=question,
+            deadline=deadline,
+        )
+        if failure_code is not None:
+            raise _retrieval_failure(failure_code)
         if time.monotonic() > deadline:
             raise _retrieval_failure("retrieval_timeout")
         return normalize_scoped_retrieval_result(result, settings=settings)
@@ -316,20 +342,44 @@ def eligible_sources_for_domain(
     *,
     domain: Domain,
 ) -> list[SourceDocument]:
-    sources = list(
-        db.scalars(
-            select(SourceDocument)
-            .where(
-                SourceDocument.domain_id == domain.id,
-                SourceDocument.state == SOURCE_STATE_PREPARED,
-                SourceDocument.index_state == SOURCE_INDEX_STATE_READY,
-                SourceDocument.index_request_id.is_not(None),
-                SourceDocument.index_content_hash.is_not(None),
-            )
-            .order_by(SourceDocument.created_at, SourceDocument.id)
+    rows = db.execute(
+        select(SourceDocument, SourceBlock)
+        .outerjoin(SourceBlock, SourceBlock.source_document_id == SourceDocument.id)
+        .where(
+            SourceDocument.domain_id == domain.id,
+            SourceDocument.state == SOURCE_STATE_PREPARED,
+            SourceDocument.index_state == SOURCE_INDEX_STATE_READY,
+            SourceDocument.index_request_id.is_not(None),
+            SourceDocument.index_content_hash.is_not(None),
         )
-    )
-    return [source for source in sources if source_has_current_index_identity(source)]
+        .order_by(
+            SourceDocument.created_at,
+            SourceDocument.id,
+            SourceBlock.source_order,
+            SourceBlock.id,
+        )
+    ).all()
+    sources_with_blocks: dict[str, tuple[SourceDocument, list[SourceBlock]]] = {}
+    for source, block in rows:
+        current = sources_with_blocks.setdefault(source.id, (source, []))
+        if block is not None:
+            current[1].append(block)
+
+    eligible: list[SourceDocument] = []
+    for source, blocks in sources_with_blocks.values():
+        if not source_has_current_index_identity(source):
+            continue
+        try:
+            rendered = render_blocks_to_lightrag_handoff(
+                source_id=source.id,
+                original_sha256=source.original_sha256,
+                blocks=blocks,
+            )
+        except SourceIndexError:
+            continue
+        if rendered.content_hash == source.index_content_hash:
+            eligible.append(source)
+    return eligible
 
 
 def freeze_retrieval_scope(
@@ -356,22 +406,6 @@ def freeze_retrieval_scope(
         runtime_instance_id=domain.runtime_instance_id,
         sources=tuple(frozen_sources),
     )
-
-
-def map_retrieval_hits_to_evidence(
-    db: Session,
-    *,
-    hits: tuple[ScopedRetrievalCandidate, ...] | list[ScopedRetrievalCandidate],
-    frozen_scope: FrozenRetrievalScope,
-) -> list[EvidenceItem]:
-    return [
-        EvidenceItem(excerpt=item.excerpt, source_label=item.source_label)
-        for item in map_retrieval_hits_to_internal_evidence(
-            db,
-            hits=hits,
-            frozen_scope=frozen_scope,
-        )
-    ]
 
 
 def map_retrieval_hits_to_internal_evidence(
@@ -473,6 +507,41 @@ def map_retrieval_hits_to_internal_evidence(
     return evidence
 
 
+def retrieve_internal_scoped_evidence(
+    db: Session,
+    *,
+    settings: Settings,
+    domain_id: str,
+    question: str,
+    client: ScopedRetrievalPort | None = None,
+    controller: DomainRuntimeController | None = None,
+) -> InternalScopedRetrievalResult:
+    domain, controller = resolve_available_domain(db, settings=settings, domain_id=domain_id, controller=controller)
+    eligible_sources = eligible_sources_for_domain(db, domain=domain)
+    if not eligible_sources:
+        return InternalScopedRetrievalResult(had_eligible_sources=False)
+
+    frozen_scope = freeze_retrieval_scope(domain, eligible_sources)
+    db.commit()
+    client = client or index_client_from_settings(settings, controller)
+    hits = retrieve_bounded_candidates(
+        settings=settings,
+        domain=domain,
+        question=question,
+        client=client,
+    )
+    return InternalScopedRetrievalResult(
+        had_eligible_sources=True,
+        evidence=tuple(
+            map_retrieval_hits_to_internal_evidence(
+                db,
+                hits=hits,
+                frozen_scope=frozen_scope,
+            )
+        ),
+    )
+
+
 def retrieve_scoped_evidence(
     db: Session,
     *,
@@ -482,33 +551,24 @@ def retrieve_scoped_evidence(
     client: ScopedRetrievalPort | None = None,
     controller: DomainRuntimeController | None = None,
 ) -> dict[str, object]:
-    domain, controller = resolve_available_domain(db, settings=settings, domain_id=domain_id, controller=controller)
-    eligible_sources = eligible_sources_for_domain(db, domain=domain)
-    if not eligible_sources:
+    try:
+        result = retrieve_internal_scoped_evidence(
+            db,
+            settings=settings,
+            domain_id=domain_id,
+            question=question,
+            client=client,
+            controller=controller,
+        )
+    except ScopedRetrievalError as exc:
+        raise EvidenceRetrievalError(502, "domain_runtime_unavailable", "Knowledge domain runtime is unavailable.") from exc
+    if not result.had_eligible_sources:
         raise EvidenceRetrievalError(
             409,
             "domain_no_eligible_sources",
             "This knowledge domain has no eligible sources for retrieval.",
         )
-
-    frozen_scope = freeze_retrieval_scope(domain, eligible_sources)
-    db.commit()
-    client = client or index_client_from_settings(settings, controller)
-    try:
-        hits = retrieve_bounded_candidates(
-            settings=settings,
-            domain=domain,
-            question=question,
-            client=client,
-        )
-    except (SourceIndexError, ScopedRetrievalError) as exc:
-        raise EvidenceRetrievalError(502, "domain_runtime_unavailable", "Knowledge domain runtime is unavailable.") from exc
-
-    evidence = map_retrieval_hits_to_evidence(
-        db,
-        hits=hits,
-        frozen_scope=frozen_scope,
-    )
+    evidence = result.evidence
     if not evidence:
         return {"result": EVIDENCE_RESULT_NO_CONTEXT, "evidence": []}
     return {

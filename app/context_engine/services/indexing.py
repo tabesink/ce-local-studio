@@ -401,26 +401,33 @@ class LightRAGClient:
                     if hasattr(coro, "close"):
                         coro.close()
                     raise TimeoutError
-                return loop.run_until_complete(asyncio.wait_for(coro, timeout=remaining))
+                task = loop.create_task(coro)
+                done, _ = loop.run_until_complete(asyncio.wait({task}, timeout=remaining))
+                if task not in done:
+                    task.cancel()
+                    raise TimeoutError
+                return task.result()
             except TimeoutError as exc:
                 raise SourceIndexError(504, "source_index_timeout", "Source index runtime timed out.") from exc
             finally:
-                # Bound cancel/cleanup so a hung finalize cannot hold the process lock forever.
-                cleanup_budget = 2.0
+                # Cleanup may consume only the original call budget. Closing the
+                # private loop prevents a cancellation-resistant task from
+                # retaining the process-global LightRAG lock after the deadline.
                 pending = [task for task in asyncio.all_tasks(loop) if not task.done()]
                 for task in pending:
                     task.cancel()
                 if pending:
-                    try:
-                        loop.run_until_complete(
-                            asyncio.wait_for(asyncio.gather(*pending, return_exceptions=True), timeout=cleanup_budget)
-                        )
-                    except TimeoutError:
-                        pass
-                try:
-                    loop.run_until_complete(asyncio.wait_for(loop.shutdown_asyncgens(), timeout=cleanup_budget))
-                except TimeoutError:
-                    pass
+                    loop.run_until_complete(asyncio.wait(pending, timeout=0))
+                pending = [task for task in pending if not task.done()]
+                remaining = call_deadline - time.monotonic()
+                if pending and remaining > 0:
+                    loop.run_until_complete(asyncio.wait(pending, timeout=remaining))
+                remaining = call_deadline - time.monotonic()
+                if remaining > 0:
+                    shutdown_task = loop.create_task(loop.shutdown_asyncgens())
+                    loop.run_until_complete(asyncio.wait({shutdown_task}, timeout=remaining))
+                    if not shutdown_task.done():
+                        shutdown_task.cancel()
                 asyncio.set_event_loop(None)
                 loop.close()
         finally:
