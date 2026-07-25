@@ -4,7 +4,7 @@ Date: 2026-07-25
 
 Owner: P6-01
 
-Status: IN_PROGRESS
+Status: DONE - implemented and proven 2026-07-25
 
 Requirements and cases: FR-05; A-08; C-01; C-02; DRIFT-27; P6-01 in
 `docs/master-build-plan.md`; `docs/contracts/document-and-evidence-contract.md`;

@@ -103,7 +103,17 @@ This is the machine-read D0 boundary. The table is sorted bytewise by record cla
 | scan-file | docs/plans/2026-07-22-001-docs-brownfield-phase-contract-alignment-plan.md | mixed-removal | approved D0 execution plan |
 | scan-file | docs/plans/2026-07-22-002-feat-lean-agent-shell-umbrella-plan.md | mixed-removal | subordinate chat child |
 | scan-file | docs/plans/2026-07-22-003-feat-ce-frontend-factory-plan.md | active | subordinate frontend child |
+| scan-file | docs/plans/2026-07-25-001-feat-scoped-retrieval-provenance-plan.md | active | P6-01 scoped retrieval plan |
 | scan-file | docs/prd.md | active | product authority |
 | scan-file | docs/quality/definition-of-done.md | active | completion gates |
 | scan-file | docs/quality/seeded-demo-and-test-data.md | active | deterministic fixture contract |
+| scan-file | docs/residual-review-findings/feat-p2-02-credential-encryption-dto.md | active | accepted review residuals |
+| scan-file | docs/residual-review-findings/feat-p2-03-embedding-validation-defaults.md | active | accepted review residuals |
+| scan-file | docs/residual-review-findings/feat-p4-03-parser-adapters-canonical-blocks.md | active | accepted review residuals |
+| scan-file | docs/residual-review-findings/feat-p4-04-source-outline-delete-apis.md | active | accepted review residuals |
+| scan-file | docs/residual-review-findings/feat-p5-01-index-state-worker-claim.md | active | accepted review residuals |
+| scan-file | docs/residual-review-findings/feat-p5-02-lightrag-renderer-adapter.md | active | accepted review residuals |
+| scan-file | docs/residual-review-findings/feat-p5-03-index-eligibility.md | active | accepted review residuals |
+| scan-file | docs/residual-review-findings/main-7de9a4a.md | active | accepted review residuals |
+| scan-file | docs/residual-review-findings/main-e187555.md | active | accepted review residuals |
 | scan-file | docs/tech-stack.md | active | technology authority |
