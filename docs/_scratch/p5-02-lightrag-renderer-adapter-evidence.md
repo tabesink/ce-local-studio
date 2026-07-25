@@ -23,6 +23,10 @@ Status: DONE - implemented and proven 2026-07-25
 - Native `LightRAGClient._run` bounds lifecycle work with
   `CE_SOURCE_INDEX_TIMEOUT_SECONDS` (default 120) via `asyncio.wait_for` and
   maps overrun to safe `504 source_index_timeout` (DRIFT-27 timeout half).
+  Cancel/cleanup under the process lock is also budgeted (2s) so hangy finalize
+  cannot retain the lock indefinitely.
+- Defaults keep `CE_SOURCE_INDEX_LEASE_SECONDS` (180) strictly greater than the
+  index timeout (120), mirrored by Settings fail-closed validation.
 - Process-wide native lifecycle lock retained until per-domain concurrency is
   separately proven.
 
@@ -40,7 +44,7 @@ Status: DONE - implemented and proven 2026-07-25
 ```text
 cd app
 python -m pytest tests/test_lightrag_renderer_adapter.py -q
-# 4 passed
+# 5 passed
 ```
 
 ## Residuals / deferred

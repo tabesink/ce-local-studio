@@ -187,6 +187,7 @@ def test_native_adapter_timeout_fails_closed() -> None:
     settings = Settings(
         database_url="sqlite+pysqlite:///:memory:",
         testing=True,
+        source_index_lease_seconds=30,
         source_index_timeout_seconds=1,
         lightrag_client_kind="native",
     )
@@ -201,3 +202,13 @@ def test_native_adapter_timeout_fails_closed() -> None:
     assert timed_out.value.code == "source_index_timeout"
     assert "timed out" in timed_out.value.message.lower()
     assert "traceback" not in timed_out.value.message.lower()
+
+
+def test_settings_require_index_lease_longer_than_timeout() -> None:
+    with pytest.raises(ValueError, match="source_index_lease_seconds must exceed"):
+        Settings(
+            database_url="sqlite+pysqlite:///:memory:",
+            testing=True,
+            source_index_lease_seconds=60,
+            source_index_timeout_seconds=120,
+        )

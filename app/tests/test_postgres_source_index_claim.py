@@ -111,6 +111,7 @@ def _settings(database_url_text: str, tmp_path: Path, *, worker_id: str) -> Sett
         source_storage_root=str(tmp_path / "source-storage"),
         source_index_worker_id=worker_id,
         source_index_lease_seconds=30,
+        source_index_timeout_seconds=10,
         lightrag_client_kind="local",
     )
 
