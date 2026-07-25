@@ -413,23 +413,6 @@
         "title": "AdminSourceListResponse",
         "type": "object"
       },
-      "AdminSourceMutationResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "operation": {
-            "$ref": "#/components/schemas/OperationDto"
-          },
-          "source": {
-            "$ref": "#/components/schemas/AdminSourceDto"
-          }
-        },
-        "required": [
-          "source",
-          "operation"
-        ],
-        "title": "AdminSourceMutationResponse",
-        "type": "object"
-      },
       "AdminSourceOperationsResponse": {
         "additionalProperties": false,
         "properties": {
@@ -2701,7 +2684,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AdminSourceMutationResponse"
+                  "$ref": "#/components/schemas/AdminSourceDetailResponse"
                 }
               }
             },
@@ -2752,7 +2735,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AdminSourceMutationResponse"
+                  "$ref": "#/components/schemas/AdminSourceDetailResponse"
                 }
               }
             },

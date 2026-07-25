@@ -176,6 +176,7 @@ def _queue_new_generation(db: Session, source: SourceDocument) -> RenderedLightR
     source.index_ready_at = None
     source.index_updated_at = now
     source.updated_at = now
+    source.version += 1
     return rendered
 
 
@@ -686,6 +687,7 @@ def cancel_source_index(
     source.index_lease_expires_at = None
     source.index_updated_at = now
     source.updated_at = now
+    source.version += 1
     db.commit()
     db.refresh(source)
 
@@ -709,6 +711,7 @@ def cancel_source_index(
     source.index_ready_at = None
     source.index_updated_at = utc_now()
     source.updated_at = source.index_updated_at
+    source.version += 1
     if audit_context is not None:
         AuditService(db).record(
             AUDIT_EVENT_SOURCE_INDEX_CANCELLED,
@@ -863,6 +866,7 @@ def mark_index_accepted_if_current(
     source.index_lease_expires_at = None
     source.index_updated_at = now
     source.updated_at = now
+    source.version += 1
     db.commit()
     return True
 
@@ -880,6 +884,7 @@ def mark_index_ready_if_current(db: Session, *, source_id: str, generation: int,
     source.index_lease_expires_at = None
     source.index_updated_at = now
     source.updated_at = now
+    source.version += 1
     db.commit()
     return True
 
@@ -896,6 +901,7 @@ def mark_index_failed_if_current(db: Session, *, source_id: str, generation: int
     source.index_lease_expires_at = None
     source.index_updated_at = now
     source.updated_at = now
+    source.version += 1
     db.commit()
     return True
 
@@ -1191,6 +1197,7 @@ class SourceIndexWorker:
             source.index_state = SOURCE_INDEX_STATE_SUBMITTING
             source.index_error_code = None
             source.index_error_message = None
+            source.version += 1
         source.index_lease_owner = self._settings.source_index_worker_id
         source.index_lease_expires_at = now + timedelta(seconds=self._settings.source_index_lease_seconds)
         source.index_updated_at = now

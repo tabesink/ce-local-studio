@@ -1156,7 +1156,7 @@ def admin_source_operations(
 @api_router.post(
     "/admin/domains/{domainId}/sources/{sourceId}/index/retry",
     status_code=202,
-    response_model=AdminSourceMutationResponse,
+    response_model=AdminSourceDetailResponse,
 )
 def admin_retry_source_index(
     request: Request,
@@ -1182,7 +1182,7 @@ def admin_retry_source_index(
 
 @api_router.post(
     "/admin/domains/{domainId}/sources/{sourceId}/index/cancel",
-    response_model=AdminSourceMutationResponse,
+    response_model=AdminSourceDetailResponse,
 )
 def admin_cancel_source_index(
     request: Request,

@@ -211,6 +211,7 @@ def test_timeout_leaves_submitting_uncertain_and_probe_avoids_resubmit(tmp_path,
         index_lease_owner="index-worker",
         index_lease_expires_at=utc_now() + timedelta(seconds=30),
         index_updated_at=utc_now(),
+        version=1,
     )
     domain = _domain()
     domain.id = "domain-x"
