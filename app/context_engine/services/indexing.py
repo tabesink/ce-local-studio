@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import itertools
 import json
 import logging
 import re
@@ -52,7 +53,8 @@ logger = logging.getLogger(__name__)
 LIGHTRAG_HANDOFF_SCHEMA_VERSION = "2"
 SOURCE_INDEX_UNCERTAIN_CODE = "source_index_uncertain"
 _RENDER_HEADER_RE = re.compile(
-    r"^\[CE_BLOCK schema=2 source_id=([^\]\s]+) source_sha256=([^\]\s]{64}) "
+    rf"^\[CE_BLOCK schema={re.escape(LIGHTRAG_HANDOFF_SCHEMA_VERSION)} "
+    r"source_id=([^\]\s]+) source_sha256=([^\]\s]{64}) "
     r"block_id=([^\]\s]+) order=([1-9]\d*)\]$",
     re.MULTILINE,
 )
@@ -162,7 +164,7 @@ def compute_index_request_id(source_id: str, generation: int, content_hash: str)
     return f"{source_id}-{generation}-{content_hash[:16]}"
 
 
-def _current_request_identity(source: SourceDocument) -> bool:
+def source_has_current_index_identity(source: SourceDocument) -> bool:
     if source.index_generation < 1 or not source.index_request_id or not source.index_content_hash:
         return False
     return source.index_request_id == compute_index_request_id(source.id, source.index_generation, source.index_content_hash)
@@ -241,32 +243,18 @@ def _bounded_adapter_result(texts, settings: Settings):
     # implements the independent index-lifecycle protocol.
     from context_engine.services.evidence import (
         ScopedRetrievalCandidate,
-        ScopedRetrievalError,
         ScopedRetrievalResult,
+        normalize_scoped_retrieval_result,
     )
 
-    candidates: list[ScopedRetrievalCandidate] = []
-    aggregate_bytes = 0
-    for text in texts:
-        if len(candidates) >= settings.retrieval_max_candidates:
-            break
-        if type(text) is not str:
-            raise ScopedRetrievalError("retrieval_malformed", "Scoped retrieval returned an invalid result.")
-        try:
-            candidate_bytes = len(text.encode("utf-8"))
-        except UnicodeEncodeError as exc:
-            raise ScopedRetrievalError(
-                "retrieval_malformed",
-                "Scoped retrieval returned an invalid result.",
-            ) from exc
-        aggregate_bytes += candidate_bytes
-        if (
-            candidate_bytes > settings.retrieval_max_candidate_bytes
-            or aggregate_bytes > settings.retrieval_max_aggregate_bytes
-        ):
-            raise ScopedRetrievalError("retrieval_malformed", "Scoped retrieval returned an invalid result.")
-        candidates.append(ScopedRetrievalCandidate(text=text))
-    return ScopedRetrievalResult(candidates=tuple(candidates))
+    result = ScopedRetrievalResult(
+        candidates=tuple(
+            ScopedRetrievalCandidate(text=text)
+            for text in itertools.islice(texts, settings.retrieval_max_candidates)
+        )
+    )
+    normalize_scoped_retrieval_result(result, settings=settings)
+    return result
 
 
 class LocalLightRAGIndexClient:
@@ -352,6 +340,8 @@ class LocalLightRAGIndexClient:
         except OSError as exc:
             raise ScopedRetrievalError("retrieval_unavailable", "Scoped retrieval is unavailable.") from exc
         for record_path in record_paths:
+            if len(texts) >= self._settings.retrieval_max_candidates:
+                break
             if deadline is not None and time.monotonic() >= deadline:
                 raise ScopedRetrievalError("retrieval_timeout", "Scoped retrieval timed out.")
             try:
@@ -1308,4 +1298,4 @@ def source_is_query_eligible(
         return False
     if source.index_state != SOURCE_INDEX_STATE_READY:
         return False
-    return _current_request_identity(source)
+    return source_has_current_index_identity(source)

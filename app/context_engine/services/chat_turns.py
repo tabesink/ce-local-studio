@@ -65,8 +65,8 @@ from context_engine.services.conversations import get_owned_conversation
 from context_engine.services.evidence import (
     EvidenceRetrievalError,
     InternalMappedEvidence,
-    RetrievalClient,
     ScopedRetrievalError,
+    ScopedRetrievalPort,
     eligible_sources_for_domain,
     freeze_retrieval_scope,
     map_retrieval_hits_to_internal_evidence,
@@ -180,7 +180,7 @@ class P6RetrievalPort:
     def __init__(
         self,
         *,
-        client: RetrievalClient | None = None,
+        client: ScopedRetrievalPort | None = None,
         controller=None,
     ) -> None:
         self._client = client
@@ -206,9 +206,7 @@ class P6RetrievalPort:
             )
             eligible_sources = eligible_sources_for_domain(
                 db,
-                settings=settings,
                 domain=domain,
-                controller=controller,
             )
             if not eligible_sources:
                 return []
@@ -227,10 +225,7 @@ class P6RetrievalPort:
             raise ChatTurnError(exc.status_code, exc.code, exc.message) from exc
         return map_retrieval_hits_to_internal_evidence(
             db,
-            settings=settings,
-            domain=domain,
             hits=hits,
-            controller=controller,
             frozen_scope=frozen_scope,
         )
 
@@ -1041,63 +1036,56 @@ class TurnOrchestrator:
 
     def _stream_direct(self, db: Session, *, settings: Settings, start: TurnStartResult) -> Iterator[TurnStreamEvent]:
         turn = start.turn
-        completed = False
+        tokens: list[str] = []
+        assert start.synthesis is not None
         try:
-            tokens: list[str] = []
-            assert start.synthesis is not None
-            try:
-                kwargs: dict[str, Any] = {
-                    "synthesis": start.synthesis,
-                    "message": turn.user_message,
-                    "prior_user_questions": start.prior_user_questions,
-                }
-                if start.assembly_context is not None:
-                    kwargs["assembly_context"] = start.assembly_context
-                for token in self._synthesis_adapter.stream_direct(**kwargs):
-                    if token:
-                        tokens.append(token)
-                        yield _persist_event(
-                            db, turn=turn, event_type=TURN_EVENT_ANSWER_DELTA, payload={"text": token}
-                        )
-            except SynthesisProviderError:
-                turn = _fail_turn(
-                    db,
-                    turn=turn,
-                    code="provider_failure",
-                    message=SAFE_PROVIDER_FAILURE_MESSAGE,
-                    stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
-                )
-                completed = True
-                _record_turn_trace(settings, turn, request_id=start.request_id)
-                yield _latest_event(db, turn)
-                return
-            answer = "".join(tokens).strip()
-            if not answer:
-                turn = _fail_turn(
-                    db,
-                    turn=turn,
-                    code="provider_failure",
-                    message=SAFE_PROVIDER_FAILURE_MESSAGE,
-                    stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
-                )
-                completed = True
-                _record_turn_trace(settings, turn, request_id=start.request_id)
-                yield _latest_event(db, turn)
-                return
-            turn = _complete_turn(
+            kwargs: dict[str, Any] = {
+                "synthesis": start.synthesis,
+                "message": turn.user_message,
+                "prior_user_questions": start.prior_user_questions,
+            }
+            if start.assembly_context is not None:
+                kwargs["assembly_context"] = start.assembly_context
+            for token in self._synthesis_adapter.stream_direct(**kwargs):
+                if token:
+                    tokens.append(token)
+                    yield _persist_event(
+                        db, turn=turn, event_type=TURN_EVENT_ANSWER_DELTA, payload={"text": token}
+                    )
+        except SynthesisProviderError:
+            turn = _fail_turn(
                 db,
                 turn=turn,
-                stop_reason=TURN_STOP_REASON_DIRECT_LLM,
-                assistant_answer=answer,
-                plan_step_count=0,
-                retrieval_operation_count=0,
-                repair_attempt_count=0,
+                code="provider_failure",
+                message=SAFE_PROVIDER_FAILURE_MESSAGE,
+                stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
             )
-            completed = True
             _record_turn_trace(settings, turn, request_id=start.request_id)
             yield _latest_event(db, turn)
-        finally:
-            _ = completed
+            return
+        answer = "".join(tokens).strip()
+        if not answer:
+            turn = _fail_turn(
+                db,
+                turn=turn,
+                code="provider_failure",
+                message=SAFE_PROVIDER_FAILURE_MESSAGE,
+                stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
+            )
+            _record_turn_trace(settings, turn, request_id=start.request_id)
+            yield _latest_event(db, turn)
+            return
+        turn = _complete_turn(
+            db,
+            turn=turn,
+            stop_reason=TURN_STOP_REASON_DIRECT_LLM,
+            assistant_answer=answer,
+            plan_step_count=0,
+            retrieval_operation_count=0,
+            repair_attempt_count=0,
+        )
+        _record_turn_trace(settings, turn, request_id=start.request_id)
+        yield _latest_event(db, turn)
 
     def _stream_domain_rag(
         self,
@@ -1107,133 +1095,88 @@ class TurnOrchestrator:
         start: TurnStartResult,
     ) -> Iterator[TurnStreamEvent]:
         turn = start.turn
-        completed = False
+        operation = operation_for_message(turn.user_message)
+        intent = intent_for_operation(operation)
+        yield _persist_event(
+            db,
+            turn=turn,
+            event_type=TURN_EVENT_RETRIEVAL_STARTED,
+            payload={"attempt": 1, "maxAttempts": 1},
+        )
         try:
-            operation = operation_for_message(turn.user_message)
-            intent = intent_for_operation(operation)
-            yield _persist_event(
+            evidence = self._retrieval_port.retrieve(
+                db,
+                settings=settings,
+                domain_id=turn.domain_id or "",
+                question=turn.user_message,
+                intent=intent,
+            )
+        except ChatTurnError as exc:
+            turn = _fail_turn(
                 db,
                 turn=turn,
-                event_type=TURN_EVENT_RETRIEVAL_STARTED,
-                payload={"attempt": 1, "maxAttempts": 1},
+                code=exc.code,
+                message=exc.message,
+                stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
             )
-            try:
-                evidence = self._retrieval_port.retrieve(
-                    db,
-                    settings=settings,
-                    domain_id=turn.domain_id or "",
-                    question=turn.user_message,
-                    intent=intent,
-                )
-            except ChatTurnError as exc:
-                turn = _fail_turn(
-                    db,
-                    turn=turn,
-                    code=exc.code,
-                    message=exc.message,
-                    stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
-                )
-                completed = True
-                _record_turn_trace(settings, turn, request_id=start.request_id)
-                yield _latest_event(db, turn)
-                return
-            if not evidence:
-                yield _persist_event(
-                    db,
-                    turn=turn,
-                    event_type=TURN_EVENT_RETRIEVAL_COMPLETED,
-                    payload={"result": "no_grounded_context", "evidenceCount": 0},
-                )
-                turn = _complete_turn(
-                    db,
-                    turn=turn,
-                    stop_reason=TURN_STOP_REASON_NO_GROUNDED_CONTEXT,
-                    assistant_answer=None,
-                    plan_step_count=1,
-                    retrieval_operation_count=1,
-                    repair_attempt_count=0,
-                )
-                completed = True
-                _record_turn_trace(settings, turn, request_id=start.request_id)
-                yield _latest_event(db, turn)
-                return
-            turn = _persist_evidence_refs(db, turn=turn, evidence=evidence)
-            yield _public_evidence_event(db, turn)
+            _record_turn_trace(settings, turn, request_id=start.request_id)
+            yield _latest_event(db, turn)
+            return
+        if not evidence:
             yield _persist_event(
                 db,
                 turn=turn,
                 event_type=TURN_EVENT_RETRIEVAL_COMPLETED,
-                payload={"result": "evidence_found", "evidenceCount": len(_public_evidence_refs(turn))},
+                payload={"result": "no_grounded_context", "evidenceCount": 0},
             )
-            public_evidence = _public_evidence_refs_for_adapter(turn)
-            tokens: list[str] = []
-            assert start.synthesis is not None
-            try:
-                kwargs: dict[str, Any] = {
-                    "synthesis": start.synthesis,
-                    "message": turn.user_message,
-                    "evidence": public_evidence,
-                    "prior_user_questions": start.prior_user_questions,
-                }
-                if start.assembly_context is not None:
-                    kwargs["assembly_context"] = start.assembly_context
-                for token in self._synthesis_adapter.stream_grounded(**kwargs):
-                    if token:
-                        tokens.append(token)
-                        yield _persist_event(
-                            db, turn=turn, event_type=TURN_EVENT_ANSWER_DELTA, payload={"text": token}
-                        )
-            except SynthesisProviderError:
-                turn = _complete_turn(
-                    db,
-                    turn=turn,
-                    stop_reason=TURN_STOP_REASON_EVIDENCE_ONLY,
-                    assistant_answer=None,
-                    plan_step_count=1,
-                    retrieval_operation_count=1,
-                    repair_attempt_count=0,
-                )
-                completed = True
-                _record_turn_trace(
-                    settings,
-                    turn,
-                    request_id=start.request_id,
-                    mapped_evidence_count=len(evidence),
-                    citation_count=len(_public_evidence_refs(turn)),
-                )
-                yield _latest_event(db, turn)
-                return
-            answer = "".join(tokens).strip()
-            if not answer:
-                turn = _complete_turn(
-                    db,
-                    turn=turn,
-                    stop_reason=TURN_STOP_REASON_EVIDENCE_ONLY,
-                    assistant_answer=None,
-                    plan_step_count=1,
-                    retrieval_operation_count=1,
-                    repair_attempt_count=0,
-                )
-                completed = True
-                _record_turn_trace(
-                    settings,
-                    turn,
-                    request_id=start.request_id,
-                    mapped_evidence_count=len(evidence),
-                    citation_count=len(_public_evidence_refs(turn)),
-                )
-                yield _latest_event(db, turn)
-                return
             turn = _complete_turn(
                 db,
                 turn=turn,
-                stop_reason=TURN_STOP_REASON_GROUNDED,
-                assistant_answer=answer,
+                stop_reason=TURN_STOP_REASON_NO_GROUNDED_CONTEXT,
+                assistant_answer=None,
                 plan_step_count=1,
                 retrieval_operation_count=1,
                 repair_attempt_count=0,
             )
-            completed = True
+            _record_turn_trace(settings, turn, request_id=start.request_id)
+            yield _latest_event(db, turn)
+            return
+        turn = _persist_evidence_refs(db, turn=turn, evidence=evidence)
+        yield _public_evidence_event(db, turn)
+        yield _persist_event(
+            db,
+            turn=turn,
+            event_type=TURN_EVENT_RETRIEVAL_COMPLETED,
+            payload={"result": "evidence_found", "evidenceCount": len(_public_evidence_refs(turn))},
+        )
+        public_evidence = _public_evidence_refs_for_adapter(turn)
+        tokens: list[str] = []
+        assert start.synthesis is not None
+        try:
+            kwargs: dict[str, Any] = {
+                "synthesis": start.synthesis,
+                "message": turn.user_message,
+                "evidence": public_evidence,
+                "prior_user_questions": start.prior_user_questions,
+            }
+            if start.assembly_context is not None:
+                kwargs["assembly_context"] = start.assembly_context
+            for token in self._synthesis_adapter.stream_grounded(**kwargs):
+                if token:
+                    tokens.append(token)
+                    yield _persist_event(
+                        db, turn=turn, event_type=TURN_EVENT_ANSWER_DELTA, payload={"text": token}
+                    )
+        except SynthesisProviderError:
+            turn = _complete_turn(
+                db,
+                turn=turn,
+                stop_reason=TURN_STOP_REASON_EVIDENCE_ONLY,
+                assistant_answer=None,
+                plan_step_count=1,
+                retrieval_operation_count=1,
+                repair_attempt_count=0,
+            )
             _record_turn_trace(
                 settings,
                 turn,
@@ -1242,8 +1185,44 @@ class TurnOrchestrator:
                 citation_count=len(_public_evidence_refs(turn)),
             )
             yield _latest_event(db, turn)
-        finally:
-            _ = completed
+            return
+        answer = "".join(tokens).strip()
+        if not answer:
+            turn = _complete_turn(
+                db,
+                turn=turn,
+                stop_reason=TURN_STOP_REASON_EVIDENCE_ONLY,
+                assistant_answer=None,
+                plan_step_count=1,
+                retrieval_operation_count=1,
+                repair_attempt_count=0,
+            )
+            _record_turn_trace(
+                settings,
+                turn,
+                request_id=start.request_id,
+                mapped_evidence_count=len(evidence),
+                citation_count=len(_public_evidence_refs(turn)),
+            )
+            yield _latest_event(db, turn)
+            return
+        turn = _complete_turn(
+            db,
+            turn=turn,
+            stop_reason=TURN_STOP_REASON_GROUNDED,
+            assistant_answer=answer,
+            plan_step_count=1,
+            retrieval_operation_count=1,
+            repair_attempt_count=0,
+        )
+        _record_turn_trace(
+            settings,
+            turn,
+            request_id=start.request_id,
+            mapped_evidence_count=len(evidence),
+            citation_count=len(_public_evidence_refs(turn)),
+        )
+        yield _latest_event(db, turn)
 
 
 def stream_turn_events(
