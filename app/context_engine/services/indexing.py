@@ -49,9 +49,13 @@ from context_engine.services.structured_logging import safe_log
 
 logger = logging.getLogger(__name__)
 
-LIGHTRAG_HANDOFF_SCHEMA_VERSION = "1"
+LIGHTRAG_HANDOFF_SCHEMA_VERSION = "2"
 SOURCE_INDEX_UNCERTAIN_CODE = "source_index_uncertain"
-_RENDER_HEADER_RE = re.compile(r"^\[CE_BLOCK id=([^\] ]+) order=(\d+)\]$", re.MULTILINE)
+_RENDER_HEADER_RE = re.compile(
+    r"^\[CE_BLOCK schema=2 source_id=([^\]\s]+) source_sha256=([^\]\s]{64}) "
+    r"block_id=([^\]\s]+) order=([1-9]\d*)\]$",
+    re.MULTILINE,
+)
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,96}$")
 _NATIVE_LIGHTRAG_LIFECYCLE_LOCK = threading.RLock()
 
@@ -120,9 +124,12 @@ def render_blocks_to_lightrag_handoff(
             raise SourceIndexError(422, "source_index_input_invalid", "Source cannot be indexed.")
         seen_ids.add(block.id)
         body = _normalize_markdown(block.canonical_markdown or "")
-        if not body:
+        if not body or re.search(r"\[CE_(?:SOURCE|BLOCK)\b", body):
             raise SourceIndexError(422, "source_index_input_invalid", "Source cannot be indexed.")
-        rendered_blocks.append(f"[CE_BLOCK id={block.id} order={block.source_order}]\n{body}")
+        rendered_blocks.append(
+            f"[CE_BLOCK schema={LIGHTRAG_HANDOFF_SCHEMA_VERSION} source_id={source_id} "
+            f"source_sha256={original_sha256} block_id={block.id} order={block.source_order}]\n{body}"
+        )
         block_ids.append(block.id)
 
     text = (
@@ -210,11 +217,11 @@ def _safe_request_id(request_id: str) -> str:
 
 
 def _private_remote_id(request_id: str) -> str:
-    return hashlib.sha256(f"ce-index:{request_id}".encode("utf-8")).hexdigest()[:32]
+    return hashlib.sha256(f"ce-index:{request_id}".encode()).hexdigest()[:32]
 
 
 def _rendered_block_ids(rendered_text: str) -> list[str]:
-    return [match.group(1) for match in _RENDER_HEADER_RE.finditer(rendered_text)]
+    return [match.group(3) for match in _RENDER_HEADER_RE.finditer(rendered_text)]
 
 
 def _rendered_hit_chunks(rendered_text: str) -> list[dict[str, str]]:
@@ -225,7 +232,7 @@ def _rendered_hit_chunks(rendered_text: str) -> list[dict[str, str]]:
         end = matches[index + 1].start() if index + 1 < len(matches) else len(rendered_text)
         text = rendered_text[start:end].strip()
         if text:
-            chunks.append({"blockId": match.group(1), "text": text})
+            chunks.append({"blockId": match.group(3), "text": text})
     return chunks
 
 
@@ -436,7 +443,10 @@ class LightRAGClient:
             import numpy as np
             from lightrag import LightRAG
             from lightrag.base import DocStatus, QueryParam
-            from lightrag.kg.shared_storage import finalize_share_data, initialize_share_data
+            from lightrag.kg.shared_storage import (
+                finalize_share_data,
+                initialize_share_data,
+            )
             from lightrag.utils import wrap_embedding_func_with_attrs
 
             assert_vendored_lightrag_loaded(lightrag)
@@ -546,7 +556,7 @@ class LightRAGClient:
             return self._run(op())
         except SourceIndexError as exc:
             return IndexReadiness(ready=False, failed=True, error_code=exc.code, error_message=exc.message)
-        except Exception:
+        except Exception:  # noqa: BLE001 -- the dependency boundary must fail closed
             return IndexReadiness(
                 ready=False,
                 failed=True,
@@ -661,7 +671,7 @@ class LightRAGClient:
 
         try:
             return self._run(op())
-        except Exception:
+        except Exception:  # noqa: BLE001 -- this optional proof must fail closed
             return ()
 
 
@@ -864,9 +874,7 @@ def _index_lease_current(
     current = now or utc_now()
     if source.index_lease_owner != owner:
         return False
-    if source.index_lease_expires_at is None or source.index_lease_expires_at < current:
-        return False
-    return True
+    return source.index_lease_expires_at is not None and source.index_lease_expires_at >= current
 
 
 def _heartbeat_index_lease(

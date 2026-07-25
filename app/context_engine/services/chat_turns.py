@@ -15,23 +15,15 @@ from context_engine.config import Settings
 from context_engine.db import utc_now
 from context_engine.models import (
     AUDIT_EVENT_CHAT_TURN_REDACTED,
-    Conversation,
-    ConversationTurn,
-    ConversationTurnComposerRef,
-    ConversationTurnEvent,
-    ConversationTurnEvidenceRef,
-    Domain,
-    SourceBlock,
-    SourceDocument,
     TURN_EVENT_ACCEPTED,
     TURN_EVENT_ANSWER_DELTA,
     TURN_EVENT_CANCELLED,
     TURN_EVENT_COMPLETED,
     TURN_EVENT_EVIDENCE_DELTA,
     TURN_EVENT_FAILED,
+    TURN_EVENT_REDACTED,
     TURN_EVENT_RETRIEVAL_COMPLETED,
     TURN_EVENT_RETRIEVAL_STARTED,
-    TURN_EVENT_REDACTED,
     TURN_EVENT_ROUTE_SELECTED,
     TURN_EVENT_SCHEMA_VERSION,
     TURN_ROUTE_DIRECT_LLM,
@@ -49,6 +41,14 @@ from context_engine.models import (
     TURN_STOP_REASON_NO_GROUNDED_CONTEXT,
     TURN_STOP_REASON_PROVIDER_FAILURE,
     TURN_STOP_REASON_REDACTED,
+    Conversation,
+    ConversationTurn,
+    ConversationTurnComposerRef,
+    ConversationTurnEvent,
+    ConversationTurnEvidenceRef,
+    Domain,
+    SourceBlock,
+    SourceDocument,
     User,
 )
 from context_engine.services.audit import AuditContext, AuditService
@@ -68,12 +68,16 @@ from context_engine.services.evidence import (
     RetrievalClient,
     ScopedRetrievalError,
     eligible_sources_for_domain,
+    freeze_retrieval_scope,
     map_retrieval_hits_to_internal_evidence,
-    retrieve_bounded_candidates,
     resolve_available_domain,
+    retrieve_bounded_candidates,
 )
 from context_engine.services.indexing import index_client_from_settings
-from context_engine.services.prompt_assembly import PromptAssemblyContext, PromptAssemblyService
+from context_engine.services.prompt_assembly import (
+    PromptAssemblyContext,
+    PromptAssemblyService,
+)
 from context_engine.services.runtime_config import (
     RuntimeConfigError,
     SecretCrypto,
@@ -200,8 +204,15 @@ class P6RetrievalPort:
                 domain_id=domain_id,
                 controller=self._controller,
             )
-            if not eligible_sources_for_domain(db, settings=settings, domain=domain, controller=controller):
+            eligible_sources = eligible_sources_for_domain(
+                db,
+                settings=settings,
+                domain=domain,
+                controller=controller,
+            )
+            if not eligible_sources:
                 return []
+            frozen_scope = freeze_retrieval_scope(domain, eligible_sources)
             db.commit()
             client = self._client or index_client_from_settings(settings, controller)
             hits = retrieve_bounded_candidates(
@@ -220,6 +231,7 @@ class P6RetrievalPort:
             domain=domain,
             hits=hits,
             controller=controller,
+            frozen_scope=frozen_scope,
         )
 
 
@@ -1085,7 +1097,7 @@ class TurnOrchestrator:
             _record_turn_trace(settings, turn, request_id=start.request_id)
             yield _latest_event(db, turn)
         finally:
-            pass
+            _ = completed
 
     def _stream_domain_rag(
         self,
@@ -1231,7 +1243,7 @@ class TurnOrchestrator:
             )
             yield _latest_event(db, turn)
         finally:
-            pass
+            _ = completed
 
 
 def stream_turn_events(

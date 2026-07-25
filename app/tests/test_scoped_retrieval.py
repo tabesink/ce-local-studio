@@ -5,11 +5,20 @@ from dataclasses import dataclass
 import pytest
 
 from context_engine.config import Settings
-from context_engine.models import Domain
+from context_engine.models import (
+    SOURCE_INDEX_STATE_READY,
+    SOURCE_STATE_PREPARED,
+    Domain,
+    SourceBlock,
+    SourceDocument,
+)
 from context_engine.services.evidence import (
+    FrozenRetrievalScope,
+    FrozenSourceIdentity,
     ScopedRetrievalCandidate,
     ScopedRetrievalError,
     ScopedRetrievalResult,
+    map_retrieval_hits_to_internal_evidence,
     retrieve_bounded_candidates,
 )
 from context_engine.services.indexing import LightRAGClientProtocol
@@ -133,3 +142,106 @@ def test_retrieval_settings_are_positive_and_aggregate_covers_one_candidate() ->
         _settings(retrieval_timeout_seconds=0)
     with pytest.raises(ValueError, match="retrieval_max_aggregate_bytes"):
         _settings(retrieval_max_candidate_bytes=513, retrieval_max_aggregate_bytes=512)
+
+
+class _Rows:
+    def __init__(self, rows: list[tuple[SourceBlock, SourceDocument]]) -> None:
+        self._rows = rows
+
+    def all(self) -> list[tuple[SourceBlock, SourceDocument]]:
+        return self._rows
+
+
+class _MappingSession:
+    def __init__(self, rows: list[tuple[SourceBlock, SourceDocument]]) -> None:
+        self.rows = rows
+        self.execute_calls = 0
+
+    def execute(self, _statement):
+        self.execute_calls += 1
+        return _Rows(self.rows)
+
+
+def test_exact_schema_v2_mapping_uses_one_query_canonical_content_and_dense_first_wins() -> None:
+    source = SourceDocument(
+        id="source-1",
+        public_ref="docref-source-1",
+        domain_id="domain-retrieval",
+        original_filename="manual.pdf",
+        content_type="application/pdf",
+        original_sha256="b" * 64,
+        original_size_bytes=128,
+        original_object_key="obj/source-1",
+        state=SOURCE_STATE_PREPARED,
+        parser_kind="docling",
+        preparation_generation=3,
+        index_state=SOURCE_INDEX_STATE_READY,
+        index_generation=4,
+        index_request_id="source-1-4-request",
+        index_content_hash="c" * 64,
+    )
+    block = SourceBlock(
+        id="block-1",
+        source_document_id=source.id,
+        domain_id=source.domain_id,
+        source_order=2,
+        kind="text",
+        canonical_markdown="Canonical database content",
+    )
+    scope = FrozenRetrievalScope(
+        domain_id=source.domain_id,
+        control_generation=5,
+        runtime_instance_id="runtime-1",
+        sources=(
+            FrozenSourceIdentity(
+                source_document_id=source.id,
+                preparation_generation=source.preparation_generation,
+                index_generation=source.index_generation,
+                index_request_id=source.index_request_id or "",
+                index_content_hash=source.index_content_hash or "",
+                original_sha256=source.original_sha256,
+            ),
+        ),
+    )
+    marker = (
+        f"[CE_BLOCK schema=2 source_id={source.id} source_sha256={source.original_sha256} "
+        f"block_id={block.id} order={block.source_order}]"
+    )
+    db = _MappingSession([(block, source)])
+
+    mapped = map_retrieval_hits_to_internal_evidence(
+        db,  # type: ignore[arg-type]
+        settings=_settings(),
+        domain=_domain(),
+        hits=[
+            ScopedRetrievalCandidate(text="[CE_BLOCK id=block-legacy order=1]\nlegacy"),
+            ScopedRetrievalCandidate(
+                text=(
+                    f"[CE_BLOCK schema=2 source_id=wrong-source source_sha256={source.original_sha256} "
+                    f"block_id={block.id} order={block.source_order}]\nwrong source"
+                )
+            ),
+            ScopedRetrievalCandidate(
+                text=(
+                    f"[CE_BLOCK schema=2 source_id={source.id} source_sha256={'d' * 64} "
+                    f"block_id={block.id} order={block.source_order}]\nwrong hash"
+                )
+            ),
+            ScopedRetrievalCandidate(
+                text=(
+                    f"[CE_BLOCK schema=2 source_id={source.id} source_sha256={source.original_sha256} "
+                    f"block_id={block.id} order=1]\nwrong order"
+                )
+            ),
+            ScopedRetrievalCandidate(text=f"{marker}\nprovider text must not become excerpt"),
+            ScopedRetrievalCandidate(text=f"{marker}\nduplicate"),
+        ],
+        frozen_scope=scope,
+    )
+
+    assert db.execute_calls == 1
+    assert len(mapped) == 1
+    assert mapped[0].source_document_id == source.id
+    assert mapped[0].source_block_id == block.id
+    assert mapped[0].excerpt == "Canonical database content"
+    assert mapped[0].retrieval_order == 1
