@@ -423,14 +423,16 @@ class SourceDocument(Base):
         CheckConstraint("original_size_bytes > 0", name="ck_source_documents_size_positive"),
         CheckConstraint("preparation_generation >= 1", name="ck_source_documents_generation_positive"),
         CheckConstraint("index_generation >= 0", name="ck_source_documents_index_generation_nonnegative"),
+        CheckConstraint("version >= 1", name="ck_source_documents_version_positive"),
         Index("uq_source_documents_public_ref", "public_ref", unique=True),
         Index("uq_source_documents_domain_hash", "domain_id", "original_sha256", unique=True),
+        Index("uq_source_documents_original_object_key", "original_object_key", unique=True),
         Index("ix_source_documents_domain_created", "domain_id", text("created_at DESC")),
         Index("ix_source_documents_domain_index_state", "domain_id", "index_state"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    public_ref: Mapped[str] = mapped_column(String(64), nullable=False, default=lambda: f"doc_{uuid.uuid4().hex}")
+    public_ref: Mapped[str] = mapped_column(String(64), nullable=False)
     domain_id: Mapped[str] = mapped_column(
         String(64),
         ForeignKey("domains.id", ondelete="CASCADE"),
@@ -440,6 +442,7 @@ class SourceDocument(Base):
     content_type: Mapped[str] = mapped_column(String(160), nullable=False)
     original_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     original_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    original_object_key: Mapped[str] = mapped_column(String(128), nullable=False)
     state: Mapped[str] = mapped_column(String(16), nullable=False, default=SOURCE_STATE_PENDING)
     parser_kind: Mapped[str] = mapped_column(String(32), nullable=False)
     preparation_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
@@ -455,6 +458,7 @@ class SourceDocument(Base):
     index_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     index_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     index_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_by_user_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -490,6 +494,7 @@ class SourcePreparationOperation(Base):
             name="ck_source_preparation_operations_status",
         ),
         CheckConstraint("preparation_generation_at_start >= 1", name="ck_source_preparation_operations_generation_positive"),
+        CheckConstraint("version >= 1", name="ck_source_preparation_operations_version_positive"),
         Index("ix_source_preparation_operations_domain_created", "domain_id", text("created_at DESC")),
         Index("ix_source_preparation_operations_source_created", "source_document_id", text("created_at DESC")),
         Index(
@@ -526,6 +531,7 @@ class SourcePreparationOperation(Base):
     error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
     lease_owner: Mapped[str | None] = mapped_column(String(64), nullable=True)
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now)

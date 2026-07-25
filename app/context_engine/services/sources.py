@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import re
+import secrets
 import shutil
 import uuid
 from collections.abc import Callable
@@ -12,10 +13,16 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from context_engine.adapters.object_storage import (
+    ObjectStorage,
+    ObjectStorageError,
+    new_object_key,
+    object_store_from_root,
+)
 from context_engine.config import Settings
 from context_engine.db import utc_now
 from context_engine.models import (
@@ -31,6 +38,14 @@ from context_engine.models import (
     SOURCE_BLOCK_KIND_TABLE,
     SOURCE_BLOCK_KIND_TEXT,
     SOURCE_BLOCK_KINDS,
+    SOURCE_INDEX_STATE_ACCEPTED,
+    SOURCE_INDEX_STATE_CANCELLING,
+    SOURCE_INDEX_STATE_CANCELLED,
+    SOURCE_INDEX_STATE_FAILED,
+    SOURCE_INDEX_STATE_NOT_REQUESTED,
+    SOURCE_INDEX_STATE_QUEUED,
+    SOURCE_INDEX_STATE_READY,
+    SOURCE_INDEX_STATE_SUBMITTING,
     SOURCE_PREP_ACTIVE_STATUSES,
     SOURCE_PREP_OPERATION_PREPARE,
     SOURCE_PREP_STATUS_CANCELLED,
@@ -142,13 +157,28 @@ class PreparedSource:
 ParserAdapter = Callable[[SourceDocument, bytes, str | None], PreparedSource]
 
 
+def new_document_public_ref() -> str:
+    return f"doc_{secrets.token_urlsafe(24)}"
+
+
 class SourceStorage:
-    def __init__(self, root: str) -> None:
+    """Source-facing storage facade over the governed object-store port.
+
+    Derived image bytes remain under a private filesystem layout until P4-03
+    adds image object-key columns. Originals use opaque object keys.
+    """
+
+    def __init__(self, root: str, store: ObjectStorage | None = None) -> None:
         self._root = Path(root).resolve()
+        self._store: ObjectStorage = store or object_store_from_root(self._root)
 
     @property
     def root(self) -> Path:
         return self._root
+
+    @property
+    def store(self) -> ObjectStorage:
+        return self._store
 
     def _safe_path(self, *parts: str) -> Path:
         candidate = self._root.joinpath(*parts).resolve()
@@ -156,33 +186,27 @@ class SourceStorage:
             raise SourceStorageError("Source storage path escaped root.")
         return candidate
 
-    def temp_path(self, source_id: str) -> Path:
-        return self._safe_path("tmp", f"{source_id}.upload")
-
     def source_dir(self, domain_id: str, source_id: str) -> Path:
         return self._safe_path("domains", domain_id, "sources", source_id)
-
-    def original_path(self, domain_id: str, source_id: str) -> Path:
-        return self.source_dir(domain_id, source_id) / "original"
 
     def image_path(self, domain_id: str, source_id: str, image_id: str) -> Path:
         return self.source_dir(domain_id, source_id) / "images" / image_id
 
-    def write_temp(self, source_id: str, data: bytes) -> Path:
-        path = self.temp_path(source_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
-        return path
-
-    def move_original(self, temp_path: Path, domain_id: str, source_id: str) -> Path:
-        final_path = self.original_path(domain_id, source_id)
-        final_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(temp_path), final_path)
-        return final_path
+    def put_original(self, data: bytes, *, content_type: str | None = None) -> str:
+        try:
+            return self._store.put(data, content_type=content_type).key
+        except ObjectStorageError as exc:
+            raise SourceStorageError("Source original could not be stored.") from exc
 
     def read_original(self, source: SourceDocument) -> bytes:
+        if source.original_object_key:
+            try:
+                return self._store.get(source.original_object_key)
+            except ObjectStorageError as exc:
+                raise SourceStorageError("Source original unavailable.") from exc
+        # Legacy path fallback for pre-P4-01 rows still under domain layout.
         try:
-            return self.original_path(source.domain_id, source.id).read_bytes()
+            return (self.source_dir(source.domain_id, source.id) / "original").read_bytes()
         except OSError as exc:
             raise SourceStorageError("Source original unavailable.") from exc
 
@@ -191,7 +215,12 @@ class SourceStorage:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
 
-    def delete_source_files(self, domain_id: str, source_id: str) -> None:
+    def delete_source_files(self, domain_id: str, source_id: str, *, original_object_key: str | None = None) -> None:
+        if original_object_key:
+            try:
+                self._store.delete(original_object_key)
+            except ObjectStorageError as exc:
+                raise SourceStorageError("Source files could not be removed.") from exc
         source_dir = self.source_dir(domain_id, source_id)
         try:
             if source_dir.exists():
@@ -204,15 +233,6 @@ class SourceStorage:
                 domain_root.rmdir()
         except OSError as exc:
             raise SourceStorageError("Source files could not be removed.") from exc
-
-    def cleanup_path(self, path: Path | None) -> None:
-        if path is None:
-            return
-        try:
-            if path.exists():
-                path.unlink()
-        except OSError:
-            pass
 
 
 def storage_from_settings(settings: Settings) -> SourceStorage:
@@ -308,20 +328,23 @@ def upload_source_bytes(
         raise SourceError(409, "source_duplicate", "Source already exists in this domain.")
 
     source_id = str(uuid.uuid4())
+    object_key = new_object_key()
     storage = storage_from_settings(settings)
-    temp_path = storage.write_temp(source_id, data)
-    final_path: Path | None = None
+    object_written = False
     now = utc_now()
     source = SourceDocument(
         id=source_id,
+        public_ref=new_document_public_ref(),
         domain_id=domain.id,
         original_filename=sanitize_original_filename(filename),
         content_type=upload_content_type,
         original_sha256=original_sha256,
         original_size_bytes=len(data),
+        original_object_key=object_key,
         state=SOURCE_STATE_PENDING,
         parser_kind=ensure_runtime_settings(db).active_parser_kind,
         preparation_generation=1,
+        version=1,
         created_by_user_id=requested_by_user.id,
         created_at=now,
         updated_at=now,
@@ -348,51 +371,87 @@ def upload_source_bytes(
                     "operationStatus": operation.status,
                 },
             )
-        final_path = storage.move_original(temp_path, domain.id, source.id)
+        storage.store.put_key(object_key, data, content_type=upload_content_type)
+        object_written = True
         db.commit()
         db.refresh(source)
         db.refresh(operation)
         return source, operation
     except IntegrityError as exc:
         db.rollback()
-        storage.cleanup_path(temp_path)
-        storage.cleanup_path(final_path)
+        if object_written:
+            storage.delete_source_files(domain.id, source_id, original_object_key=object_key)
         raise SourceError(409, "source_duplicate", "Source already exists in this domain.") from exc
-    except OSError as exc:
+    except (OSError, SourceStorageError, ObjectStorageError) as exc:
         db.rollback()
-        storage.cleanup_path(temp_path)
-        storage.cleanup_path(final_path)
+        if object_written:
+            storage.delete_source_files(domain.id, source_id, original_object_key=object_key)
         raise SourceError(500, "source_storage_unavailable", "Source storage unavailable.") from exc
 
 
-def _block_count(db: Session, source_id: str) -> int:
-    return int(db.scalar(select(func.count()).select_from(SourceBlock).where(SourceBlock.source_document_id == source_id)) or 0)
+def _public_index_state(source: SourceDocument) -> str:
+    if source.state == SOURCE_STATE_DELETING:
+        return "deleting"
+    mapping = {
+        SOURCE_INDEX_STATE_NOT_REQUESTED: "not_requested",
+        SOURCE_INDEX_STATE_QUEUED: "queued",
+        SOURCE_INDEX_STATE_SUBMITTING: "processing",
+        SOURCE_INDEX_STATE_ACCEPTED: "processing",
+        SOURCE_INDEX_STATE_READY: "ready",
+        SOURCE_INDEX_STATE_FAILED: "failed",
+        SOURCE_INDEX_STATE_CANCELLING: "deleting",
+        SOURCE_INDEX_STATE_CANCELLED: "cancelled",
+    }
+    return mapping.get(source.index_state, "failed")
 
 
-def _image_count(db: Session, source_id: str) -> int:
-    return int(db.scalar(select(func.count()).select_from(SourceImage).where(SourceImage.source_document_id == source_id)) or 0)
+def _source_allowed_actions(source: SourceDocument, active: SourcePreparationOperation | None) -> list[dict[str, Any]]:
+    busy = active is not None
+    deleting = source.state == SOURCE_STATE_DELETING
+
+    def action(name: str, enabled: bool, reason: str | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {"action": name, "enabled": enabled}
+        if not enabled and reason is not None:
+            payload["reasonCode"] = reason
+        return payload
+
+    if deleting:
+        reason = "source_state_conflict"
+        return [
+            action("retry", False, reason),
+            action("cancel", False, reason),
+            action("delete", False, reason),
+        ]
+    if busy:
+        return [
+            action("retry", False, "source_operation_in_progress"),
+            action("cancel", True),
+            action("delete", False, "source_operation_in_progress"),
+        ]
+    return [
+        action("retry", source.state == SOURCE_STATE_PENDING, "source_state_conflict"),
+        action("cancel", False, "source_operation_not_active"),
+        action("delete", True),
+    ]
 
 
 def safe_source(db: Session, source: SourceDocument) -> dict[str, Any]:
+    active = _active_operation(db, source.id)
     return {
         "id": source.id,
+        "documentRef": source.public_ref,
         "domainId": source.domain_id,
-        "originalFilename": source.original_filename,
+        "displayName": source.original_filename,
         "contentType": source.content_type,
-        "originalSizeBytes": source.original_size_bytes,
-        "originalSha256": source.original_sha256,
+        "sizeBytes": source.original_size_bytes,
         "state": source.state,
         "parserKind": source.parser_kind,
-        "blockCount": _block_count(db, source.id),
-        "imageCount": _image_count(db, source.id),
-        "indexState": source.index_state,
-        "indexErrorCode": source.index_error_code,
-        "indexErrorMessage": source.index_error_message,
-        "indexAcceptedAt": iso_utc(source.index_accepted_at) if source.index_accepted_at is not None else None,
-        "indexReadyAt": iso_utc(source.index_ready_at) if source.index_ready_at is not None else None,
-        "indexUpdatedAt": iso_utc(source.index_updated_at) if source.index_updated_at is not None else None,
+        "indexState": _public_index_state(source),
+        "activeOperationId": active.id if active is not None else None,
         "createdAt": iso_utc(source.created_at),
         "updatedAt": iso_utc(source.updated_at),
+        "version": source.version,
+        "allowedActions": _source_allowed_actions(source, active),
     }
 
 
@@ -590,7 +649,11 @@ def delete_source(
     source.updated_at = now
     _cancel_active_operation_for_delete(db, source, now)
     cleanup_index_before_source_delete(db, settings=settings, source=source)
-    storage_from_settings(settings).delete_source_files(domain_id, source_id)
+    storage_from_settings(settings).delete_source_files(
+        domain_id,
+        source_id,
+        original_object_key=source.original_object_key,
+    )
     db.delete(source)
     if audit_context is not None:
         AuditService(db).record(
@@ -621,7 +684,11 @@ def purge_domain_sources_local(
         source.updated_at = now
         _cancel_active_operation_for_delete(db, source, now)
         cleanup_index_before_source_delete(db, settings=settings, source=source)
-        storage.delete_source_files(source.domain_id, source.id)
+        storage.delete_source_files(
+            source.domain_id,
+            source.id,
+            original_object_key=source.original_object_key,
+        )
         db.delete(source)
     db.flush()
 

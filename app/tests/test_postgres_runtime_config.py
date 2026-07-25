@@ -70,7 +70,7 @@ from context_engine.services.runtime_config import (
 APP_ROOT = Path(__file__).resolve().parents[1]
 ADMIN_URL_ENV = "CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL"
 OPT_IN_ENV = "CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS"
-HEAD_REVISION = "e3a1c8d04f21"
+HEAD_REVISION = "f4b2c9e18a70"
 DATABASE_NAME_PATTERN = re.compile(r"^ce_p20[123]_[a-z_]+_[0-9a-f]{32}$")
 
 pytestmark = pytest.mark.postgresql

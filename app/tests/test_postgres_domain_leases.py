@@ -55,7 +55,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 ADMIN_URL_ENV = "CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL"
 OPT_IN_ENV = "CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS"
 DATABASE_NAME_PATTERN = re.compile(r"^ce_p303_[a-z0-9_]+$")
-HEAD_REVISION = "e3a1c8d04f21"
+HEAD_REVISION = "f4b2c9e18a70"
 
 pytestmark = pytest.mark.postgresql
 

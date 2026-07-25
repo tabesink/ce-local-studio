@@ -95,26 +95,30 @@ source_documents
   domain_id FK domains.id CASCADE NOT NULL
   original_filename varchar(255); content_type varchar(160)
   original_sha256 varchar(64); original_size_bytes integer CHECK >0
+  original_object_key varchar(128) NOT NULL UNIQUE INDEX
   state CHECK IN ('pending','prepared','deleting')
   parser_kind CHECK IN ('docling','reducto')
   preparation_generation integer DEFAULT 1 CHECK >=1
-  index_state closed set not_requested/queued/processing/ready/failed/cancelled/deleting
+  index_state closed set not_requested/queued/submitting/accepted/ready/failed/cancelling/cancelled
   index_generation integer DEFAULT 0 CHECK >=0
   index_request_id varchar(96); index_content_hash varchar(64)
   index_remote_document_id varchar(128)
   safe index_error_code/index_error_message; index lease owner/expiry
   index_accepted_at, index_ready_at, index_updated_at
+  version integer DEFAULT 1 CHECK >=1
   created_by_user_id FK users.id SET NULL; created_at, updated_at
   UNIQUE(domain_id, original_sha256)
   INDEX(domain_id, created_at DESC); INDEX(domain_id, index_state)
+  note: public AdminSourceDto.indexState projects submitting/accepted->processing and cancelling->deleting
 
 source_preparation_operations
   id PK; source_document_id FK source_documents.id CASCADE
   domain_id FK domains.id CASCADE; operation_type='prepare'
   status closed operation set; preparation_generation_at_start CHECK >=1
   requested_by_user_id FK users.id SET NULL; request_id INDEX
-  safe message/error fields; lease fields; started/finished/created/updated timestamps
-  indexes by domain/source creation; one active preparation per source/generation
+  safe message/error fields; lease fields; version integer DEFAULT 1 CHECK >=1
+  started/finished/created/updated timestamps
+  indexes by domain/source creation; one active preparation per source
 
 source_blocks
   id PK; source_document_id FK source_documents.id CASCADE
