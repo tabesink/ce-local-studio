@@ -6,13 +6,15 @@ import time
 from dataclasses import dataclass
 from typing import Protocol
 
-from sqlalchemy import select
+from sqlalchemy import exists, select, tuple_
 from sqlalchemy.orm import Session
 
 from context_engine.config import Settings
 from context_engine.models import (
     DOMAIN_OPERATION_ACTIVE_STATUSES,
     DOMAIN_STATE_RUNNING,
+    SOURCE_INDEX_STATE_READY,
+    SOURCE_STATE_PREPARED,
     Domain,
     DomainOperation,
     SourceBlock,
@@ -33,8 +35,11 @@ EVIDENCE_RESULT_FOUND = "evidence_found"
 EVIDENCE_RESULT_NO_CONTEXT = "no_grounded_context"
 MAX_EVIDENCE_EXCERPT_CHARS = 500
 MAX_SOURCE_LABEL_CHARS = 255
-_CE_BLOCK_TOKEN_RE = re.compile(r"\[CE_BLOCK[^\]]*\]")
-_CE_BLOCK_MARKER_RE = re.compile(r"^\[CE_BLOCK id=([^\]\s]+) order=([1-9]\d*)\]$")
+_RESERVED_PROVENANCE_TOKEN_RE = re.compile(r"\[CE_(?:SOURCE|BLOCK)\b")
+_CE_BLOCK_MARKER_RE = re.compile(
+    r"^\[CE_BLOCK schema=2 source_id=([^\]\s]+) source_sha256=([^\]\s]{64}) "
+    r"block_id=([^\]\s]+) order=([1-9]\d*)\]$"
+)
 _RETRIEVAL_GATE_LOCK = threading.Lock()
 _RETRIEVAL_GLOBAL_GATES: dict[int, threading.BoundedSemaphore] = {}
 _RETRIEVAL_DOMAIN_GATES: dict[tuple[int, str], threading.BoundedSemaphore] = {}
@@ -50,6 +55,8 @@ class EvidenceRetrievalError(Exception):
 
 @dataclass(frozen=True)
 class CEBlockMarker:
+    source_id: str
+    source_sha256: str
     block_id: str
     source_order: int
 
@@ -67,6 +74,24 @@ class InternalMappedEvidence:
     source_label: str
     excerpt: str
     retrieval_order: int
+
+
+@dataclass(frozen=True)
+class FrozenSourceIdentity:
+    source_document_id: str
+    preparation_generation: int
+    index_generation: int
+    index_request_id: str
+    index_content_hash: str
+    original_sha256: str
+
+
+@dataclass(frozen=True)
+class FrozenRetrievalScope:
+    domain_id: str
+    control_generation: int
+    runtime_instance_id: str
+    sources: tuple[FrozenSourceIdentity, ...]
 
 
 @dataclass(frozen=True)
@@ -209,13 +234,18 @@ def retrieve_bounded_candidates(
 
 
 def parse_ce_block_marker(text: str) -> CEBlockMarker | None:
-    tokens = _CE_BLOCK_TOKEN_RE.findall(text)
-    if len(tokens) != 1:
+    first_line, separator, body = text.partition("\n")
+    if not separator or _RESERVED_PROVENANCE_TOKEN_RE.search(body):
         return None
-    match = _CE_BLOCK_MARKER_RE.fullmatch(tokens[0])
+    match = _CE_BLOCK_MARKER_RE.fullmatch(first_line)
     if match is None:
         return None
-    return CEBlockMarker(block_id=match.group(1), source_order=int(match.group(2)))
+    return CEBlockMarker(
+        source_id=match.group(1),
+        source_sha256=match.group(2),
+        block_id=match.group(3),
+        source_order=int(match.group(4)),
+    )
 
 
 def _safe_excerpt(markdown: str) -> str:
@@ -279,6 +309,32 @@ def eligible_sources_for_domain(
     return [source for source in sources if source_is_query_eligible(db, source, domain, settings=settings, controller=controller)]
 
 
+def freeze_retrieval_scope(
+    domain: Domain,
+    sources: list[SourceDocument],
+) -> FrozenRetrievalScope:
+    frozen_sources: list[FrozenSourceIdentity] = []
+    for source in sources:
+        if not source.index_request_id or not source.index_content_hash:
+            continue
+        frozen_sources.append(
+            FrozenSourceIdentity(
+                source_document_id=source.id,
+                preparation_generation=source.preparation_generation,
+                index_generation=source.index_generation,
+                index_request_id=source.index_request_id,
+                index_content_hash=source.index_content_hash,
+                original_sha256=source.original_sha256,
+            )
+        )
+    return FrozenRetrievalScope(
+        domain_id=domain.id,
+        control_generation=domain.control_generation,
+        runtime_instance_id=domain.runtime_instance_id,
+        sources=tuple(frozen_sources),
+    )
+
+
 def map_retrieval_hits_to_evidence(
     db: Session,
     *,
@@ -286,6 +342,7 @@ def map_retrieval_hits_to_evidence(
     domain: Domain,
     hits: tuple[ScopedRetrievalCandidate, ...] | list[ScopedRetrievalCandidate],
     controller: DomainRuntimeController | None = None,
+    frozen_scope: FrozenRetrievalScope | None = None,
 ) -> list[EvidenceItem]:
     return [
         EvidenceItem(excerpt=item.excerpt, source_label=item.source_label)
@@ -295,6 +352,7 @@ def map_retrieval_hits_to_evidence(
             domain=domain,
             hits=hits,
             controller=controller,
+            frozen_scope=frozen_scope,
         )
     ]
 
@@ -306,25 +364,89 @@ def map_retrieval_hits_to_internal_evidence(
     domain: Domain,
     hits: tuple[ScopedRetrievalCandidate, ...] | list[ScopedRetrievalCandidate],
     controller: DomainRuntimeController | None = None,
+    frozen_scope: FrozenRetrievalScope | None = None,
 ) -> list[InternalMappedEvidence]:
     controller = controller or controller_from_settings(settings)
-    evidence: list[InternalMappedEvidence] = []
-    seen_blocks: set[str] = set()
-    current_domain = db.get(Domain, domain.id)
-    if current_domain is None or not domain_available(db, current_domain, controller):
-        return evidence
+    if frozen_scope is None:
+        current_sources = eligible_sources_for_domain(
+            db,
+            settings=settings,
+            domain=domain,
+            controller=controller,
+        )
+        frozen_scope = freeze_retrieval_scope(domain, current_sources)
+    if not frozen_scope.sources:
+        return []
 
+    parsed_candidates: list[tuple[ScopedRetrievalCandidate, CEBlockMarker]] = []
     for hit in hits:
         marker = parse_ce_block_marker(hit.text)
-        if marker is None or marker.block_id in seen_blocks:
+        if marker is None:
             continue
-        block = db.get(SourceBlock, marker.block_id)
-        if block is None or block.domain_id != current_domain.id or block.source_order != marker.source_order:
+        parsed_candidates.append((hit, marker))
+    if not parsed_candidates:
+        return []
+
+    frozen_rows = [
+        (
+            frozen.source_document_id,
+            frozen.preparation_generation,
+            frozen.index_generation,
+            frozen.index_request_id,
+            frozen.index_content_hash,
+            frozen.original_sha256,
+        )
+        for frozen in frozen_scope.sources
+    ]
+    block_ids = tuple({marker.block_id for _, marker in parsed_candidates})
+    active_operation = exists(
+        select(DomainOperation.id).where(
+            DomainOperation.domain_id == Domain.id,
+            DomainOperation.status.in_(DOMAIN_OPERATION_ACTIVE_STATUSES),
+        )
+    )
+    statement = (
+        select(SourceBlock, SourceDocument)
+        .join(SourceDocument, SourceDocument.id == SourceBlock.source_document_id)
+        .join(Domain, Domain.id == SourceDocument.domain_id)
+        .where(
+            Domain.id == frozen_scope.domain_id,
+            Domain.state == DOMAIN_STATE_RUNNING,
+            Domain.control_generation == frozen_scope.control_generation,
+            Domain.runtime_instance_id == frozen_scope.runtime_instance_id,
+            ~active_operation,
+            SourceDocument.domain_id == frozen_scope.domain_id,
+            SourceDocument.state == SOURCE_STATE_PREPARED,
+            SourceDocument.index_state == SOURCE_INDEX_STATE_READY,
+            tuple_(
+                SourceDocument.id,
+                SourceDocument.preparation_generation,
+                SourceDocument.index_generation,
+                SourceDocument.index_request_id,
+                SourceDocument.index_content_hash,
+                SourceDocument.original_sha256,
+            ).in_(frozen_rows),
+            SourceBlock.domain_id == frozen_scope.domain_id,
+            SourceBlock.id.in_(block_ids),
+        )
+    )
+    current_rows = db.execute(statement).all()
+    current_by_block_id = {block.id: (block, source) for block, source in current_rows}
+
+    evidence: list[InternalMappedEvidence] = []
+    seen_blocks: set[str] = set()
+    for _hit, marker in parsed_candidates:
+        if marker.block_id in seen_blocks:
             continue
-        source = db.get(SourceDocument, block.source_document_id)
-        if source is None or source.domain_id != current_domain.id:
+        current = current_by_block_id.get(marker.block_id)
+        if current is None:
             continue
-        if not source_is_query_eligible(db, source, current_domain, settings=settings, controller=controller):
+        block, source = current
+        if (
+            marker.source_id != source.id
+            or marker.source_sha256 != source.original_sha256
+            or marker.source_order != block.source_order
+        ):
             continue
         item = safe_evidence_item(block, source)
         if item is None:
@@ -352,13 +474,15 @@ def retrieve_scoped_evidence(
     controller: DomainRuntimeController | None = None,
 ) -> dict[str, object]:
     domain, controller = resolve_available_domain(db, settings=settings, domain_id=domain_id, controller=controller)
-    if not eligible_sources_for_domain(db, settings=settings, domain=domain, controller=controller):
+    eligible_sources = eligible_sources_for_domain(db, settings=settings, domain=domain, controller=controller)
+    if not eligible_sources:
         raise EvidenceRetrievalError(
             409,
             "domain_no_eligible_sources",
             "This knowledge domain has no eligible sources for retrieval.",
         )
 
+    frozen_scope = freeze_retrieval_scope(domain, eligible_sources)
     db.commit()
     client = client or index_client_from_settings(settings, controller)
     try:
@@ -371,7 +495,14 @@ def retrieve_scoped_evidence(
     except (SourceIndexError, ScopedRetrievalError) as exc:
         raise EvidenceRetrievalError(502, "domain_runtime_unavailable", "Knowledge domain runtime is unavailable.") from exc
 
-    evidence = map_retrieval_hits_to_evidence(db, settings=settings, domain=domain, hits=hits, controller=controller)
+    evidence = map_retrieval_hits_to_evidence(
+        db,
+        settings=settings,
+        domain=domain,
+        hits=hits,
+        controller=controller,
+        frozen_scope=frozen_scope,
+    )
     if not evidence:
         return {"result": EVIDENCE_RESULT_NO_CONTEXT, "evidence": []}
     return {
