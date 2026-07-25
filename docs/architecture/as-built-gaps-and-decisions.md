@@ -14,7 +14,7 @@ Every foundation stays `NOT_STARTED` until the targeted boundary proof in the br
 
 ## Partial or scaffolded capabilities
 
-- **Parsers:** current Docling adapter is a simple text fallback; Reducto fails as unimplemented. Choose and add real SDK/process integration, fixtures, timeouts, and typed errors.
+- **Parsers:** P4-03 lands a `DocumentParser` port with Docling/Reducto adapters, injectable fixtures, bounded timeouts, and typed fail-closed errors. Live workers still require optional `parsers` extras (`docling`, `reductoai`); CI proves behavior via injected transports without network.
 - **Model providers:** OpenAI, Bedrock, and Ollama are represented in configuration/ports, but their SDK dependencies and production adapters are not proven by the root manifest.
 - **LightRAG/runtime:** local Compose deliberately uses local client/controller modes. Native per-domain LightRAG and Docker lifecycle need separate integration evidence.
 - **Tracing:** the optional tracer currently resolves to a disabled/no-op port and has no Langfuse dependency/configuration.

@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import re
 import secrets
 import shutil
+import threading
 import uuid
-from collections.abc import Callable
-from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -23,6 +21,14 @@ from context_engine.adapters.object_storage import (
     new_object_key,
     object_store_from_root,
 )
+from context_engine.adapters.parsers import (
+    DocumentParser,
+    ParserAdapterError,
+    ParserRequest,
+    PreparedSource,
+    default_parser_registry,
+    validate_prepared_source,
+)
 from context_engine.config import Settings
 from context_engine.db import utc_now
 from context_engine.models import (
@@ -31,13 +37,8 @@ from context_engine.models import (
     AUDIT_EVENT_SOURCE_PREPARATION_RETRIED,
     AUDIT_EVENT_SOURCE_UPLOADED,
     DOMAIN_STATE_DELETING,
-    PARSER_DOCLING,
     PARSER_REDUCTO,
     PROVIDER_REDUCTO,
-    SOURCE_BLOCK_KIND_FIGURE,
-    SOURCE_BLOCK_KIND_TABLE,
-    SOURCE_BLOCK_KIND_TEXT,
-    SOURCE_BLOCK_KINDS,
     SOURCE_INDEX_STATE_ACCEPTED,
     SOURCE_INDEX_STATE_CANCELLING,
     SOURCE_INDEX_STATE_CANCELLED,
@@ -69,8 +70,6 @@ from context_engine.services.auth import iso_utc
 from context_engine.services.indexing import SourceIndexError, cleanup_index_before_source_delete, queue_source_index_after_publish
 from context_engine.services.runtime_config import SecretCrypto, ensure_runtime_settings, is_provider_configured
 from context_engine.services.source_upload import (
-    ALLOWED_SOURCE_CONTENT_TYPES,
-    MAX_SOURCE_FILE_SIZE_BYTES,
     UploadValidationError,
     validate_upload_bytes,
 )
@@ -78,23 +77,7 @@ from context_engine.services.structured_logging import safe_log
 
 logger = logging.getLogger(__name__)
 
-_IMAGE_MIME_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
 _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._ -]+")
-_FORBIDDEN_PREPARED_KEYS = {
-    "bbox",
-    "confidence",
-    "granular_confidence",
-    "image_url",
-    "job_id",
-    "native_id",
-    "parser_payload",
-    "pdf_url",
-    "provider_payload",
-    "self_ref",
-    "studio_link",
-    "task_id",
-    "url",
-}
 
 
 class SourceError(Exception):
@@ -109,53 +92,6 @@ class SourceStorageError(Exception):
     pass
 
 
-class ParserAdapterError(Exception):
-    def __init__(self, code: str, message: str = "Source preparation failed.", status_code: int = 502) -> None:
-        self.code = code
-        self.message = message
-        self.status_code = status_code
-        super().__init__(message)
-
-
-@dataclass(frozen=True)
-class PreparedWarning:
-    code: str
-    message: str
-
-
-@dataclass(frozen=True)
-class PreparedBlock:
-    source_order: int
-    kind: str
-    canonical_markdown: str
-    heading_level: int | None = None
-    page_start: int | None = None
-    page_end: int | None = None
-    section_path: list[str] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class PreparedImage:
-    source_order: int
-    content_hash: str
-    mime_type: str
-    bytes_data: bytes
-    alt_text: str | None = None
-    page_number: int | None = None
-
-
-@dataclass(frozen=True)
-class PreparedSource:
-    source_document_id: str
-    parser_kind: str
-    blocks: list[PreparedBlock]
-    images: list[PreparedImage] = field(default_factory=list)
-    warnings: list[PreparedWarning] = field(default_factory=list)
-
-
-ParserAdapter = Callable[[SourceDocument, bytes, str | None], PreparedSource]
-
-
 def new_document_public_ref() -> str:
     return f"doc_{secrets.token_urlsafe(24)}"
 
@@ -163,8 +99,8 @@ def new_document_public_ref() -> str:
 class SourceStorage:
     """Source-facing storage facade over the governed object-store port.
 
-    Derived image bytes remain under a private filesystem layout until P4-03
-    adds image object-key columns. Originals use opaque object keys.
+    Originals and derived image bytes use opaque object keys. A legacy
+    filesystem layout under domains/... remains only for pre-P4 cleanup.
     """
 
     def __init__(self, root: str, store: ObjectStorage | None = None) -> None:
@@ -188,9 +124,6 @@ class SourceStorage:
     def source_dir(self, domain_id: str, source_id: str) -> Path:
         return self._safe_path("domains", domain_id, "sources", source_id)
 
-    def image_path(self, domain_id: str, source_id: str, image_id: str) -> Path:
-        return self.source_dir(domain_id, source_id) / "images" / image_id
-
     def put_original(self, data: bytes, *, content_type: str | None = None) -> str:
         try:
             return self._store.put(data, content_type=content_type).key
@@ -209,17 +142,31 @@ class SourceStorage:
         except OSError as exc:
             raise SourceStorageError("Source original unavailable.") from exc
 
-    def write_image(self, source: SourceDocument, image_id: str, data: bytes) -> None:
-        path = self.image_path(source.domain_id, source.id, image_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
+    def write_image(self, data: bytes, *, content_type: str | None = None) -> str:
+        try:
+            return self._store.put(data, content_type=content_type).key
+        except ObjectStorageError as exc:
+            raise SourceStorageError("Source image could not be stored.") from exc
 
-    def delete_source_files(self, domain_id: str, source_id: str, *, original_object_key: str | None = None) -> None:
-        if original_object_key:
+    def delete_object_keys(self, object_keys: list[str]) -> None:
+        for key in object_keys:
+            if not key:
+                continue
             try:
-                self._store.delete(original_object_key)
+                self._store.delete(key)
             except ObjectStorageError as exc:
                 raise SourceStorageError("Source files could not be removed.") from exc
+
+    def delete_source_files(
+        self,
+        domain_id: str,
+        source_id: str,
+        *,
+        original_object_key: str | None = None,
+        image_object_keys: list[str] | None = None,
+    ) -> None:
+        keys = [key for key in [original_object_key, *(image_object_keys or [])] if key]
+        self.delete_object_keys(keys)
         source_dir = self.source_dir(domain_id, source_id)
         try:
             if source_dir.exists():
@@ -603,6 +550,8 @@ def cancel_source(
     operation.message = "Preparation cancelled."
     operation.error_code = None
     operation.error_message = None
+    operation.lease_owner = None
+    operation.lease_expires_at = None
     operation.finished_at = now
     operation.updated_at = now
     if audit_context is not None:
@@ -626,6 +575,8 @@ def _cancel_active_operation_for_delete(db: Session, source: SourceDocument, now
     operation.message = "Preparation cancelled."
     operation.error_code = None
     operation.error_message = None
+    operation.lease_owner = None
+    operation.lease_expires_at = None
     operation.finished_at = now
     operation.updated_at = now
 
@@ -649,10 +600,16 @@ def delete_source(
     source.updated_at = now
     _cancel_active_operation_for_delete(db, source, now)
     cleanup_index_before_source_delete(db, settings=settings, source=source)
+    image_object_keys = [
+        image.object_key
+        for image in db.scalars(select(SourceImage).where(SourceImage.source_document_id == source.id))
+        if image.object_key
+    ]
     storage_from_settings(settings).delete_source_files(
         domain_id,
         source_id,
         original_object_key=source.original_object_key,
+        image_object_keys=image_object_keys,
     )
     db.delete(source)
     if audit_context is not None:
@@ -684,274 +641,58 @@ def purge_domain_sources_local(
         source.updated_at = now
         _cancel_active_operation_for_delete(db, source, now)
         cleanup_index_before_source_delete(db, settings=settings, source=source)
+        image_object_keys = [
+            image.object_key
+            for image in db.scalars(select(SourceImage).where(SourceImage.source_document_id == source.id))
+            if image.object_key
+        ]
         storage.delete_source_files(
             source.domain_id,
             source.id,
             original_object_key=source.original_object_key,
+            image_object_keys=image_object_keys,
         )
         db.delete(source)
     db.flush()
 
 
-def _safe_text(value: Any) -> str:
-    return str(value or "").strip()
+def _lease_heartbeat_seconds(lease_seconds: int) -> int:
+    return max(1, lease_seconds // 3)
 
 
-def _page_from_native(value: Any) -> int | None:
-    if isinstance(value, dict):
-        for key in ("page", "page_no", "page_number"):
-            page = value.get(key)
-            if isinstance(page, int) and page >= 1:
-                return page
-        bbox = value.get("bbox")
-        if isinstance(bbox, dict):
-            return _page_from_native(bbox)
-    if isinstance(value, list):
-        for item in value:
-            page = _page_from_native(item)
-            if page is not None:
-                return page
-    return None
+def _prep_lease_current(
+    operation: SourcePreparationOperation,
+    *,
+    owner: str,
+    now=None,
+) -> bool:
+    current = now or utc_now()
+    if operation.status != SOURCE_PREP_STATUS_RUNNING:
+        return False
+    if operation.lease_owner != owner:
+        return False
+    if operation.lease_expires_at is None or operation.lease_expires_at < current:
+        return False
+    return True
 
 
-def _heading_markdown(text: str, level: int) -> str:
-    text = text.lstrip("# ").strip()
-    prefix = "#" * max(1, min(level, 6))
-    return f"{prefix} {text}"
-
-
-def normalize_reducto_parse_response(source_document_id: str, parser_kind: str, payload: dict[str, Any]) -> PreparedSource:
-    result = payload.get("result", payload)
-    chunks = result.get("chunks") if isinstance(result, dict) else None
-    if not isinstance(chunks, list):
-        raise ParserAdapterError("parser_malformed_response", "Parser response could not be normalized.")
-
-    blocks: list[PreparedBlock] = []
-    images: list[PreparedImage] = []
-    section_path: list[str] = []
-    order = 1
-    for chunk in chunks:
-        native_blocks = chunk.get("blocks", []) if isinstance(chunk, dict) else []
-        if not native_blocks and isinstance(chunk, dict) and chunk.get("content"):
-            native_blocks = [{"type": "Text", "content": chunk.get("content")}]
-        for native in native_blocks:
-            if not isinstance(native, dict):
-                continue
-            native_type = _safe_text(native.get("type") or native.get("label")).lower()
-            content = _safe_text(native.get("content") or native.get("text") or native.get("caption"))
-            page = _page_from_native(native)
-            heading_level: int | None = None
-            kind = SOURCE_BLOCK_KIND_TEXT
-            if native_type in {"title"}:
-                heading_level = 1
-                if content:
-                    section_path = [content]
-                    content = _heading_markdown(content, heading_level)
-            elif native_type in {"section header", "section_header", "header", "heading"}:
-                heading_level = 2
-                if content:
-                    section_path = (section_path[:1] if section_path else []) + [content]
-                    content = _heading_markdown(content, heading_level)
-            elif "table" in native_type:
-                kind = SOURCE_BLOCK_KIND_TABLE
-            elif "figure" in native_type or "picture" in native_type or "image" in native_type:
-                kind = SOURCE_BLOCK_KIND_FIGURE
-            if not content and kind == SOURCE_BLOCK_KIND_FIGURE:
-                content = _safe_text(native.get("alt_text")) or "Figure"
-            blocks.append(
-                PreparedBlock(
-                    source_order=order,
-                    kind=kind,
-                    canonical_markdown=content,
-                    heading_level=heading_level,
-                    page_start=page,
-                    page_end=page,
-                    section_path=list(section_path),
-                )
-            )
-            image_bytes = native.get("image_bytes")
-            if kind == SOURCE_BLOCK_KIND_FIGURE and isinstance(image_bytes, bytes):
-                mime_type = _safe_text(native.get("mime_type") or "image/png").lower()
-                images.append(
-                    PreparedImage(
-                        source_order=order,
-                        content_hash=hashlib.sha256(image_bytes).hexdigest(),
-                        mime_type=mime_type,
-                        bytes_data=image_bytes,
-                        alt_text=_safe_text(native.get("alt_text")) or None,
-                        page_number=page,
-                    )
-                )
-            order += 1
-    return PreparedSource(source_document_id=source_document_id, parser_kind=parser_kind, blocks=blocks, images=images)
-
-
-def normalize_docling_document(source_document_id: str, parser_kind: str, payload: dict[str, Any]) -> PreparedSource:
-    items_by_ref: dict[str, dict[str, Any]] = {}
-    for list_name in ("texts", "tables", "pictures"):
-        values = payload.get(list_name, [])
-        if isinstance(values, list):
-            for index, item in enumerate(values):
-                if isinstance(item, dict):
-                    ref = str(item.get("self_ref") or f"#/{list_name}/{index}")
-                    items_by_ref[ref] = item
-
-    ordered_items: list[dict[str, Any]] = []
-
-    def walk(node: Any) -> None:
-        if isinstance(node, dict):
-            ref = node.get("$ref") or node.get("self_ref") or node.get("ref")
-            if isinstance(ref, str) and ref in items_by_ref:
-                ordered_items.append(items_by_ref[ref])
-            for child in node.get("children", []) or []:
-                walk(child)
-        elif isinstance(node, list):
-            for child in node:
-                walk(child)
-
-    body = payload.get("body")
-    walk(body)
-    if not ordered_items:
-        for list_name in ("texts", "tables", "pictures"):
-            values = payload.get(list_name, [])
-            if isinstance(values, list):
-                ordered_items.extend(item for item in values if isinstance(item, dict))
-
-    blocks: list[PreparedBlock] = []
-    images: list[PreparedImage] = []
-    section_path: list[str] = []
-    for order, item in enumerate(ordered_items, start=1):
-        label = _safe_text(item.get("label") or item.get("type") or item.get("name")).lower()
-        text = _safe_text(item.get("text") or item.get("content") or item.get("caption"))
-        page = _page_from_native(item.get("prov") or item)
-        heading_level: int | None = None
-        kind = SOURCE_BLOCK_KIND_TEXT
-        if "title" in label:
-            heading_level = 1
-            if text:
-                section_path = [text]
-                text = _heading_markdown(text, heading_level)
-        elif "section" in label or "header" in label:
-            heading_level = int(item.get("level") or 2)
-            if text:
-                section_path = (section_path[: max(0, heading_level - 1)] if section_path else []) + [text]
-                text = _heading_markdown(text, heading_level)
-        elif "table" in label:
-            kind = SOURCE_BLOCK_KIND_TABLE
-        elif "picture" in label or "figure" in label or "image" in label:
-            kind = SOURCE_BLOCK_KIND_FIGURE
-        if not text and kind == SOURCE_BLOCK_KIND_FIGURE:
-            text = _safe_text(item.get("alt_text")) or "Figure"
-        blocks.append(
-            PreparedBlock(
-                source_order=order,
-                kind=kind,
-                canonical_markdown=text,
-                heading_level=heading_level,
-                page_start=page,
-                page_end=page,
-                section_path=list(section_path),
-            )
-        )
-        image_bytes = item.get("image_bytes")
-        if kind == SOURCE_BLOCK_KIND_FIGURE and isinstance(image_bytes, bytes):
-            mime_type = _safe_text(item.get("mime_type") or "image/png").lower()
-            images.append(
-                PreparedImage(
-                    source_order=order,
-                    content_hash=hashlib.sha256(image_bytes).hexdigest(),
-                    mime_type=mime_type,
-                    bytes_data=image_bytes,
-                    alt_text=_safe_text(item.get("alt_text")) or None,
-                    page_number=page,
-                )
-            )
-    return PreparedSource(source_document_id=source_document_id, parser_kind=parser_kind, blocks=blocks, images=images)
-
-
-def _simple_text_prepared_source(source: SourceDocument, original_bytes: bytes) -> PreparedSource:
-    text = original_bytes.decode("utf-8", errors="replace").strip()
-    if not text:
-        raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
-    blocks: list[PreparedBlock] = []
-    section_path: list[str] = []
-    order = 1
-    for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if stripped.startswith("#"):
-            heading_text = stripped.lstrip("# ").strip()
-            heading_level = max(1, min(len(stripped) - len(stripped.lstrip("#")), 6))
-            section_path = (section_path[: max(0, heading_level - 1)] if section_path else []) + [heading_text]
-            blocks.append(
-                PreparedBlock(
-                    source_order=order,
-                    kind=SOURCE_BLOCK_KIND_TEXT,
-                    canonical_markdown=_heading_markdown(heading_text, heading_level),
-                    heading_level=heading_level,
-                    section_path=list(section_path),
-                )
-            )
-            order += 1
-    body_lines = [line.strip() for line in text.splitlines() if line.strip() and not line.strip().startswith("#")]
-    if body_lines:
-        blocks.append(
-            PreparedBlock(
-                source_order=order,
-                kind=SOURCE_BLOCK_KIND_TEXT,
-                canonical_markdown="\n".join(body_lines),
-                section_path=list(section_path),
-            )
-        )
-    if not blocks:
-        blocks.append(PreparedBlock(source_order=1, kind=SOURCE_BLOCK_KIND_TEXT, canonical_markdown=text))
-    return PreparedSource(source_document_id=source.id, parser_kind=source.parser_kind, blocks=blocks)
-
-
-def docling_adapter(source: SourceDocument, original_bytes: bytes, _credential: str | None = None) -> PreparedSource:
-    return _simple_text_prepared_source(source, original_bytes)
-
-
-def reducto_adapter(source: SourceDocument, original_bytes: bytes, credential: str | None = None) -> PreparedSource:
-    if credential is None:
-        raise ParserAdapterError("parser_not_ready", "Parser is not configured.", 409)
-    return _simple_text_prepared_source(source, original_bytes)
-
-
-def _validate_prepared_source(prepared: PreparedSource) -> None:
-    if not prepared.blocks:
-        raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
-    seen: set[int] = set()
-    figure_orders = {block.source_order for block in prepared.blocks if block.kind == SOURCE_BLOCK_KIND_FIGURE}
-    for block in prepared.blocks:
-        if block.source_order < 1 or block.source_order in seen:
-            raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
-        seen.add(block.source_order)
-        if block.kind not in SOURCE_BLOCK_KINDS:
-            raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
-        if block.kind in {SOURCE_BLOCK_KIND_TEXT, SOURCE_BLOCK_KIND_TABLE} and not block.canonical_markdown.strip():
-            raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
-        if block.kind == SOURCE_BLOCK_KIND_FIGURE and not block.canonical_markdown.strip():
-            raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
-        if block.heading_level is not None and block.heading_level < 1:
-            raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
-        if block.page_start is not None and block.page_start < 1:
-            raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
-        if block.page_end is not None and block.page_end < 1:
-            raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
-        if block.page_start is not None and block.page_end is not None and block.page_end < block.page_start:
-            raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
-        as_dict = block.__dict__
-        if _FORBIDDEN_PREPARED_KEYS.intersection(as_dict):
-            raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
-    for image in prepared.images:
-        if image.source_order not in figure_orders:
-            raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
-        if image.mime_type not in _IMAGE_MIME_TYPES:
-            raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
-        if hashlib.sha256(image.bytes_data).hexdigest() != image.content_hash:
-            raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
+def _heartbeat_prep_lease(
+    db: Session,
+    operation: SourcePreparationOperation,
+    *,
+    owner: str,
+    lease_seconds: int,
+    now=None,
+) -> bool:
+    current = now or utc_now()
+    db.refresh(operation)
+    if not _prep_lease_current(operation, owner=owner, now=current):
+        return False
+    operation.lease_expires_at = current + timedelta(seconds=lease_seconds)
+    operation.updated_at = current
+    db.commit()
+    db.refresh(operation)
+    return True
 
 
 def _fail_operation(db: Session, operation: SourcePreparationOperation, code: str, message: str) -> None:
@@ -960,6 +701,8 @@ def _fail_operation(db: Session, operation: SourcePreparationOperation, code: st
     operation.message = message
     operation.error_code = code
     operation.error_message = message
+    operation.lease_owner = None
+    operation.lease_expires_at = None
     operation.finished_at = now
     operation.updated_at = now
     db.commit()
@@ -986,10 +729,65 @@ def _resolve_parser_credential(db: Session, settings: Settings, parser_kind: str
     return SecretCrypto.from_settings(settings).decrypt_secret(provider.credential_ciphertext)
 
 
-def publish_prepared_source(db: Session, settings: Settings, operation_id: str, prepared: PreparedSource) -> bool:
-    _validate_prepared_source(prepared)
+def _cas_finalize_preparation(
+    db: Session,
+    *,
+    operation_id: str,
+    source_id: str,
+    owner: str,
+    preparation_generation: int,
+    now,
+) -> bool:
+    operation_updated = db.execute(
+        update(SourcePreparationOperation)
+        .where(
+            SourcePreparationOperation.id == operation_id,
+            SourcePreparationOperation.status == SOURCE_PREP_STATUS_RUNNING,
+            SourcePreparationOperation.lease_owner == owner,
+            SourcePreparationOperation.lease_expires_at.is_not(None),
+            SourcePreparationOperation.lease_expires_at >= now,
+            SourcePreparationOperation.preparation_generation_at_start == preparation_generation,
+        )
+        .values(
+            status=SOURCE_PREP_STATUS_SUCCEEDED,
+            message="Preparation succeeded.",
+            error_code=None,
+            error_message=None,
+            lease_owner=None,
+            lease_expires_at=None,
+            finished_at=now,
+            updated_at=now,
+        )
+    )
+    if int(operation_updated.rowcount or 0) != 1:
+        return False
+    source_updated = db.execute(
+        update(SourceDocument)
+        .where(
+            SourceDocument.id == source_id,
+            SourceDocument.state == SOURCE_STATE_PENDING,
+            SourceDocument.preparation_generation == preparation_generation,
+        )
+        .values(state=SOURCE_STATE_PREPARED, updated_at=now)
+    )
+    return int(source_updated.rowcount or 0) == 1
+
+
+def publish_prepared_source(
+    db: Session,
+    settings: Settings,
+    operation_id: str,
+    prepared: PreparedSource,
+    *,
+    lease_owner: str | None = None,
+) -> bool:
+    validate_prepared_source(prepared)
     operation = db.get(SourcePreparationOperation, operation_id)
-    if operation is None or operation.status != SOURCE_PREP_STATUS_RUNNING:
+    if operation is None:
+        return False
+    owner = lease_owner or settings.source_prep_worker_id
+    now = utc_now()
+    if not _prep_lease_current(operation, owner=owner, now=now):
         return False
     source = db.get(SourceDocument, operation.source_document_id)
     if source is None:
@@ -999,59 +797,105 @@ def publish_prepared_source(db: Session, settings: Settings, operation_id: str, 
     if source.id != prepared.source_document_id or source.parser_kind != prepared.parser_kind:
         raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
 
-    db.execute(delete(SourceImage).where(SourceImage.source_document_id == source.id))
-    db.execute(delete(SourceBlock).where(SourceBlock.source_document_id == source.id))
-    blocks_by_order: dict[int, SourceBlock] = {}
-    now = utc_now()
-    for prepared_block in sorted(prepared.blocks, key=lambda block: block.source_order):
-        block = SourceBlock(
-            id=str(uuid.uuid4()),
-            source_document_id=source.id,
-            domain_id=source.domain_id,
-            source_order=prepared_block.source_order,
-            kind=prepared_block.kind,
-            canonical_markdown=prepared_block.canonical_markdown,
-            heading_level=prepared_block.heading_level,
-            page_start=prepared_block.page_start,
-            page_end=prepared_block.page_end,
-            section_path=json.dumps(prepared_block.section_path),
-            created_at=now,
-        )
-        db.add(block)
-        blocks_by_order[prepared_block.source_order] = block
-    db.flush()
+    previous_image_keys = [
+        image.object_key
+        for image in db.scalars(select(SourceImage).where(SourceImage.source_document_id == source.id))
+        if image.object_key
+    ]
     storage = storage_from_settings(settings)
-    for prepared_image in prepared.images:
-        block = blocks_by_order[prepared_image.source_order]
-        image = SourceImage(
-            id=str(uuid.uuid4()),
-            source_document_id=source.id,
-            source_block_id=block.id,
-            content_hash=prepared_image.content_hash,
-            mime_type=prepared_image.mime_type,
-            alt_text=prepared_image.alt_text,
-            page_number=prepared_image.page_number,
-            created_at=now,
-        )
-        db.add(image)
-        storage.write_image(source, image.id, prepared_image.bytes_data)
-    source.state = SOURCE_STATE_PREPARED
-    source.updated_at = now
-    queue_source_index_after_publish(db, source)
-    operation.status = SOURCE_PREP_STATUS_SUCCEEDED
-    operation.message = "Preparation succeeded."
-    operation.error_code = None
-    operation.error_message = None
-    operation.finished_at = now
-    operation.updated_at = now
-    db.commit()
+    written_image_keys: list[str] = []
+    preparation_generation = operation.preparation_generation_at_start
+    try:
+        for prepared_image in prepared.images:
+            object_key = storage.write_image(prepared_image.bytes_data, content_type=prepared_image.mime_type)
+            written_image_keys.append(object_key)
+
+        db.execute(delete(SourceImage).where(SourceImage.source_document_id == source.id))
+        db.execute(delete(SourceBlock).where(SourceBlock.source_document_id == source.id))
+        blocks_by_order: dict[int, SourceBlock] = {}
+        for prepared_block in sorted(prepared.blocks, key=lambda block: block.source_order):
+            block = SourceBlock(
+                id=str(uuid.uuid4()),
+                source_document_id=source.id,
+                domain_id=source.domain_id,
+                source_order=prepared_block.source_order,
+                kind=prepared_block.kind,
+                canonical_markdown=prepared_block.canonical_markdown,
+                heading_level=prepared_block.heading_level,
+                page_start=prepared_block.page_start,
+                page_end=prepared_block.page_end,
+                section_path=json.dumps(prepared_block.section_path),
+                created_at=now,
+            )
+            db.add(block)
+            blocks_by_order[prepared_block.source_order] = block
+        db.flush()
+        image_key_iter = iter(written_image_keys)
+        for prepared_image in prepared.images:
+            block = blocks_by_order[prepared_image.source_order]
+            image = SourceImage(
+                id=str(uuid.uuid4()),
+                source_document_id=source.id,
+                source_block_id=block.id,
+                object_key=next(image_key_iter),
+                content_hash=prepared_image.content_hash,
+                mime_type=prepared_image.mime_type,
+                alt_text=prepared_image.alt_text,
+                page_number=prepared_image.page_number,
+                created_at=now,
+            )
+            db.add(image)
+
+        now = utc_now()
+        if not _cas_finalize_preparation(
+            db,
+            operation_id=operation.id,
+            source_id=source.id,
+            owner=owner,
+            preparation_generation=preparation_generation,
+            now=now,
+        ):
+            db.rollback()
+            if written_image_keys:
+                storage.delete_object_keys(written_image_keys)
+            return False
+
+        db.expire_all()
+        source = db.get(SourceDocument, source.id)
+        if source is None:
+            db.rollback()
+            if written_image_keys:
+                storage.delete_object_keys(written_image_keys)
+            return False
+        queue_source_index_after_publish(db, source)
+        db.commit()
+    except Exception:
+        db.rollback()
+        if written_image_keys:
+            storage.delete_object_keys(written_image_keys)
+        raise
+    if previous_image_keys:
+        try:
+            storage.delete_object_keys(previous_image_keys)
+        except SourceStorageError:
+            safe_log(
+                logger,
+                "source_preparation_worker.image_cleanup_deferred",
+                request_id=operation.request_id,
+                domain_id=operation.domain_id,
+                source_id=operation.source_document_id,
+                operation_id=operation.id,
+                outcome="failed",
+            )
     return True
 
 
 class SourcePreparationWorker:
-    def __init__(self, settings: Settings, adapters: dict[str, ParserAdapter] | None = None) -> None:
+    def __init__(self, settings: Settings, parsers: dict[str, DocumentParser] | None = None) -> None:
         self._settings = settings
-        self._adapters = adapters or {PARSER_DOCLING: docling_adapter, PARSER_REDUCTO: reducto_adapter}
+        self._parsers = parsers or default_parser_registry(
+            reducto_timeout_seconds=float(settings.source_parser_timeout_seconds)
+        )
 
     def run_once(self, db: Session) -> bool:
         operation = self._claim_next_operation(db)
@@ -1060,25 +904,94 @@ class SourcePreparationWorker:
         source = db.get(SourceDocument, operation.source_document_id)
         if source is None:
             return True
+        owner = self._settings.source_prep_worker_id
+        lease_seconds = self._settings.source_prep_lease_seconds
         try:
+            if not _heartbeat_prep_lease(db, operation, owner=owner, lease_seconds=lease_seconds):
+                return True
             original = storage_from_settings(self._settings).read_original(source)
             credential = _resolve_parser_credential(db, self._settings, source.parser_kind)
-            adapter = self._adapters.get(source.parser_kind)
-            if adapter is None:
+            parser = self._parsers.get(source.parser_kind)
+            if parser is None:
                 raise ParserAdapterError("parser_not_ready", "Parser is not configured.", 409)
-            prepared = adapter(source, original, credential)
-            publish_prepared_source(db, self._settings, operation.id, prepared)
+            prepared = self._parse_with_lease_heartbeat(
+                operation_id=operation.id,
+                owner=owner,
+                lease_seconds=lease_seconds,
+                parser=parser,
+                request=ParserRequest(
+                    source_document_id=source.id,
+                    parser_kind=source.parser_kind,
+                    original_bytes=original,
+                    content_type=source.content_type,
+                    filename=source.original_filename,
+                    credential=credential,
+                ),
+            )
+            if prepared is None:
+                return True
+            if not _heartbeat_prep_lease(db, operation, owner=owner, lease_seconds=lease_seconds):
+                return True
+            publish_prepared_source(
+                db,
+                self._settings,
+                operation.id,
+                prepared,
+                lease_owner=owner,
+            )
         except (ParserAdapterError, SourceIndexError) as exc:
             db.rollback()
             current = db.get(SourcePreparationOperation, operation.id)
-            if current is not None and current.status == SOURCE_PREP_STATUS_RUNNING:
+            if current is not None and _prep_lease_current(current, owner=owner):
                 _fail_operation(db, current, exc.code, exc.message)
         except SourceStorageError:
             db.rollback()
             current = db.get(SourcePreparationOperation, operation.id)
-            if current is not None and current.status == SOURCE_PREP_STATUS_RUNNING:
+            if current is not None and _prep_lease_current(current, owner=owner):
                 _fail_operation(db, current, "source_preparation_invalid", "Prepared source did not pass validation.")
         return True
+
+    def _parse_with_lease_heartbeat(
+        self,
+        *,
+        operation_id: str,
+        owner: str,
+        lease_seconds: int,
+        parser: DocumentParser,
+        request: ParserRequest,
+    ) -> PreparedSource | None:
+        from context_engine.db import create_db_engine, create_session_factory
+
+        stop = threading.Event()
+        lost = threading.Event()
+        heartbeat_seconds = _lease_heartbeat_seconds(lease_seconds)
+        engine = create_db_engine(self._settings)
+        session_factory = create_session_factory(engine)
+
+        def _beat() -> None:
+            while not stop.wait(heartbeat_seconds):
+                with session_factory() as beat_db:
+                    current = beat_db.get(SourcePreparationOperation, operation_id)
+                    if current is None or not _heartbeat_prep_lease(
+                        beat_db,
+                        current,
+                        owner=owner,
+                        lease_seconds=lease_seconds,
+                    ):
+                        lost.set()
+                        return
+
+        thread = threading.Thread(target=_beat, name="source-prep-lease-heartbeat", daemon=True)
+        thread.start()
+        try:
+            prepared = parser.parse(request)
+        finally:
+            stop.set()
+            thread.join(timeout=max(1, heartbeat_seconds))
+            engine.dispose()
+        if lost.is_set():
+            return None
+        return prepared
 
     def _claim_next_operation(self, db: Session) -> SourcePreparationOperation | None:
         now = utc_now()

@@ -586,6 +586,7 @@ class SourceImage(Base):
     __table_args__ = (
         CheckConstraint("page_number is null or page_number >= 1", name="ck_source_images_page_positive"),
         Index("ix_source_images_source_block", "source_document_id", "source_block_id"),
+        Index("uq_source_images_object_key", "object_key", unique=True),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -599,6 +600,7 @@ class SourceImage(Base):
         ForeignKey("source_blocks.id", ondelete="CASCADE"),
         nullable=False,
     )
+    object_key: Mapped[str] = mapped_column(String(128), nullable=False)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(80), nullable=False)
     alt_text: Mapped[str | None] = mapped_column(String(500), nullable=True)
