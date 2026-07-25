@@ -43,8 +43,9 @@ Disposition values are `retain-and-reverify`, `modify`, `replace`, `add`, and `r
 | DRIFT-31 | worker cannot stop claiming and drain gracefully | FR-11; A-04, C-01 | modify | P10-03 | leased operations | SIGTERM/SIGINT stop-claim, bounded drain/checkpoint and reclaim tests | NOT_STARTED |
 | DRIFT-32 | unknown external lifecycle outcomes are not reconciled | FR-03, FR-05; A-04, A-05, A-08, A-10 | replace | P3-03, P5-03 | operation/outbox primitive | stable key, unknown state, reconciliation and stale-finalization races | DONE — P3-03 domain uncertain reconcile + P5-03 index timeout→uncertain→readiness probe before re-submit |
 | DRIFT-33 | Deferred publication service permitted stale edits and was coupled into persistence/context/deletion; active routes, services, handlers, ORM tables/columns, composer kind, and Wiki audit vocabulary are removed from the Phase 1 package, while migration provenance and populated-data retirement remain unresolved | Phase-scope manifest; `future/wiki-layer.md` | remove-from-phase-1 | P0-07, P12-01 | recovered migration history and legacy compatibility decision | active-package/schema negative scans plus source/evidence/template composer tests; fresh-install Alembic proof and any populated contraction follow `architecture/legacy-persistence-retirement.md` | IN_PROGRESS |
+| DRIFT-34 | Lifted retrieval is coupled to the index lifecycle client, accepts unversioned block markers from provider text, bounds only native top-k, and maps through stale identity-map objects and multiple database snapshots | FR-05; A-08, C-01, C-02 | replace | P6-01, P6-02 | P5 handoff and query eligibility | schema-v2 marker preservation, bounded admission/deadline/count/bytes, exact one-query mapping, and PostgreSQL stop/restart plus reindex/new-ready race proof; safe public projection remains P6-02 | IN_PROGRESS |
 
-DRIFT IDs 01 through 33 appear exactly once above as primary rows.
+DRIFT IDs 01 through 34 appear exactly once above as primary rows.
 
 ## Contract-removal and stable-ID ledger
 
