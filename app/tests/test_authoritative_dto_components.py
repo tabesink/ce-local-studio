@@ -27,6 +27,9 @@ EXPECTED_COMPONENTS = {
     "OperationDto",
     "OperationErrorDto",
     "ProviderSummaryDto",
+    "RetrievalEvidenceItemDto",
+    "RetrievalEvidenceRequestDto",
+    "RetrievalEvidenceResponseDto",
     "RuntimeSettingsDto",
     "TurnDto",
     "TurnErrorDto",
@@ -75,6 +78,42 @@ def test_authoritative_components_are_closed_camel_case_contracts() -> None:
     assert evidence["properties"]["excerpt"]["maxLength"] == 500
     assert evidence["properties"]["anchor"]["$ref"] == "#/components/schemas/EvidenceAnchorDto"
     assert "region" not in schemas["EvidenceAnchorDto"]["required"]
+
+    retrieval_request = schemas["RetrievalEvidenceRequestDto"]
+    assert retrieval_request["additionalProperties"] is False
+    assert set(retrieval_request["properties"]) == {"question"}
+    assert set(retrieval_request["required"]) == {"question"}
+    assert retrieval_request["properties"]["question"]["minLength"] == 1
+    assert retrieval_request["properties"]["question"]["maxLength"] == 2000
+
+    retrieval_evidence = schemas["RetrievalEvidenceItemDto"]
+    assert retrieval_evidence["additionalProperties"] is False
+    assert set(retrieval_evidence["properties"]) == {
+        "citationLabel",
+        "sourceLabel",
+        "excerpt",
+        "kind",
+        "documentRef",
+        "documentLabel",
+        "anchor",
+    }
+    assert "id" not in retrieval_evidence["properties"]
+    assert retrieval_evidence["properties"]["excerpt"]["maxLength"] == 500
+    assert retrieval_evidence["properties"]["anchor"]["anyOf"] == [
+        {"$ref": "#/components/schemas/EvidenceAnchorDto"},
+        {"type": "null"},
+    ]
+
+    retrieval_response = schemas["RetrievalEvidenceResponseDto"]
+    assert retrieval_response["additionalProperties"] is False
+    assert set(retrieval_response["properties"]) == {"result", "evidence"}
+    assert retrieval_response["properties"]["result"]["enum"] == [
+        "evidence_found",
+        "no_grounded_context",
+    ]
+    assert retrieval_response["properties"]["evidence"]["items"]["$ref"] == (
+        "#/components/schemas/RetrievalEvidenceItemDto"
+    )
 
     turn = schemas["TurnDto"]
     assert turn["additionalProperties"] is False
