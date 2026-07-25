@@ -71,7 +71,7 @@ Required/bootstrap variables include:
 - `CE_SESSION_COOKIE_SECURE`, `CE_SESSION_COOKIE_SAMESITE`, `CE_SESSION_TTL_SECONDS`
 - `CE_DOMAIN_RUNTIME_ROOT`, `CE_DOMAIN_RUNTIME_CONTROLLER_KIND`, `CE_DOMAIN_CONTROLLER_COMMAND`, controller timeout
 - worker IDs and lease durations for domain deletion, source preparation, and indexing
-- `CE_SOURCE_STORAGE_ROOT`, `CE_LIGHTRAG_CLIENT_KIND`
+- `CE_SOURCE_STORAGE_ROOT`, `CE_LIGHTRAG_CLIENT_KIND`, `CE_SOURCE_INDEX_TIMEOUT_SECONDS`
 - `CONTEXT_ENGINE_API_BASE` for server-side frontend proxy/rewrites
 - Compose PostgreSQL credentials and published port overrides
 

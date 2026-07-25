@@ -42,6 +42,7 @@ from context_engine.services.structured_logging import safe_log
 
 logger = logging.getLogger(__name__)
 
+LIGHTRAG_HANDOFF_SCHEMA_VERSION = "1"
 _RENDER_HEADER_RE = re.compile(r"^\[CE_BLOCK id=([^\] ]+) order=(\d+)\]$", re.MULTILINE)
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,96}$")
 _NATIVE_LIGHTRAG_LIFECYCLE_LOCK = threading.RLock()
@@ -100,17 +101,13 @@ def _normalize_markdown(value: str) -> str:
     return value.replace("\r\n", "\n").replace("\r", "\n").strip()
 
 
-def render_lightrag_input(db: Session, source: SourceDocument) -> RenderedLightRAGInput:
-    if source.state != SOURCE_STATE_PREPARED:
-        raise SourceIndexError(409, "source_state_conflict", "Source state does not allow this operation.")
-
-    blocks = list(
-        db.scalars(
-            select(SourceBlock)
-            .where(SourceBlock.source_document_id == source.id)
-            .order_by(SourceBlock.source_order, SourceBlock.id)
-        )
-    )
+def render_blocks_to_lightrag_handoff(
+    *,
+    source_id: str,
+    original_sha256: str,
+    blocks: list[SourceBlock],
+) -> RenderedLightRAGInput:
+    """Render ordered Source Blocks into the versioned LightRAG handoff."""
     if not blocks:
         raise SourceIndexError(422, "source_index_input_invalid", "Source cannot be indexed.")
 
@@ -127,9 +124,30 @@ def render_lightrag_input(db: Session, source: SourceDocument) -> RenderedLightR
         rendered_blocks.append(f"[CE_BLOCK id={block.id} order={block.source_order}]\n{body}")
         block_ids.append(block.id)
 
-    text = f"[CE_SOURCE schema=1 source_id={source.id} sha256={source.original_sha256}]\n\n" + "\n\n".join(rendered_blocks)
+    text = (
+        f"[CE_SOURCE schema={LIGHTRAG_HANDOFF_SCHEMA_VERSION} "
+        f"source_id={source_id} sha256={original_sha256}]\n\n" + "\n\n".join(rendered_blocks)
+    )
     content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
     return RenderedLightRAGInput(text=text, content_hash=content_hash, block_ids=tuple(block_ids))
+
+
+def render_lightrag_input(db: Session, source: SourceDocument) -> RenderedLightRAGInput:
+    if source.state != SOURCE_STATE_PREPARED:
+        raise SourceIndexError(409, "source_state_conflict", "Source state does not allow this operation.")
+
+    blocks = list(
+        db.scalars(
+            select(SourceBlock)
+            .where(SourceBlock.source_document_id == source.id)
+            .order_by(SourceBlock.source_order, SourceBlock.id)
+        )
+    )
+    return render_blocks_to_lightrag_handoff(
+        source_id=source.id,
+        original_sha256=source.original_sha256,
+        blocks=blocks,
+    )
 
 
 def compute_index_request_id(source_id: str, generation: int, content_hash: str) -> str:
@@ -326,11 +344,14 @@ class LightRAGClient:
     def _run(self, coro):
         # LightRAG 1.4.16 uses module-level shared storage state. Keep native
         # lifecycle calls process-serialized until per-domain concurrency is proven.
+        timeout_seconds = max(1, int(self._settings.source_index_timeout_seconds))
         with _NATIVE_LIGHTRAG_LIFECYCLE_LOCK:
             loop = asyncio.new_event_loop()
             try:
                 asyncio.set_event_loop(loop)
-                return loop.run_until_complete(coro)
+                return loop.run_until_complete(asyncio.wait_for(coro, timeout=timeout_seconds))
+            except TimeoutError as exc:
+                raise SourceIndexError(504, "source_index_timeout", "Source index runtime timed out.") from exc
             finally:
                 pending = [task for task in asyncio.all_tasks(loop) if not task.done()]
                 for task in pending:
