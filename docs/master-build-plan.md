@@ -20,7 +20,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | P3 | Knowledge Domain runtime | DONE | P2 | per-domain runtime boundary, lifecycle operations, leases/generations, readiness proven |
 | P4 | Source preparation | DONE | P3 | upload/storage/parser adapters produce canonical blocks and support retry/cancel/delete |
 | P5 | LightRAG indexing eligibility | DONE | P4 | vendored fixture proves idempotent submit, readiness, delete, provenance markers, eligibility |
-| P6 | Scoped Evidence retrieval | NOT_STARTED | P5 | single-domain authorized retrieval maps only valid local blocks to safe Evidence |
+| P6 | Scoped Evidence retrieval | BLOCKED | P5 | single-domain authorized retrieval maps only valid local blocks to safe Evidence |
 | P7 | Durable grounded streaming chat | NOT_STARTED | P6 | conversation ownership, intent gate, bounded RAG, SSE, idempotent replay, redaction pass |
 | P8 | Operational safety and Phase 1 gate | NOT_STARTED | P1-P7 | transactional audit writes, allowlisted logs, request/trace correlation, health, privacy scans, and resilience evidence pass |
 | P9 | Thin Next.js frontend | NOT_STARTED | P1-P8 | login/chat/documents/settings and the reserved graph state use only versioned APIs and pass parity/accessibility checks |
@@ -113,7 +113,7 @@ P5-03 closure evidence (2026-07-25): `docs/_scratch/p5-03-index-eligibility-inve
 | P5-02 | DONE | P5-01 | versioned canonical-block renderer and vendored LightRAG adapter |
 | P5-03 | DONE | P5-02 | submit/poll/retry/cancel/delete and query-eligibility service |
 | P6-01 | DONE | P5 | scoped retrieval port and raw-hit provenance mapper |
-| P6-02 | NOT_STARTED | P6-01 | authorized safe Evidence DTO, ordering, excerpt limits and failure mapping |
+| P6-02 | BLOCKED | P6-01 | approve the stateless Evidence projection/ref/anchor/error contract, then implement authorized safe Evidence DTO, ordering, excerpt limits and failure mapping |
 
 P6-01 closure evidence (2026-07-25): `docs/_scratch/p6-01-scoped-retrieval-inventory.md`
 records the retain/modify/defer boundary. Index lifecycle and scoped retrieval
@@ -128,6 +128,15 @@ Results were 35 focused/regression tests plus the exact Ruff, generated-contract
 and 64-file phase-scope gates passing.
 `docs/_scratch/p6-01-scoped-retrieval-evidence.md` records commands, privacy,
 schema-v2 reindex rollout, and keeps public Evidence projection with P6-02.
+
+P6-02 decision gate (2026-07-25):
+`docs/_scratch/p6-02-evidence-contract-decision.md` records the contradiction
+between the non-mutating standalone retrieval endpoint and the only approved
+persisted turn-scoped `EvidenceItemDto`, plus the missing no-page anchor and
+closed failure mappings. P6-02 remains `BLOCKED` until an explicit contract
+decision approves either the proposed stateless retrieval DTO or defers/removes
+the endpoint until P7 persistence. No private/derived/ephemeral evidence ID may
+be substituted.
 
 ### P7-P8 - Chat and operational safety
 
