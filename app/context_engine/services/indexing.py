@@ -872,18 +872,20 @@ class SourceIndexWorker:
 
     def _claim_next_source(self, db: Session) -> SourceDocument | None:
         now = utc_now()
+        lease_expired = SourceDocument.index_lease_expires_at.is_not(None) & (
+            SourceDocument.index_lease_expires_at < now
+        )
         source = db.scalar(
             select(SourceDocument)
             .where(
                 SourceDocument.state == SOURCE_STATE_PREPARED,
                 or_(
                     SourceDocument.index_state == SOURCE_INDEX_STATE_QUEUED,
+                    (SourceDocument.index_state == SOURCE_INDEX_STATE_SUBMITTING) & lease_expired,
                     (
-                        (SourceDocument.index_state == SOURCE_INDEX_STATE_SUBMITTING)
-                        & (SourceDocument.index_lease_expires_at.is_not(None))
-                        & (SourceDocument.index_lease_expires_at < now)
+                        (SourceDocument.index_state == SOURCE_INDEX_STATE_ACCEPTED)
+                        & or_(SourceDocument.index_lease_expires_at.is_(None), lease_expired)
                     ),
-                    SourceDocument.index_state == SOURCE_INDEX_STATE_ACCEPTED,
                 ),
             )
             .order_by(SourceDocument.index_updated_at, SourceDocument.created_at, SourceDocument.id)
@@ -895,20 +897,20 @@ class SourceIndexWorker:
             return None
         if source.index_state == SOURCE_INDEX_STATE_QUEUED:
             source.index_state = SOURCE_INDEX_STATE_SUBMITTING
-            source.index_lease_owner = self._settings.source_index_worker_id
-            source.index_lease_expires_at = now + timedelta(seconds=self._settings.source_index_lease_seconds)
-            source.index_updated_at = now
-            source.updated_at = now
-            db.commit()
-            db.refresh(source)
-            safe_log(
-                logger,
-                "source_index_worker.claimed",
-                domain_id=source.domain_id,
-                source_id=source.id,
-                index_request_id=source.index_request_id,
-                outcome="succeeded",
-            )
+        source.index_lease_owner = self._settings.source_index_worker_id
+        source.index_lease_expires_at = now + timedelta(seconds=self._settings.source_index_lease_seconds)
+        source.index_updated_at = now
+        source.updated_at = now
+        db.commit()
+        db.refresh(source)
+        safe_log(
+            logger,
+            "source_index_worker.claimed",
+            domain_id=source.domain_id,
+            source_id=source.id,
+            index_request_id=source.index_request_id,
+            outcome="succeeded",
+        )
         return source
 
 
