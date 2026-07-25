@@ -77,6 +77,18 @@ class Settings:
     source_index_poll_backoff_seconds: int = field(
         default_factory=lambda: _env_int("CE_SOURCE_INDEX_POLL_BACKOFF_SECONDS", 5)
     )
+    retrieval_timeout_seconds: int = field(default_factory=lambda: _env_int("CE_RETRIEVAL_TIMEOUT_SECONDS", 30))
+    retrieval_global_concurrency: int = field(default_factory=lambda: _env_int("CE_RETRIEVAL_GLOBAL_CONCURRENCY", 8))
+    retrieval_per_domain_concurrency: int = field(
+        default_factory=lambda: _env_int("CE_RETRIEVAL_PER_DOMAIN_CONCURRENCY", 2)
+    )
+    retrieval_max_candidates: int = field(default_factory=lambda: _env_int("CE_RETRIEVAL_MAX_CANDIDATES", 10))
+    retrieval_max_candidate_bytes: int = field(
+        default_factory=lambda: _env_int("CE_RETRIEVAL_MAX_CANDIDATE_BYTES", 256 * 1024)
+    )
+    retrieval_max_aggregate_bytes: int = field(
+        default_factory=lambda: _env_int("CE_RETRIEVAL_MAX_AGGREGATE_BYTES", 1024 * 1024)
+    )
     lightrag_client_kind: str = field(default_factory=lambda: _env("CE_LIGHTRAG_CLIENT_KIND", "native") or "native")
     worker_idle_seconds: int = field(default_factory=lambda: _env_int("CE_WORKER_IDLE_SECONDS", 2))
 
@@ -119,7 +131,19 @@ class Settings:
             raise ValueError("source_index_poll_backoff_seconds must be positive.")
         if self.source_index_poll_backoff_seconds >= self.source_index_lease_seconds:
             raise ValueError("source_index_poll_backoff_seconds must be less than source_index_lease_seconds.")
+        if self.retrieval_timeout_seconds <= 0:
+            raise ValueError("retrieval_timeout_seconds must be positive.")
+        if self.retrieval_global_concurrency <= 0:
+            raise ValueError("retrieval_global_concurrency must be positive.")
+        if self.retrieval_per_domain_concurrency <= 0:
+            raise ValueError("retrieval_per_domain_concurrency must be positive.")
+        if self.retrieval_max_candidates <= 0 or self.retrieval_max_candidates > 10:
+            raise ValueError("retrieval_max_candidates must be between 1 and 10.")
+        if self.retrieval_max_candidate_bytes <= 0:
+            raise ValueError("retrieval_max_candidate_bytes must be positive.")
+        if self.retrieval_max_aggregate_bytes < self.retrieval_max_candidate_bytes:
+            raise ValueError("retrieval_max_aggregate_bytes must cover at least one candidate.")
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         return cls()
