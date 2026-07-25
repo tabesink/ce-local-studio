@@ -265,8 +265,11 @@ def test_p6_01_post_call_snapshot_rejects_committed_fences(tmp_path: Path, fence
                 retrieval_thread.join(timeout=10)
 
                 assert not retrieval_thread.is_alive()
-                assert failures == []
-                assert results == [{"result": EVIDENCE_RESULT_NO_CONTEXT, "evidence": []}]
+                assert results == []
+                assert len(failures) == 1
+                assert isinstance(failures[0], EvidenceRetrievalError)
+                expected_code = "domain_state_conflict" if fence == "stop_restart" else "domain_no_eligible_sources"
+                assert failures[0].code == expected_code
             finally:
                 engine.dispose()
     finally:
@@ -347,6 +350,7 @@ def test_p6_01_postgresql_success_schema_rollout_and_concurrent_isolation(tmp_pa
                     db.commit()
                     domain_id = domain.id
                     source_id = source.id
+                    document_ref = source.public_ref
                     source_sha256 = source.original_sha256
                     block_ids = tuple(block.id for block in blocks)
 
@@ -366,7 +370,17 @@ def test_p6_01_postgresql_success_schema_rollout_and_concurrent_isolation(tmp_pa
                     )
                 assert found == {
                     "result": EVIDENCE_RESULT_FOUND,
-                    "evidence": [{"excerpt": "Canonical content 1", "sourceLabel": "manual.pdf"}],
+                    "evidence": [
+                        {
+                            "citationLabel": "[1]",
+                            "sourceLabel": "manual.pdf",
+                            "excerpt": "Canonical content 1",
+                            "kind": "text",
+                            "documentRef": document_ref,
+                            "documentLabel": "manual.pdf",
+                            "anchor": None,
+                        }
+                    ],
                 }
 
                 wrong_domain = markers[0].replace(f"source_id={source_id}", "source_id=another-domain-source")
@@ -451,10 +465,26 @@ def test_p6_01_postgresql_success_schema_rollout_and_concurrent_isolation(tmp_pa
 
                 assert failures == []
                 assert results["call-1"]["evidence"] == [
-                    {"excerpt": "Canonical content 1", "sourceLabel": "manual.pdf"}
+                    {
+                        "citationLabel": "[1]",
+                        "sourceLabel": "manual.pdf",
+                        "excerpt": "Canonical content 1",
+                        "kind": "text",
+                        "documentRef": document_ref,
+                        "documentLabel": "manual.pdf",
+                        "anchor": None,
+                    }
                 ]
                 assert results["call-2"]["evidence"] == [
-                    {"excerpt": "Canonical content 2", "sourceLabel": "manual.pdf"}
+                    {
+                        "citationLabel": "[1]",
+                        "sourceLabel": "manual.pdf",
+                        "excerpt": "Canonical content 2",
+                        "kind": "text",
+                        "documentRef": document_ref,
+                        "documentLabel": "manual.pdf",
+                        "anchor": None,
+                    }
                 ]
             finally:
                 engine.dispose()

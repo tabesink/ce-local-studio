@@ -19,6 +19,7 @@ from context_engine.models import (
     DomainOperation,
     SourceBlock,
     SourceDocument,
+    SourceImage,
 )
 from context_engine.services.domains import (
     DomainRuntimeController,
@@ -31,6 +32,7 @@ from context_engine.services.indexing import (
     render_blocks_to_lightrag_handoff,
     source_has_current_index_identity,
 )
+from context_engine.services.sources import sanitize_original_filename
 
 EVIDENCE_RESULT_FOUND = "evidence_found"
 EVIDENCE_RESULT_NO_CONTEXT = "no_grounded_context"
@@ -83,6 +85,10 @@ class InternalMappedEvidence:
     source_block_id: str
     source_label: str
     excerpt: str
+    kind: str
+    document_ref: str
+    document_label: str
+    anchor: dict[str, object] | None
     retrieval_order: int
 
 
@@ -304,7 +310,37 @@ def safe_evidence_item(block: SourceBlock, source: SourceDocument) -> EvidenceIt
     excerpt = _safe_excerpt(block.canonical_markdown or "")
     if not excerpt:
         return None
-    return EvidenceItem(excerpt=excerpt, source_label=source.original_filename[:MAX_SOURCE_LABEL_CHARS])
+    return EvidenceItem(
+        excerpt=excerpt,
+        source_label=sanitize_original_filename(source.original_filename)[:MAX_SOURCE_LABEL_CHARS],
+    )
+
+
+def _safe_section_label(section_path: str | None) -> str | None:
+    if not section_path:
+        return None
+    label = " ".join(section_path.split())[:160].rstrip()
+    return label or None
+
+
+def _evidence_anchor(
+    block: SourceBlock,
+    *,
+    image_pages: set[int],
+) -> dict[str, object] | None:
+    page_number = block.page_start
+    if page_number is None and block.kind == "figure" and len(image_pages) == 1:
+        page_number = next(iter(image_pages))
+    if page_number is None:
+        return None
+    section_label = _safe_section_label(block.section_path)
+    anchor: dict[str, object] = {
+        "pageNumber": page_number,
+        "fallback": "section" if section_label else "page",
+    }
+    if section_label:
+        anchor["sectionLabel"] = section_label
+    return anchor
 
 
 def _active_domain_operation_exists(db: Session, domain_id: str) -> bool:
@@ -332,7 +368,15 @@ def resolve_available_domain(
     if domain.state != DOMAIN_STATE_RUNNING or _active_domain_operation_exists(db, domain.id):
         raise EvidenceRetrievalError(409, "domain_state_conflict", "Domain lifecycle state does not allow this operation.")
     controller = controller or controller_from_settings(settings)
-    if not controller.health(domain).healthy:
+    try:
+        health = controller.health(domain)
+    except Exception:  # noqa: BLE001 - normalize arbitrary controller failures
+        raise EvidenceRetrievalError(
+            503,
+            "domain_runtime_dependency_unavailable",
+            "Knowledge domain runtime health is unavailable.",
+        ) from None
+    if not health.healthy:
         raise EvidenceRetrievalError(502, "domain_runtime_unavailable", "Knowledge domain runtime is unavailable.")
     return domain, controller
 
@@ -358,6 +402,7 @@ def eligible_sources_for_domain(
             SourceBlock.source_order,
             SourceBlock.id,
         )
+        .execution_options(populate_existing=True)
     ).all()
     sources_with_blocks: dict[str, tuple[SourceDocument, list[SourceBlock]]] = {}
     for source, block in rows:
@@ -408,6 +453,73 @@ def freeze_retrieval_scope(
     )
 
 
+def _frozen_source_identity(source: SourceDocument) -> FrozenSourceIdentity | None:
+    if not source.index_request_id or not source.index_content_hash:
+        return None
+    return FrozenSourceIdentity(
+        source_document_id=source.id,
+        preparation_generation=source.preparation_generation,
+        index_generation=source.index_generation,
+        index_request_id=source.index_request_id,
+        index_content_hash=source.index_content_hash,
+        original_sha256=source.original_sha256,
+    )
+
+
+def reauthorize_frozen_retrieval_scope(
+    db: Session,
+    *,
+    frozen_scope: FrozenRetrievalScope,
+    controller: DomainRuntimeController,
+) -> None:
+    current_domain = db.scalar(
+        select(Domain)
+        .where(
+            Domain.id == frozen_scope.domain_id,
+            Domain.state == DOMAIN_STATE_RUNNING,
+            Domain.control_generation == frozen_scope.control_generation,
+            Domain.runtime_instance_id == frozen_scope.runtime_instance_id,
+        )
+        .execution_options(populate_existing=True)
+    )
+    if current_domain is None or _active_domain_operation_exists(db, frozen_scope.domain_id):
+        raise EvidenceRetrievalError(
+            409,
+            "domain_state_conflict",
+            "Domain lifecycle state does not allow this operation.",
+        )
+
+    try:
+        health = controller.health(current_domain)
+    except Exception:  # noqa: BLE001 - normalize arbitrary controller failures
+        raise EvidenceRetrievalError(
+            503,
+            "domain_runtime_dependency_unavailable",
+            "Knowledge domain runtime health is unavailable.",
+        ) from None
+    if not health.healthy:
+        raise EvidenceRetrievalError(
+            502,
+            "domain_runtime_unavailable",
+            "Knowledge domain runtime is unavailable.",
+        )
+
+    eligible_sources = eligible_sources_for_domain(db, domain=current_domain)
+    current_identities = {
+        identity.source_document_id: identity
+        for source in eligible_sources
+        if (identity := _frozen_source_identity(source)) is not None
+    }
+    if not current_identities or any(
+        current_identities.get(frozen.source_document_id) != frozen for frozen in frozen_scope.sources
+    ):
+        raise EvidenceRetrievalError(
+            409,
+            "domain_no_eligible_sources",
+            "This knowledge domain has no eligible sources for retrieval.",
+        )
+
+
 def map_retrieval_hits_to_internal_evidence(
     db: Session,
     *,
@@ -449,9 +561,10 @@ def map_retrieval_hits_to_internal_evidence(
         )
     )
     statement = (
-        select(SourceBlock, SourceDocument)
+        select(SourceBlock, SourceDocument, SourceImage.page_number)
         .join(SourceDocument, SourceDocument.id == SourceBlock.source_document_id)
         .join(Domain, Domain.id == SourceDocument.domain_id)
+        .outerjoin(SourceImage, SourceImage.source_block_id == SourceBlock.id)
         .where(
             Domain.id == frozen_scope.domain_id,
             Domain.state == DOMAIN_STATE_RUNNING,
@@ -474,7 +587,11 @@ def map_retrieval_hits_to_internal_evidence(
         )
     )
     current_rows = db.execute(statement).all()
-    current_by_block_id = {block.id: (block, source) for block, source in current_rows}
+    current_by_block_id: dict[str, tuple[SourceBlock, SourceDocument, set[int]]] = {}
+    for block, source, image_page in current_rows:
+        current = current_by_block_id.setdefault(block.id, (block, source, set()))
+        if image_page is not None:
+            current[2].add(image_page)
 
     evidence: list[InternalMappedEvidence] = []
     seen_blocks: set[str] = set()
@@ -484,7 +601,7 @@ def map_retrieval_hits_to_internal_evidence(
         current = current_by_block_id.get(marker.block_id)
         if current is None:
             continue
-        block, source = current
+        block, source, image_pages = current
         if (
             marker.source_id != source.id
             or marker.source_sha256 != source.original_sha256
@@ -501,6 +618,10 @@ def map_retrieval_hits_to_internal_evidence(
                 source_block_id=block.id,
                 source_label=item.source_label,
                 excerpt=item.excerpt,
+                kind=block.kind,
+                document_ref=source.public_ref,
+                document_label=sanitize_original_filename(source.original_filename),
+                anchor=_evidence_anchor(block, image_pages=image_pages),
                 retrieval_order=len(evidence) + 1,
             )
         )
@@ -530,15 +651,21 @@ def retrieve_internal_scoped_evidence(
         question=question,
         client=client,
     )
+    mapped_evidence = tuple(
+        map_retrieval_hits_to_internal_evidence(
+            db,
+            hits=hits,
+            frozen_scope=frozen_scope,
+        )
+    )
+    reauthorize_frozen_retrieval_scope(
+        db,
+        frozen_scope=frozen_scope,
+        controller=controller,
+    )
     return InternalScopedRetrievalResult(
         had_eligible_sources=True,
-        evidence=tuple(
-            map_retrieval_hits_to_internal_evidence(
-                db,
-                hits=hits,
-                frozen_scope=frozen_scope,
-            )
-        ),
+        evidence=mapped_evidence,
     )
 
 
@@ -561,7 +688,17 @@ def retrieve_scoped_evidence(
             controller=controller,
         )
     except ScopedRetrievalError as exc:
-        raise EvidenceRetrievalError(502, "domain_runtime_unavailable", "Knowledge domain runtime is unavailable.") from exc
+        if exc.code == "retrieval_saturated":
+            raise EvidenceRetrievalError(
+                503,
+                "retrieval_capacity_unavailable",
+                "Scoped retrieval capacity is unavailable.",
+            ) from exc
+        raise EvidenceRetrievalError(
+            503,
+            "retrieval_dependency_unavailable",
+            "Scoped retrieval dependency is unavailable.",
+        ) from exc
     if not result.had_eligible_sources:
         raise EvidenceRetrievalError(
             409,
@@ -573,5 +710,16 @@ def retrieve_scoped_evidence(
         return {"result": EVIDENCE_RESULT_NO_CONTEXT, "evidence": []}
     return {
         "result": EVIDENCE_RESULT_FOUND,
-        "evidence": [{"excerpt": item.excerpt, "sourceLabel": item.source_label} for item in evidence],
+        "evidence": [
+            {
+                "citationLabel": f"[{index}]",
+                "sourceLabel": item.source_label,
+                "excerpt": item.excerpt,
+                "kind": item.kind,
+                "documentRef": item.document_ref,
+                "documentLabel": item.document_label,
+                "anchor": item.anchor,
+            }
+            for index, item in enumerate(evidence, start=1)
+        ],
     }
