@@ -332,6 +332,7 @@ class Domain(Base):
     __table_args__ = (
         CheckConstraint("state in ('stopped', 'running', 'deleting')", name="ck_domains_state"),
         CheckConstraint("control_generation >= 1", name="ck_domains_control_generation_positive"),
+        CheckConstraint("version >= 1", name="ck_domains_version_positive"),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -345,6 +346,7 @@ class Domain(Base):
     )
     runtime_instance_id: Mapped[str] = mapped_column(String(36), nullable=False, default=lambda: str(uuid.uuid4()))
     control_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now, onupdate=utc_now)
 
@@ -369,6 +371,7 @@ class DomainOperation(Base):
             "status in ('queued', 'running', 'succeeded', 'failed', 'cancelled')",
             name="ck_domain_operations_status",
         ),
+        CheckConstraint("version >= 1", name="ck_domain_operations_version_positive"),
         Index("ix_domain_operations_domain_created", "domain_id", text("created_at DESC")),
         Index(
             "uq_domain_operations_one_active",
@@ -399,6 +402,7 @@ class DomainOperation(Base):
     error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
     lease_owner: Mapped[str | None] = mapped_column(String(64), nullable=True)
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now)

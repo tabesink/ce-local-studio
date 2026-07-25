@@ -150,6 +150,101 @@
         "title": "AdminDomainDto",
         "type": "object"
       },
+      "AdminDomainListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "domains": {
+            "items": {
+              "$ref": "#/components/schemas/AdminDomainDto"
+            },
+            "title": "Domains",
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "domains",
+          "nextCursor"
+        ],
+        "title": "AdminDomainListResponse",
+        "type": "object"
+      },
+      "AdminDomainMutationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "domain": {
+            "$ref": "#/components/schemas/AdminDomainDto"
+          }
+        },
+        "required": [
+          "domain"
+        ],
+        "title": "AdminDomainMutationResponse",
+        "type": "object"
+      },
+      "AdminDomainOperationsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/OperationDto"
+            },
+            "title": "Operations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "operations",
+          "nextCursor"
+        ],
+        "title": "AdminDomainOperationsResponse",
+        "type": "object"
+      },
+      "AdminDomainStatusResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "activeOperation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OperationDto"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "domain": {
+            "$ref": "#/components/schemas/AdminDomainDto"
+          }
+        },
+        "required": [
+          "domain",
+          "activeOperation"
+        ],
+        "title": "AdminDomainStatusResponse",
+        "type": "object"
+      },
       "AdminSourceDto": {
         "additionalProperties": false,
         "properties": {
@@ -707,6 +802,19 @@
         "title": "DomainCreateRequest",
         "type": "object"
       },
+      "DomainOperationMutationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/OperationDto"
+          }
+        },
+        "required": [
+          "operation"
+        ],
+        "title": "DomainOperationMutationResponse",
+        "type": "object"
+      },
       "DomainSummaryDto": {
         "additionalProperties": false,
         "properties": {
@@ -1123,6 +1231,23 @@
           "password"
         ],
         "title": "LoginRequest",
+        "type": "object"
+      },
+      "MemberDomainListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "domains": {
+            "items": {
+              "$ref": "#/components/schemas/DomainSummaryDto"
+            },
+            "title": "Domains",
+            "type": "array"
+          }
+        },
+        "required": [
+          "domains"
+        ],
+        "title": "MemberDomainListResponse",
         "type": "object"
       },
       "ModelProfileCreateRequest": {
@@ -1914,9 +2039,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin List Domains Api V1 Admin Domains Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AdminDomainListResponse"
                 }
               }
             },
@@ -1942,9 +2065,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Create Domain Api V1 Admin Domains Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AdminDomainMutationResponse"
                 }
               }
             },
@@ -1977,6 +2098,22 @@
               "title": "Domainid",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
           }
         ],
         "responses": {
@@ -1984,9 +2121,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Delete Domain Api V1 Admin Domains  Domainid  Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DomainOperationMutationResponse"
                 }
               }
             },
@@ -2024,9 +2159,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Get Domain Api V1 Admin Domains  Domainid  Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AdminDomainMutationResponse"
                 }
               }
             },
@@ -2066,9 +2199,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Domain Operations Api V1 Admin Domains  Domainid  Operations Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AdminDomainOperationsResponse"
                 }
               }
             },
@@ -2618,13 +2749,11 @@
           }
         ],
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Start Domain Api V1 Admin Domains  Domainid  Start Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DomainOperationMutationResponse"
                 }
               }
             },
@@ -2664,9 +2793,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Get Domain Status Api V1 Admin Domains  Domainid  Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AdminDomainStatusResponse"
                 }
               }
             },
@@ -2702,13 +2829,11 @@
           }
         ],
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Admin Stop Domain Api V1 Admin Domains  Domainid  Stop Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DomainOperationMutationResponse"
                 }
               }
             },
@@ -3510,9 +3635,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Available Domains Api V1 Domains Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/MemberDomainListResponse"
                 }
               }
             },

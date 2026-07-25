@@ -623,6 +623,29 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** AdminDomainListResponse */
+        AdminDomainListResponse: {
+            /** Domains */
+            domains: components["schemas"]["AdminDomainDto"][];
+            /** Nextcursor */
+            nextCursor: string | null;
+        };
+        /** AdminDomainMutationResponse */
+        AdminDomainMutationResponse: {
+            domain: components["schemas"]["AdminDomainDto"];
+        };
+        /** AdminDomainOperationsResponse */
+        AdminDomainOperationsResponse: {
+            /** Nextcursor */
+            nextCursor: string | null;
+            /** Operations */
+            operations: components["schemas"]["OperationDto"][];
+        };
+        /** AdminDomainStatusResponse */
+        AdminDomainStatusResponse: {
+            activeOperation: components["schemas"]["OperationDto"] | null;
+            domain: components["schemas"]["AdminDomainDto"];
+        };
         /** AdminSourceDto */
         AdminSourceDto: {
             /** Activeoperationid */
@@ -793,6 +816,10 @@ export interface components {
             /** Id */
             id: string;
         };
+        /** DomainOperationMutationResponse */
+        DomainOperationMutationResponse: {
+            operation: components["schemas"]["OperationDto"];
+        };
         /** DomainSummaryDto */
         DomainSummaryDto: {
             /** Displayname */
@@ -926,6 +953,11 @@ export interface components {
             password: string;
             /** Username */
             username: string;
+        };
+        /** MemberDomainListResponse */
+        MemberDomainListResponse: {
+            /** Domains */
+            domains: components["schemas"]["DomainSummaryDto"][];
         };
         /** ModelProfileCreateRequest */
         ModelProfileCreateRequest: {
@@ -1173,9 +1205,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AdminDomainListResponse"];
                 };
             };
         };
@@ -1199,9 +1229,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AdminDomainMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1232,9 +1260,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AdminDomainMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1251,7 +1277,9 @@ export interface operations {
     admin_delete_domain_api_v1_admin_domains__domainId__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
             path: {
                 domainId: string;
             };
@@ -1265,9 +1293,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["DomainOperationMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1298,9 +1324,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AdminDomainOperationsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1667,14 +1691,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["DomainOperationMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1705,9 +1727,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AdminDomainStatusResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1733,14 +1753,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["DomainOperationMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2371,9 +2389,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["MemberDomainListResponse"];
                 };
             };
         };

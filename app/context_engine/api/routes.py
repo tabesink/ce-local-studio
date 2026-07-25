@@ -14,7 +14,10 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from context_engine.api.catalog_schemas import (
+    AdminDomainDto,
+    DomainSummaryDto,
     ModelProfileDto,
+    OperationDto,
     ProviderSummaryDto,
     RuntimeSettingsDto,
 )
@@ -183,7 +186,46 @@ class DomainCreateRequest(BaseModel):
     display_name: str | None = Field(default=None, alias="displayName", min_length=1, max_length=120)
     embedding_profile_id: str = Field(alias="embeddingProfileId", min_length=1, max_length=36)
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class AdminDomainMutationResponse(BaseModel):
+    domain: AdminDomainDto
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class AdminDomainListResponse(BaseModel):
+    domains: list[AdminDomainDto]
+    next_cursor: str | None = Field(alias="nextCursor")
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class AdminDomainStatusResponse(BaseModel):
+    domain: AdminDomainDto
+    active_operation: OperationDto | None = Field(alias="activeOperation")
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class DomainOperationMutationResponse(BaseModel):
+    operation: OperationDto
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class AdminDomainOperationsResponse(BaseModel):
+    operations: list[OperationDto]
+    next_cursor: str | None = Field(alias="nextCursor")
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class MemberDomainListResponse(BaseModel):
+    domains: list[DomainSummaryDto]
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
 class EvidenceRequest(BaseModel):
@@ -781,14 +823,14 @@ def admin_update_runtime_settings(
     )
 
 
-@api_router.post("/admin/domains", status_code=201)
+@api_router.post("/admin/domains", status_code=201, response_model=AdminDomainMutationResponse)
 def admin_create_domain(
     request: Request,
     payload: DomainCreateRequest,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> dict[str, object]:
+) -> JSONResponse:
     try:
         domain = create_domain(
             db,
@@ -803,54 +845,63 @@ def admin_create_domain(
         raise _runtime_config_api_error(exc) from exc
     except DomainError as exc:
         raise _domain_api_error(exc) from exc
-    return {"domain": safe_domain_admin(db, settings, domain, controller_from_settings(settings))}
+    projected = safe_domain_admin(db, settings, domain, controller_from_settings(settings))
+    return _private_json_response(
+        {"domain": projected},
+        status_code=201,
+        etag=strong_etag(domain.version),
+    )
 
 
-@api_router.get("/admin/domains")
+@api_router.get("/admin/domains", response_model=AdminDomainListResponse)
 def admin_list_domains(
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> dict[str, object]:
-    return {"domains": admin_domain_list(db, settings)}
+) -> JSONResponse:
+    return _private_json_response({"domains": admin_domain_list(db, settings), "nextCursor": None})
 
 
-@api_router.get("/admin/domains/{domainId}")
+@api_router.get("/admin/domains/{domainId}", response_model=AdminDomainMutationResponse)
 def admin_get_domain(
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> dict[str, object]:
+) -> JSONResponse:
     try:
-        return {"domain": domain_detail(db, settings, domain_id)}
+        domain = domain_detail(db, settings, domain_id)
     except DomainError as exc:
         raise _domain_api_error(exc) from exc
+    return _private_json_response(
+        {"domain": domain},
+        etag=strong_etag(int(domain["version"])),
+    )
 
 
-@api_router.get("/admin/domains/{domainId}/status")
+@api_router.get("/admin/domains/{domainId}/status", response_model=AdminDomainStatusResponse)
 def admin_get_domain_status(
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> dict[str, object]:
+) -> JSONResponse:
     try:
-        return domain_status(db, settings, domain_id)
+        return _private_json_response(domain_status(db, settings, domain_id))
     except DomainError as exc:
         raise _domain_api_error(exc) from exc
 
 
-@api_router.post("/admin/domains/{domainId}/start")
+@api_router.post("/admin/domains/{domainId}/start", status_code=202, response_model=DomainOperationMutationResponse)
 def admin_start_domain(
     request: Request,
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> dict[str, object]:
+) -> JSONResponse:
     try:
-        domain = start_domain(
+        operation = start_domain(
             db,
             settings=settings,
             domain_id=domain_id,
@@ -859,19 +910,23 @@ def admin_start_domain(
         )
     except DomainError as exc:
         raise _domain_api_error(exc) from exc
-    return {"domain": safe_domain_admin(db, settings, domain, controller_from_settings(settings))}
+    return _private_json_response(
+        {"operation": safe_domain_operation(operation)},
+        status_code=202,
+        etag=strong_etag(operation.version),
+    )
 
 
-@api_router.post("/admin/domains/{domainId}/stop")
+@api_router.post("/admin/domains/{domainId}/stop", status_code=202, response_model=DomainOperationMutationResponse)
 def admin_stop_domain(
     request: Request,
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> dict[str, object]:
+) -> JSONResponse:
     try:
-        domain = stop_domain(
+        operation = stop_domain(
             db,
             settings=settings,
             domain_id=domain_id,
@@ -880,36 +935,49 @@ def admin_stop_domain(
         )
     except DomainError as exc:
         raise _domain_api_error(exc) from exc
-    return {"domain": safe_domain_admin(db, settings, domain, controller_from_settings(settings))}
+    return _private_json_response(
+        {"operation": safe_domain_operation(operation)},
+        status_code=202,
+        etag=strong_etag(operation.version),
+    )
 
 
-@api_router.delete("/admin/domains/{domainId}", status_code=202)
+@api_router.delete("/admin/domains/{domainId}", status_code=202, response_model=DomainOperationMutationResponse)
 def admin_delete_domain(
     request: Request,
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
-) -> dict[str, object]:
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+) -> JSONResponse:
     try:
+        expected_version = parse_if_match_version(if_match)
         operation = enqueue_delete_domain(
             db,
             domain_id=domain_id,
             requested_by_user=admin,
+            expected_version=expected_version,
             audit_context=_audit_context(request, admin),
         )
+    except RuntimeConfigError as exc:
+        raise _runtime_config_api_error(exc) from exc
     except DomainError as exc:
         raise _domain_api_error(exc) from exc
-    return {"operation": safe_domain_operation(operation)}
+    return _private_json_response(
+        {"operation": safe_domain_operation(operation)},
+        status_code=202,
+        etag=strong_etag(operation.version),
+    )
 
 
-@api_router.get("/admin/domains/{domainId}/operations")
+@api_router.get("/admin/domains/{domainId}/operations", response_model=AdminDomainOperationsResponse)
 def admin_domain_operations(
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
-) -> dict[str, object]:
+) -> JSONResponse:
     try:
-        return {"operations": domain_operations(db, domain_id)}
+        return _private_json_response({"operations": domain_operations(db, domain_id), "nextCursor": None})
     except DomainError as exc:
         raise _domain_api_error(exc) from exc
 
@@ -1132,10 +1200,10 @@ def retrieve_domain_evidence(
         raise _evidence_api_error(exc) from exc
 
 
-@api_router.get("/domains")
+@api_router.get("/domains", response_model=MemberDomainListResponse)
 def list_available_domains(
     _: CurrentSession = Depends(require_current_session),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> dict[str, object]:
-    return {"domains": member_domain_list(db, settings)}
+) -> JSONResponse:
+    return _private_json_response({"domains": member_domain_list(db, settings)})

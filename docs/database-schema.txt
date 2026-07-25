@@ -76,6 +76,7 @@ domains
   embedding_profile_id FK model_profiles.id RESTRICT NOT NULL
   runtime_instance_id varchar(36) NOT NULL
   control_generation integer NOT NULL DEFAULT 1 CHECK >=1
+  version integer NOT NULL DEFAULT 1 CHECK >=1
   created_at, updated_at timestamp NOT NULL
 
 domain_operations
@@ -85,8 +86,9 @@ domain_operations
   control_generation_at_start integer NOT NULL
   requested_by_user_id FK users.id SET NULL; request_id varchar(80) INDEX
   safe message/error_code/error_message; lease_owner; lease_expires_at
+  version integer NOT NULL DEFAULT 1 CHECK >=1
   started_at, finished_at, created_at, updated_at
-  INDEX domain_id+created_at DESC; enforce one active operation per domain/type as migrated
+  INDEX domain_id+created_at DESC; enforce one active operation per domain as migrated
 
 source_documents
   id PK varchar(36); public_ref varchar(64) NOT NULL UNIQUE INDEX
