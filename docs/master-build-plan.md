@@ -124,7 +124,7 @@ provenance marker. Retrieval freezes domain/source generations and index
 identities before provider work; one joined post-call query maps only current
 selected-domain canonical blocks. Barrier-driven PostgreSQL 16 proof covers
 stop/restart, reindex/new-ready, delete, and preparation-replacement fences.
-Results were 31 focused/regression tests plus the exact Ruff, generated-contract,
+Results were 35 focused/regression tests plus the exact Ruff, generated-contract,
 and 64-file phase-scope gates passing.
 `docs/_scratch/p6-01-scoped-retrieval-evidence.md` records commands, privacy,
 schema-v2 reindex rollout, and keeps public Evidence projection with P6-02.
