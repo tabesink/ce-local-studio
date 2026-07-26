@@ -1169,27 +1169,6 @@
         "title": "EvidenceItemDto",
         "type": "object"
       },
-      "EvidenceItemResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "excerpt": {
-            "maxLength": 500,
-            "title": "Excerpt",
-            "type": "string"
-          },
-          "sourceLabel": {
-            "maxLength": 255,
-            "title": "Sourcelabel",
-            "type": "string"
-          }
-        },
-        "required": [
-          "excerpt",
-          "sourceLabel"
-        ],
-        "title": "EvidenceItemResponse",
-        "type": "object"
-      },
       "EvidenceRegionDto": {
         "additionalProperties": false,
         "properties": {
@@ -1225,48 +1204,6 @@
           "height"
         ],
         "title": "EvidenceRegionDto",
-        "type": "object"
-      },
-      "EvidenceRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "question": {
-            "maxLength": 2000,
-            "minLength": 1,
-            "title": "Question",
-            "type": "string"
-          }
-        },
-        "required": [
-          "question"
-        ],
-        "title": "EvidenceRequest",
-        "type": "object"
-      },
-      "EvidenceResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "evidence": {
-            "items": {
-              "$ref": "#/components/schemas/EvidenceItemResponse"
-            },
-            "title": "Evidence",
-            "type": "array"
-          },
-          "result": {
-            "enum": [
-              "evidence_found",
-              "no_grounded_context"
-            ],
-            "title": "Result",
-            "type": "string"
-          }
-        },
-        "required": [
-          "result",
-          "evidence"
-        ],
-        "title": "EvidenceResponse",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -3947,7 +3884,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/EvidenceRequest"
+                "$ref": "#/components/schemas/RetrievalEvidenceRequestDto"
               }
             }
           },
@@ -3958,7 +3895,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EvidenceResponse"
+                  "$ref": "#/components/schemas/RetrievalEvidenceResponseDto"
                 }
               }
             },

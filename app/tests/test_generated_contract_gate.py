@@ -8,7 +8,6 @@ from pathlib import Path
 
 from context_engine.api.contract_app import CANONICAL_API_PREFIX
 
-
 ROOT = Path(__file__).resolve().parents[2]
 OPENAPI = ROOT / "app" / "contracts" / "openapi.json"
 GENERATOR = ROOT / "scripts" / "generate_openapi.py"
@@ -168,6 +167,21 @@ def test_registered_path_parameters_are_camel_case() -> None:
         "sourceId",
         "turnId",
     }
+
+
+def test_stateless_evidence_route_uses_authoritative_generated_components() -> None:
+    document = json.loads(OPENAPI.read_text(encoding="utf-8"))
+    operation = document["paths"][f"{CANONICAL_API_PREFIX}/domains/{{domainId}}/evidence"]["post"]
+
+    assert operation["requestBody"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/RetrievalEvidenceRequestDto"
+    }
+    assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/RetrievalEvidenceResponseDto"
+    }
+    assert "EvidenceRequest" not in document["components"]["schemas"]
+    assert "EvidenceItemResponse" not in document["components"]["schemas"]
+    assert "EvidenceResponse" not in document["components"]["schemas"]
 
 
 def test_uncataloged_lifted_operations_have_no_active_call_sites() -> None:

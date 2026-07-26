@@ -1,14 +1,24 @@
+# FastAPI dependency markers are intentionally evaluated in route defaults.
+# ruff: noqa: B008
 from __future__ import annotations
-
-from context_engine.services.readiness import ReadinessError, check_readiness
 
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Body, Depends, Header, Path, Query, Request, Response, UploadFile
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    Header,
+    Path,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import select, text
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from context_engine.api.catalog_schemas import (
@@ -19,11 +29,25 @@ from context_engine.api.catalog_schemas import (
     OperationDto,
     OutlineItemDto,
     ProviderSummaryDto,
+    RetrievalEvidenceRequestDto,
+    RetrievalEvidenceResponseDto,
     RuntimeSettingsDto,
 )
-from context_engine.api.dependencies import CurrentSession, get_db, get_settings, require_admin, require_current_session
+from context_engine.api.dependencies import (
+    CurrentSession,
+    get_db,
+    get_settings,
+    require_admin,
+    require_current_session,
+)
 from context_engine.api.errors import ApiError, request_id_from
-from context_engine.api.public_schemas import ErrorEnvelope, CsrfResponse, LiveHealthResponse, ReadyHealthResponse
+from context_engine.api.public_schemas import (
+    CsrfResponse,
+    ErrorEnvelope,
+    LiveHealthResponse,
+    ReadyHealthResponse,
+)
+from context_engine.api.sse_schemas import TurnStreamEvent
 from context_engine.config import Settings
 from context_engine.models import (
     User,
@@ -33,16 +57,8 @@ from context_engine.services.audit import AuditContext
 from context_engine.services.auth import (
     authenticate_user,
     create_auth_session,
-    iso_utc,
     revoke_session_token,
     safe_user,
-)
-from context_engine.services.csrf import CSRF_PREAUTH_BINDING, issue_csrf_token
-from context_engine.services.login_throttle import (
-    LoginRateLimited,
-    assert_login_allowed,
-    clear_login_failures,
-    record_login_failure,
 )
 from context_engine.services.chat_turns import (
     ChatTurnError,
@@ -54,9 +70,9 @@ from context_engine.services.chat_turns import (
     stream_turn_events_by_turn,
 )
 from context_engine.services.composer_refs import (
-    ComposerRefError,
     MAX_COMPOSER_REFS,
     MAX_DISCOVERY_LIMIT,
+    ComposerRefError,
     discover_composer_refs,
 )
 from context_engine.services.conversations import (
@@ -68,6 +84,39 @@ from context_engine.services.conversations import (
     safe_conversation_summary,
     update_conversation_title,
 )
+from context_engine.services.csrf import CSRF_PREAUTH_BINDING, issue_csrf_token
+from context_engine.services.domains import (
+    DOMAIN_ID_PATTERN,
+    DomainError,
+    admin_domain_list,
+    controller_from_settings,
+    create_domain,
+    domain_detail,
+    domain_operations,
+    domain_status,
+    enqueue_delete_domain,
+    member_domain_list,
+    safe_domain_admin,
+    safe_domain_operation,
+    start_domain,
+    stop_domain,
+)
+from context_engine.services.evidence import (
+    EvidenceRetrievalError,
+    retrieve_scoped_evidence,
+)
+from context_engine.services.indexing import (
+    SourceIndexError,
+    cancel_source_index,
+    retry_source_index,
+)
+from context_engine.services.login_throttle import (
+    LoginRateLimited,
+    assert_login_allowed,
+    clear_login_failures,
+    record_login_failure,
+)
+from context_engine.services.readiness import ReadinessError, check_readiness
 from context_engine.services.runtime_config import (
     RuntimeConfigError,
     SecretCrypto,
@@ -83,24 +132,6 @@ from context_engine.services.runtime_config import (
     update_model_profile,
     update_runtime_settings,
 )
-from context_engine.services.domains import (
-    DOMAIN_ID_PATTERN,
-    DomainError,
-    admin_domain_list,
-    create_domain,
-    domain_detail,
-    domain_operations,
-    domain_status,
-    enqueue_delete_domain,
-    member_domain_list,
-    safe_domain_admin,
-    safe_domain_operation,
-    start_domain,
-    stop_domain,
-    controller_from_settings,
-)
-from context_engine.services.evidence import EvidenceRetrievalError, retrieve_scoped_evidence
-from context_engine.services.indexing import SourceIndexError, cancel_source_index, retry_source_index
 from context_engine.services.source_upload import (
     MAX_SOURCE_FILE_SIZE_BYTES,
     UploadValidationError,
@@ -272,20 +303,6 @@ class MemberDomainListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
-class EvidenceRequest(BaseModel):
-    question: str = Field(min_length=1, max_length=2000)
-
-    model_config = ConfigDict(extra="forbid")
-
-    @field_validator("question")
-    @classmethod
-    def strip_question(cls, value: str) -> str:
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("Question is required.")
-        return stripped
-
-
 class ComposerRefDiscoverRequest(BaseModel):
     conversation_id: str | None = Field(default=None, alias="conversationId", max_length=36)
     domain_id: str | None = Field(default=None, alias="domainId", max_length=64)
@@ -317,20 +334,6 @@ class TurnStreamRequest(BaseModel):
     composer_ref_tokens: list[str] = Field(default_factory=list, alias="composerRefTokens", max_length=MAX_COMPOSER_REFS)
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-
-class EvidenceItemResponse(BaseModel):
-    excerpt: str = Field(max_length=500)
-    source_label: str = Field(alias="sourceLabel", max_length=255)
-
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-
-class EvidenceResponse(BaseModel):
-    result: Literal["evidence_found", "no_grounded_context"]
-    evidence: list[EvidenceItemResponse]
-
-    model_config = ConfigDict(extra="forbid")
 
 
 api_router = APIRouter()
@@ -516,7 +519,44 @@ def _source_index_api_error(exc: SourceIndexError) -> ApiError:
 
 
 def _evidence_api_error(exc: EvidenceRetrievalError) -> ApiError:
-    return ApiError(exc.status_code, exc.code, exc.message)
+    failures = {
+        "domain_not_found": (404, "not_found", "Domain not found."),
+        "domain_state_conflict": (
+            409,
+            "domain_not_query_eligible",
+            "This knowledge domain is not currently available for queries.",
+        ),
+        "domain_runtime_unavailable": (
+            409,
+            "domain_not_query_eligible",
+            "This knowledge domain is not currently available for queries.",
+        ),
+        "domain_no_eligible_sources": (
+            409,
+            "domain_not_query_eligible",
+            "This knowledge domain is not currently available for queries.",
+        ),
+        "retrieval_capacity_unavailable": (
+            503,
+            "capacity_unavailable",
+            "Retrieval capacity is temporarily unavailable.",
+        ),
+        "retrieval_dependency_unavailable": (
+            503,
+            "dependency_unavailable",
+            "Retrieval is temporarily unavailable.",
+        ),
+        "domain_runtime_dependency_unavailable": (
+            503,
+            "dependency_unavailable",
+            "Retrieval is temporarily unavailable.",
+        ),
+    }
+    status_code, code, message = failures.get(
+        exc.code,
+        (503, "dependency_unavailable", "Retrieval is temporarily unavailable."),
+    )
+    return ApiError(status_code, code, message)
 
 
 def _conversation_api_error(exc: ConversationError) -> ApiError:
@@ -1300,18 +1340,23 @@ def admin_delete_source(
     )
 
 
-@api_router.post("/domains/{domainId}/evidence", response_model=EvidenceResponse)
+@api_router.post("/domains/{domainId}/evidence", response_model=RetrievalEvidenceResponseDto)
 def retrieve_domain_evidence(
-    payload: EvidenceRequest,
+    payload: RetrievalEvidenceRequestDto,
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
     _: CurrentSession = Depends(require_current_session),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> dict[str, object]:
+) -> JSONResponse:
     try:
-        return retrieve_scoped_evidence(db, settings=settings, domain_id=domain_id, question=payload.question)
+        result = retrieve_scoped_evidence(db, settings=settings, domain_id=domain_id, question=payload.question)
     except EvidenceRetrievalError as exc:
         raise _evidence_api_error(exc) from exc
+    try:
+        response = RetrievalEvidenceResponseDto.model_validate(result)
+    except ValidationError:
+        raise ApiError(503, "dependency_unavailable", "Retrieval is temporarily unavailable.") from None
+    return _private_json_response(response.model_dump(by_alias=True))
 
 
 @api_router.get("/domains", response_model=MemberDomainListResponse)

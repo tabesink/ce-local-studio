@@ -5,7 +5,6 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.json_schema import models_json_schema
 
-
 OpaqueRef = Annotated[str, Field(min_length=8, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")]
 SafeLabel = Annotated[str, Field(min_length=1, max_length=255)]
 SafeMessage = Annotated[str, Field(min_length=1, max_length=500)]
