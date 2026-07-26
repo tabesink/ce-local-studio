@@ -6,7 +6,6 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
 import context_engine.services.chat_turns as chat_turns_module
 from context_engine.api.contract_app import CANONICAL_API_PREFIX
