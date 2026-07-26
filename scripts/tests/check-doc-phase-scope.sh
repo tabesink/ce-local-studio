@@ -267,6 +267,15 @@ new_fixture
 printf '# unclassified\n' > "$fixture_root/docs/architecture/unclassified.md"
 fixture_fails unclassified-governed-doc classification
 
+case "$OSTYPE" in
+  msys*|cygwin*) ;;
+  *)
+    new_fixture
+    printf '# literal backslash path\n' > "$fixture_root/docs/architecture/literal\\name.md"
+    fixture_fails literal-backslash-governed-doc classification
+    ;;
+esac
+
 new_fixture
 sed -i 's/phase-1>phase-2-observability>phase-3-wiki/phase-1>phase-3-wiki>phase-2-observability/' \
   "$fixture_root/docs/phase-scope-manifest.md"

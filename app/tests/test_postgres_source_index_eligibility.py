@@ -12,7 +12,7 @@ from alembic.config import Config
 from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
 import pytest
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine, URL, make_url
 
 from context_engine.app import create_app
@@ -27,7 +27,6 @@ from context_engine.models import (
     SOURCE_INDEX_STATE_CANCELLED,
     SOURCE_INDEX_STATE_QUEUED,
     SOURCE_INDEX_STATE_READY,
-    SOURCE_INDEX_STATE_SUBMITTING,
     SOURCE_STATE_PREPARED,
     SourceBlock,
     SourceDocument,
