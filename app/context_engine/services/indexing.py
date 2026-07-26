@@ -332,8 +332,6 @@ class LocalLightRAGIndexClient:
         if deadline is not None and time.monotonic() >= deadline:
             raise ScopedRetrievalError("retrieval_timeout", "Scoped retrieval timed out.")
         index_dir = self._index_dir(domain)
-        if not index_dir.exists():
-            return _bounded_adapter_result((), self._settings)
         texts: list[str] = []
         try:
             record_paths = sorted(index_dir.glob("*.json"))

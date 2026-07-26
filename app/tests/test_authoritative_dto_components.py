@@ -140,7 +140,6 @@ def test_authoritative_components_are_closed_camel_case_contracts() -> None:
         },
     ]
 
-    retrieval_response = schemas["RetrievalEvidenceResponseDto"]
     assert retrieval_response["additionalProperties"] is False
     assert set(retrieval_response["properties"]) == {"result", "evidence"}
     assert retrieval_response["properties"]["result"]["enum"] == [
