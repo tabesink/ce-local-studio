@@ -12,7 +12,10 @@ from context_engine.db import Base, utc_now
 from context_engine.models import (
     Conversation,
     ConversationTurn,
+    ConversationTurnEvidenceRef,
     ConversationTurnEvent,
+    SourceBlock,
+    SourceDocument,
     TURN_EVENT_ACCEPTED,
     TURN_EVENT_ANSWER_DELTA,
     TURN_EVENT_CANCELLED,
@@ -28,12 +31,21 @@ from context_engine.models import (
     User,
 )
 from context_engine.services.chat_turns import (
+    ChatTurnError,
+    P6RetrievalPort,
     _cancel_running_turn,
     _complete_turn,
+    _persist_evidence_refs,
     _persist_event,
     _redact_turns,
     _stored_events,
 )
+from context_engine.services.evidence import (
+    InternalMappedEvidence,
+    ScopedRetrievalError,
+)
+import context_engine.services.chat_turns as chat_turns_service
+from context_engine.config import Settings
 
 
 def _database(tmp_path: Path) -> tuple[Session, ConversationTurn]:
@@ -212,5 +224,92 @@ def test_m11_redaction_sanitizes_ledger_without_changing_existing_sequences(tmp_
         assert "Sensitive answer." not in serialized
         assert "Sensitive evidence." not in serialized
         assert "ev_sensitive" not in serialized
+    finally:
+        db.close()
+
+
+def test_m02_p6_shared_retrieval_keeps_turn_evidence_durable_and_errors_safe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db, turn = _database(tmp_path)
+    try:
+        source = SourceDocument(
+            id="source-chat-p6",
+            public_ref="document-chat-p6",
+            domain_id="domain-chat-p6",
+            original_filename="manual.pdf",
+            content_type="application/pdf",
+            original_sha256="a" * 64,
+            original_size_bytes=128,
+            original_object_key="source/chat-p6",
+            state="prepared",
+            parser_kind="docling",
+        )
+        block = SourceBlock(
+            id="block-chat-p6",
+            source_document_id=source.id,
+            domain_id=source.domain_id,
+            source_order=1,
+            kind="text",
+            canonical_markdown="Canonical durable evidence.",
+        )
+        db.add_all([source, block])
+        db.commit()
+
+        mapped = InternalMappedEvidence(
+            source_document_id=source.id,
+            source_block_id=block.id,
+            source_label="manual.pdf",
+            excerpt="Canonical durable evidence.",
+            kind="text",
+            document_ref=source.public_ref,
+            document_label=source.original_filename,
+            anchor=None,
+            retrieval_order=1,
+        )
+        _persist_evidence_refs(db, turn=turn, evidence=[mapped])
+
+        persisted = db.scalar(
+            select(ConversationTurnEvidenceRef).where(
+                ConversationTurnEvidenceRef.turn_id == turn.id
+            )
+        )
+        assert persisted is not None
+        assert persisted.source_document_id == source.id
+        assert persisted.source_block_id == block.id
+        assert persisted.citation_label == "[1]"
+        assert persisted.excerpt == "Canonical durable evidence."
+
+        private_failure = "SENTINEL-PRIVATE-RETRIEVAL-FAILURE"
+
+        def fail_retrieval(*_args, **_kwargs):
+            raise ScopedRetrievalError(
+                "retrieval_unavailable",
+                private_failure,
+            )
+
+        monkeypatch.setattr(
+            chat_turns_service,
+            "retrieve_internal_scoped_evidence",
+            fail_retrieval,
+        )
+        settings = Settings(
+            database_url="sqlite+pysqlite:///:memory:",
+            testing=True,
+        )
+
+        with pytest.raises(ChatTurnError) as failure:
+            P6RetrievalPort().retrieve(
+                db,
+                settings=settings,
+                domain_id=source.domain_id,
+                question="Where is the valve?",
+                intent="fact",
+            )
+
+        assert failure.value.status_code == 502
+        assert failure.value.code == "domain_runtime_unavailable"
+        assert private_failure not in failure.value.message
     finally:
         db.close()

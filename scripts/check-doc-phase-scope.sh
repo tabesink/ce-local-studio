@@ -28,6 +28,7 @@ previous_key=''
 table_state='before'
 
 while IFS= read -r raw || [[ -n "$raw" ]]; do
+  raw="${raw%$'\r'}"
   if [[ "$raw" == '| recordClass | subject | value | notes |' ]]; then
     [[ "$table_state" == before ]] || fail "canonical manifest header is misplaced or duplicated"
     ((header_count += 1))
@@ -198,6 +199,7 @@ for root_file in AGENTS.md DESIGN.md STRATEGY.md; do
   [[ -f "$root_file" ]] && candidates+=("$root_file")
 done
 while IFS= read -r path; do
+  path="${path//\\//}"
   case "$path" in
     docs/plans/*) candidates+=("$path") ;;
     docs/_scratch/code-docs-drift-review.md) candidates+=("$path") ;;
