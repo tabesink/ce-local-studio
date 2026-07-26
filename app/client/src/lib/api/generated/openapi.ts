@@ -924,13 +924,6 @@ export interface components {
             /** Sourcelabel */
             sourceLabel: string;
         };
-        /** EvidenceItemResponse */
-        EvidenceItemResponse: {
-            /** Excerpt */
-            excerpt: string;
-            /** Sourcelabel */
-            sourceLabel: string;
-        };
         /** EvidenceRegionDto */
         EvidenceRegionDto: {
             /** Height */
@@ -941,21 +934,6 @@ export interface components {
             x: number;
             /** Y */
             y: number;
-        };
-        /** EvidenceRequest */
-        EvidenceRequest: {
-            /** Question */
-            question: string;
-        };
-        /** EvidenceResponse */
-        EvidenceResponse: {
-            /** Evidence */
-            evidence: components["schemas"]["EvidenceItemResponse"][];
-            /**
-             * Result
-             * @enum {string}
-             */
-            result: "evidence_found" | "no_grounded_context";
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2476,7 +2454,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["EvidenceRequest"];
+                "application/json": components["schemas"]["RetrievalEvidenceRequestDto"];
             };
         };
         responses: {
@@ -2486,7 +2464,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EvidenceResponse"];
+                    "application/json": components["schemas"]["RetrievalEvidenceResponseDto"];
                 };
             };
             /** @description Validation Error */
