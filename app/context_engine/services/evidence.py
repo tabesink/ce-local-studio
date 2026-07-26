@@ -13,6 +13,7 @@ from context_engine.config import Settings
 from context_engine.models import (
     DOMAIN_OPERATION_ACTIVE_STATUSES,
     DOMAIN_STATE_RUNNING,
+    SOURCE_BLOCK_KIND_FIGURE,
     SOURCE_INDEX_STATE_READY,
     SOURCE_STATE_PREPARED,
     Domain,
@@ -329,7 +330,7 @@ def _evidence_anchor(
     image_pages: set[int],
 ) -> dict[str, object] | None:
     page_number = block.page_start
-    if page_number is None and block.kind == "figure" and len(image_pages) == 1:
+    if page_number is None and block.kind == SOURCE_BLOCK_KIND_FIGURE and len(image_pages) == 1:
         page_number = next(iter(image_pages))
     if page_number is None:
         return None
@@ -355,6 +356,23 @@ def _active_domain_operation_exists(db: Session, domain_id: str) -> bool:
     )
 
 
+def _assert_runtime_healthy(controller: DomainRuntimeController, domain: Domain) -> None:
+    try:
+        health = controller.health(domain)
+    except Exception:  # noqa: BLE001 - normalize arbitrary controller failures
+        raise EvidenceRetrievalError(
+            503,
+            "domain_runtime_dependency_unavailable",
+            "Knowledge domain runtime health is unavailable.",
+        ) from None
+    if not health.healthy:
+        raise EvidenceRetrievalError(
+            502,
+            "domain_runtime_unavailable",
+            "Knowledge domain runtime is unavailable.",
+        )
+
+
 def resolve_available_domain(
     db: Session,
     *,
@@ -368,16 +386,7 @@ def resolve_available_domain(
     if domain.state != DOMAIN_STATE_RUNNING or _active_domain_operation_exists(db, domain.id):
         raise EvidenceRetrievalError(409, "domain_state_conflict", "Domain lifecycle state does not allow this operation.")
     controller = controller or controller_from_settings(settings)
-    try:
-        health = controller.health(domain)
-    except Exception:  # noqa: BLE001 - normalize arbitrary controller failures
-        raise EvidenceRetrievalError(
-            503,
-            "domain_runtime_dependency_unavailable",
-            "Knowledge domain runtime health is unavailable.",
-        ) from None
-    if not health.healthy:
-        raise EvidenceRetrievalError(502, "domain_runtime_unavailable", "Knowledge domain runtime is unavailable.")
+    _assert_runtime_healthy(controller, domain)
     return domain, controller
 
 
@@ -433,18 +442,8 @@ def freeze_retrieval_scope(
 ) -> FrozenRetrievalScope:
     frozen_sources: list[FrozenSourceIdentity] = []
     for source in sources:
-        if not source.index_request_id or not source.index_content_hash:
-            continue
-        frozen_sources.append(
-            FrozenSourceIdentity(
-                source_document_id=source.id,
-                preparation_generation=source.preparation_generation,
-                index_generation=source.index_generation,
-                index_request_id=source.index_request_id,
-                index_content_hash=source.index_content_hash,
-                original_sha256=source.original_sha256,
-            )
-        )
+        if (identity := _frozen_source_identity(source)) is not None:
+            frozen_sources.append(identity)
     return FrozenRetrievalScope(
         domain_id=domain.id,
         control_generation=domain.control_generation,
@@ -489,20 +488,7 @@ def reauthorize_frozen_retrieval_scope(
             "Domain lifecycle state does not allow this operation.",
         )
 
-    try:
-        health = controller.health(current_domain)
-    except Exception:  # noqa: BLE001 - normalize arbitrary controller failures
-        raise EvidenceRetrievalError(
-            503,
-            "domain_runtime_dependency_unavailable",
-            "Knowledge domain runtime health is unavailable.",
-        ) from None
-    if not health.healthy:
-        raise EvidenceRetrievalError(
-            502,
-            "domain_runtime_unavailable",
-            "Knowledge domain runtime is unavailable.",
-        )
+    _assert_runtime_healthy(controller, current_domain)
 
     eligible_sources = eligible_sources_for_domain(db, domain=current_domain)
     current_identities = {

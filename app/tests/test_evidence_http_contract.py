@@ -29,7 +29,7 @@ from context_engine.services.request_security import (
 )
 
 
-def _http_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, role: str = "member"):
+def _http_app(tmp_path: Path, *, role: str = "member"):
     settings = Settings(database_url=f"sqlite+pysqlite:///{tmp_path / f'evidence-{role}.db'}", testing=True)
     app = create_app(settings)
     Base.metadata.create_all(app.state.engine)
@@ -89,7 +89,7 @@ def test_m02_stateless_evidence_http_returns_exact_closed_private_projection(
         return _success_payload()
 
     monkeypatch.setattr(routes_module, "retrieve_scoped_evidence", retrieve)
-    app = _http_app(tmp_path, monkeypatch, role=role)
+    app = _http_app(tmp_path, role=role)
 
     with TestClient(app) as client:
         before = _database_row_counts(app)
@@ -141,7 +141,7 @@ def test_m02_stateless_evidence_http_exhaustively_maps_safe_failures(
         raise EvidenceRetrievalError(599, current["code"], "SENTINEL-PRIVATE-DEPENDENCY-EXCEPTION")
 
     monkeypatch.setattr(routes_module, "retrieve_scoped_evidence", fail)
-    app = _http_app(tmp_path, monkeypatch)
+    app = _http_app(tmp_path)
 
     with TestClient(app) as client:
         for internal_code, status_code, public_code in cases:
@@ -174,7 +174,7 @@ def test_m02_stateless_evidence_http_rejects_invalid_input_before_retrieval(
         called = True
 
     monkeypatch.setattr(routes_module, "retrieve_scoped_evidence", unexpected)
-    app = _http_app(tmp_path, monkeypatch)
+    app = _http_app(tmp_path)
 
     with TestClient(app) as client:
         for payload in (
@@ -205,7 +205,7 @@ def test_m02_stateless_evidence_http_trims_before_question_length_validation(
         return {"result": "no_grounded_context", "evidence": []}
 
     monkeypatch.setattr(routes_module, "retrieve_scoped_evidence", retrieve)
-    app = _http_app(tmp_path, monkeypatch)
+    app = _http_app(tmp_path)
     normalized = "x" * 2000
 
     with TestClient(app) as client:
@@ -225,7 +225,7 @@ def test_m02_stateless_evidence_http_fails_closed_on_private_response_field(
     payload = _success_payload()
     payload["evidence"][0]["sourceDocumentId"] = "SENTINEL-PRIVATE-SOURCE-ID"  # type: ignore[index]
     monkeypatch.setattr(routes_module, "retrieve_scoped_evidence", lambda *_args, **_kwargs: payload)
-    app = _http_app(tmp_path, monkeypatch)
+    app = _http_app(tmp_path)
 
     with TestClient(app, raise_server_exceptions=False) as client:
         response = client.post(
@@ -256,7 +256,7 @@ def test_m02_stateless_evidence_http_fails_closed_on_invalid_anchor_or_result_pa
     payload = _success_payload()
     mutate(payload)
     monkeypatch.setattr(routes_module, "retrieve_scoped_evidence", lambda *_args, **_kwargs: payload)
-    app = _http_app(tmp_path, monkeypatch)
+    app = _http_app(tmp_path)
 
     with TestClient(app, raise_server_exceptions=False) as client:
         response = client.post(
