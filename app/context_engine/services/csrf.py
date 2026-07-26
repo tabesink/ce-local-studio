@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-from datetime import timedelta
 import hashlib
 import hmac
 import json
