@@ -198,7 +198,7 @@ declare -a candidates=()
 for root_file in AGENTS.md DESIGN.md STRATEGY.md; do
   [[ -f "$root_file" ]] && candidates+=("$root_file")
 done
-while IFS= read -r path; do
+while IFS= read -r -d '' path; do
   case "$path" in
     docs/plans/*) candidates+=("$path") ;;
     docs/_scratch/code-docs-drift-review.md) candidates+=("$path") ;;
@@ -207,7 +207,7 @@ while IFS= read -r path; do
     docs/ideation/*) ;;
     *.md|*.txt|*.html) candidates+=("$path") ;;
   esac
-done < <(MSYS2_ARG_CONV_EXCL='*' rg --files -uu --path-separator / docs)
+done < <(find docs -type f -print0)
 
 mapfile -t discovered < <(printf '%s\n' "${candidates[@]}" | sort -u)
 mapfile -t classified < <(
