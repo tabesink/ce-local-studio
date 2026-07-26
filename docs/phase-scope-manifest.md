@@ -115,6 +115,7 @@ This is the machine-read D0 boundary. The table is sorted bytewise by record cla
 | scan-file | docs/residual-review-findings/feat-p5-01-index-state-worker-claim.md | active | accepted review residuals |
 | scan-file | docs/residual-review-findings/feat-p5-02-lightrag-renderer-adapter.md | active | accepted review residuals |
 | scan-file | docs/residual-review-findings/feat-p5-03-index-eligibility.md | active | accepted review residuals |
+| scan-file | docs/residual-review-findings/feat-p6-scoped-evidence.md | active | accepted review residuals |
 | scan-file | docs/residual-review-findings/main-7de9a4a.md | active | accepted review residuals |
 | scan-file | docs/residual-review-findings/main-e187555.md | active | accepted review residuals |
 | scan-file | docs/tech-stack.md | active | technology authority |
