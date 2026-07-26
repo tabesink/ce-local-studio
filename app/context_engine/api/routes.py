@@ -1340,7 +1340,16 @@ def admin_delete_source(
     )
 
 
-@api_router.post("/domains/{domainId}/evidence", response_model=RetrievalEvidenceResponseDto)
+@api_router.post(
+    "/domains/{domainId}/evidence",
+    response_model=RetrievalEvidenceResponseDto,
+    responses={
+        404: {"model": ErrorEnvelope, "description": "Domain not found."},
+        409: {"model": ErrorEnvelope, "description": "Domain is not query eligible."},
+        422: {"model": ErrorEnvelope, "description": "Request validation failed."},
+        503: {"model": ErrorEnvelope, "description": "Retrieval is temporarily unavailable."},
+    },
+)
 def retrieve_domain_evidence(
     payload: RetrievalEvidenceRequestDto,
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 
 from context_engine.api import routes as routes_module
 from context_engine.api.contract_app import (
@@ -93,10 +93,21 @@ def test_m02_stateless_evidence_http_returns_exact_closed_private_projection(
 
     with TestClient(app) as client:
         before = _database_row_counts(app)
-        response = client.post(
-            f"{CANONICAL_API_PREFIX}/domains/domain-http-001/evidence",
-            json={"question": f"  {private_question}  "},
-        )
+        writes: list[str] = []
+
+        def capture_writes(_conn, _cursor, statement, _parameters, _context, _executemany):
+            normalized = statement.lstrip().upper()
+            if normalized.startswith(("INSERT ", "UPDATE ", "DELETE ")):
+                writes.append(normalized.split(maxsplit=1)[0])
+
+        event.listen(app.state.engine, "before_cursor_execute", capture_writes)
+        try:
+            response = client.post(
+                f"{CANONICAL_API_PREFIX}/domains/domain-http-001/evidence",
+                json={"question": f"  {private_question}  "},
+            )
+        finally:
+            event.remove(app.state.engine, "before_cursor_execute", capture_writes)
         after = _database_row_counts(app)
 
     assert response.status_code == 200
@@ -111,6 +122,7 @@ def test_m02_stateless_evidence_http_returns_exact_closed_private_projection(
     assert "sourceDocumentId" not in response.text
     assert "sourceBlockId" not in response.text
     assert after == before
+    assert writes == []
     rendered_logs = "\n".join(record.getMessage() for record in caplog.records)
     for private_value in (
         private_question,

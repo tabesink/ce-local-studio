@@ -17,7 +17,7 @@ from context_engine.models import (
     SourceBlock,
     SourceDocument,
 )
-from context_engine.services.evidence import parse_ce_block_marker
+from context_engine.services.evidence import ScopedRetrievalError, parse_ce_block_marker
 from context_engine.services.indexing import (
     LIGHTRAG_HANDOFF_SCHEMA_VERSION,
     LightRAGClient,
@@ -218,6 +218,28 @@ def test_local_adapter_idempotent_submit_readiness_delete_and_provenance(tmp_pat
     assert client.readiness(domain, request_id=request_id).failed is True
 
 
+def test_local_retrieval_reports_missing_index_as_unavailable(tmp_path: Path) -> None:
+    settings = Settings(
+        database_url="sqlite+pysqlite:///:memory:",
+        testing=True,
+        domain_runtime_root=str(tmp_path / "runtimes"),
+        lightrag_client_kind="local",
+    )
+    client = LocalLightRAGIndexClient(settings, _HealthyController(tmp_path / "runtimes"))
+    domain = Domain(
+        id="domain-index",
+        display_name="Index",
+        runtime_instance_id="runtime-1",
+        embedding_profile_id="openai-embedding-default",
+        state="running",
+    )
+
+    with pytest.raises(ScopedRetrievalError) as failure:
+        client.retrieve(domain, question="question")
+
+    assert failure.value.code == "retrieval_unavailable"
+
+
 def test_native_adapter_timeout_fails_closed() -> None:
     settings = Settings(
         database_url="sqlite+pysqlite:///:memory:",
@@ -294,6 +316,74 @@ def test_native_retrieval_preserves_schema_v2_candidate_without_rewriting() -> N
 
     assert result.candidates[0].text == candidate
     assert parse_ce_block_marker(result.candidates[0].text) is not None
+
+
+@pytest.mark.parametrize(
+    ("native_result", "expects_empty"),
+    [
+        (
+            {
+                "status": "failure",
+                "metadata": {"failure_reason": "no_results"},
+            },
+            True,
+        ),
+        (
+            {
+                "status": "failure",
+                "metadata": {"failure_reason": "dependency_failure"},
+            },
+            False,
+        ),
+        ("malformed-native-result", False),
+    ],
+)
+def test_native_retrieval_only_accepts_explicit_no_results_as_empty(
+    native_result: object,
+    expects_empty: bool,
+) -> None:
+    settings = Settings(
+        database_url="sqlite+pysqlite:///:memory:",
+        testing=True,
+        source_index_lease_seconds=30,
+        source_index_timeout_seconds=1,
+        lightrag_client_kind="native",
+    )
+    client = LightRAGClient(settings)
+
+    class _Rag:
+        async def aquery_data(self, _question, _params):
+            return native_result
+
+    class _QueryParam:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+    async def _new_rag(_domain):
+        return _Rag(), {"QueryParam": _QueryParam}
+
+    async def _close_rag(_rag, _runtime):
+        return None
+
+    client._new_rag = _new_rag  # type: ignore[method-assign]
+    client._close_rag = _close_rag  # type: ignore[method-assign]
+    client._run = lambda awaitable, deadline=None: asyncio.run(awaitable)  # type: ignore[method-assign]
+    domain = Domain(
+        id="domain-index",
+        display_name="Index",
+        runtime_instance_id="runtime-1",
+        embedding_profile_id="openai-embedding-default",
+        state="running",
+    )
+
+    if expects_empty:
+        assert client.retrieve(domain, question="question").candidates == ()
+        return
+
+    with pytest.raises(ScopedRetrievalError) as failure:
+        client.retrieve(domain, question="question")
+    assert failure.value.code == "retrieval_malformed"
+    assert "dependency_failure" not in failure.value.message
 
 
 def test_settings_require_index_lease_longer_than_timeout() -> None:

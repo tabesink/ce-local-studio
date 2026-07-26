@@ -28,6 +28,7 @@ from context_engine.services.evidence import (
     map_retrieval_hits_to_internal_evidence,
     resolve_available_domain,
     retrieve_bounded_candidates,
+    retrieve_internal_scoped_evidence,
     retrieve_scoped_evidence,
 )
 from context_engine.services.indexing import LightRAGClientProtocol
@@ -222,6 +223,74 @@ def test_scoped_port_saturation_releases_gate_for_later_calls() -> None:
         )
         == ()
     )
+
+
+def test_complete_retrieval_pipeline_admits_before_eligibility_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    started = threading.Event()
+    release = threading.Event()
+    eligibility_calls = 0
+    results: list[InternalScopedRetrievalResult] = []
+    failures: list[BaseException] = []
+
+    class _HealthyController:
+        def health(self, _domain):
+            return type("Health", (), {"healthy": True})()
+
+    def resolve(*_args, **_kwargs):
+        return _domain(), _HealthyController()
+
+    def scan(*_args, **_kwargs):
+        nonlocal eligibility_calls
+        eligibility_calls += 1
+        started.set()
+        assert release.wait(timeout=1)
+        return []
+
+    monkeypatch.setattr(evidence_service, "resolve_available_domain", resolve)
+    monkeypatch.setattr(evidence_service, "eligible_sources_for_domain", scan)
+
+    def run_first_call() -> None:
+        try:
+            results.append(
+                retrieve_internal_scoped_evidence(
+                    object(),  # type: ignore[arg-type]
+                    settings=_settings(
+                        retrieval_timeout_seconds=1,
+                        retrieval_global_concurrency=1,
+                        retrieval_per_domain_concurrency=1,
+                    ),
+                    domain_id="domain-retrieval",
+                    question="first",
+                )
+            )
+        except BaseException as exc:  # pragma: no cover - surfaced below
+            failures.append(exc)
+
+    first = threading.Thread(target=run_first_call, daemon=True)
+    first.start()
+    assert started.wait(timeout=1)
+
+    with pytest.raises(ScopedRetrievalError) as saturated:
+        retrieve_internal_scoped_evidence(
+            object(),  # type: ignore[arg-type]
+            settings=_settings(
+                retrieval_timeout_seconds=0.01,
+                retrieval_global_concurrency=1,
+                retrieval_per_domain_concurrency=1,
+            ),
+            domain_id="domain-retrieval",
+            question="second",
+        )
+    assert saturated.value.code == "retrieval_saturated"
+    assert eligibility_calls == 1
+
+    release.set()
+    first.join(timeout=1)
+    assert not first.is_alive()
+    assert failures == []
+    assert results == [InternalScopedRetrievalResult(had_eligible_sources=False)]
 
 
 def test_scoped_port_rejects_late_result_and_releases_gates(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -541,3 +610,34 @@ def test_domain_health_exception_does_not_escape_safe_boundary() -> None:
     assert failure.value.code == "domain_runtime_dependency_unavailable"
     rendered = "".join(traceback.format_exception(failure.value))
     assert "SENTINEL-PRIVATE-HEALTH-EXCEPTION" not in rendered
+
+
+def test_unhealthy_domain_runtime_stops_before_eligibility_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _DomainSession:
+        def get(self, _model, _domain_id):
+            return _domain()
+
+        def scalar(self, _statement):
+            return None
+
+    class _UnhealthyController:
+        def health(self, _domain):
+            return type("Health", (), {"healthy": False})()
+
+    def unexpected_scan(*_args, **_kwargs):
+        raise AssertionError("eligibility scan must not run")
+
+    monkeypatch.setattr(evidence_service, "eligible_sources_for_domain", unexpected_scan)
+
+    with pytest.raises(EvidenceRetrievalError) as failure:
+        retrieve_internal_scoped_evidence(
+            _DomainSession(),  # type: ignore[arg-type]
+            settings=_settings(),
+            domain_id="domain-retrieval",
+            question="bounded",
+            controller=_UnhealthyController(),  # type: ignore[arg-type]
+        )
+
+    assert failure.value.code == "domain_runtime_unavailable"

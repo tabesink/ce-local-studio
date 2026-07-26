@@ -59,9 +59,9 @@ cd app
 .\.venv\Scripts\python.exe -m pytest tests\test_postgres_scoped_retrieval.py -q
 ```
 
-Result: PASS, 5 tests against PostgreSQL 16.14. Barrier-driven transactions
-prove stop/restart, reindex-ready, deletion, and preparation-replacement fences
-plus simultaneous request isolation. The documented disposable database was
+Result: PASS, 6 tests against PostgreSQL 16.14. Barrier-driven transactions
+prove stop/restart, an active lifecycle operation, reindex-ready, deletion, and
+preparation-replacement fences plus simultaneous request isolation. The documented disposable database was
 started from `app/compose.stack.yml` on loopback port 5438 before the successful
 run; an earlier attempt made while that service was absent produced no test
 result and is not counted as evidence.
@@ -120,8 +120,7 @@ cd app
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Result: PASS, 194 tests on exact revision
-`c117fb133dc643b75348fe8c8f41e3adca41e884`.
+Result: PASS, 202 tests in the final reviewed worktree against PostgreSQL 16.14.
 
 The applicable backend portion of `scripts/verify.sh` was run through the
 existing locked virtual environment: package import, full package Ruff, the
@@ -131,6 +130,16 @@ without contacting PyPI; network escalation was denied. No dependency or
 `app/uv.lock` change exists in this slice. Frontend and image/Compose build
 checks are outside this backend-only P6 implementation boundary and remain in
 their owning LFG shipping/browser and P10/P12 gates.
+
+### Browser test boundary
+
+The LFG pipeline browser scope mapped zero changed runtime files to a rendered
+route. This slice changes the private FastAPI Evidence endpoint, its generated
+client contract, backend services/tests, and governance evidence; it changes no
+Next.js route, feature, component, style, or browser interaction. The browser
+run is therefore `NOT_APPLICABLE` with zero pages tested. HTTP behavior is
+covered at the real FastAPI boundary, while P9 owns the first Evidence inspector
+and governed-document browser flows.
 
 ## Privacy and no-mutation evidence
 
@@ -145,8 +154,10 @@ their owning LFG shipping/browser and P10/P12 gates.
   private question/health exceptions are absent from safe exception strings,
   cause/context chains, and formatted tracebacks.
 - Every database table count is snapshotted after app startup and remains
-  unchanged across the stateless request. The separate chat characterization
-  confirms only the P7-owned turn path persists Evidence refs.
+  unchanged across the stateless request. A SQL execution listener additionally
+  proves that the request issues no `INSERT`, `UPDATE`, or `DELETE`. The
+  separate chat characterization confirms only the P7-owned turn path persists
+  Evidence refs.
 - The endpoint emits no audit event, trace payload, product metric, snapshot,
   export, or failure artifact, so those sinks are non-applicable to this
   endpoint-specific P6 proof. P8 owns the system-wide cross-sink scan and
@@ -164,6 +175,23 @@ their owning LFG shipping/browser and P10/P12 gates.
 - Any future addition of a stateless Evidence ID, region anchor, new error
   code, source-content URL, or browser capability requires an approved contract
   change.
+
+## Structured review closure
+
+The LFG code-review pass retained and resolved four findings:
+
+- admission and the single retrieval deadline now cover domain resolution,
+  eligibility rendering, provider work, mapping, and terminal reauthorization;
+- terminal reauthorization queries only the frozen source identities instead
+  of re-rendering the complete domain corpus a second time;
+- native LightRAG accepts only its explicit `no_results` failure reason as an
+  empty result and fails closed on every other malformed/non-success payload;
+- DRIFT-34 now records P6-01/P6-02 as complete.
+
+Regression coverage proves pre-scan capacity rejection, unhealthy-runtime
+short-circuiting, native response classification, active-operation fencing, and
+the stateless HTTP no-write guarantee. Deployment-wide retrieval admission
+remains P10/P12-owned because the Phase 1 P6 gate is intentionally process-local.
 
 ## Deferred ownership
 
