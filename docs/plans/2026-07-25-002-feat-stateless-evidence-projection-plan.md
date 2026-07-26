@@ -257,14 +257,14 @@ PostgreSQL concurrency tests use barriers/latches rather than sleeps. If the app
 
 ## Definition of Done
 
-- [ ] U1-U4 are complete with no handwritten competing retrieval DTO or abandoned projection path.
-- [ ] The endpoint remains stateless and emits no evidence ID, private ID, raw hit, or fabricated anchor.
-- [ ] Every item uses canonical content, sanitized labels, opaque document refs, nullable provable anchors, deterministic deduplication, and dense response-scoped citations.
-- [ ] Pre/post authorization proves current selected-domain/runtime/source eligibility, including PostgreSQL lifecycle and generation races.
-- [ ] Every public failure uses the approved status/code/message envelope with request-ID correlation and private no-store caching.
-- [ ] OpenAPI, public JSON Schema, SSE generation artifacts, and generated browser types are synchronized and verified.
-- [ ] PostgreSQL 16 retrieval and lifecycle-race proof passes; focused unit, HTTP, indexing/retrieval regression, lint, privacy, phase-scope, and applicable broad gates pass or carry an explicit authoritative environment boundary only where that gate permits one.
-- [ ] Decision-gate documentation is resolved in place; P7 remains the sole owner of durable evidence refs, location resolution, replay, and redaction.
-- [ ] `docs/_scratch/p6-02-evidence-inventory.md` and `docs/_scratch/p6-02-evidence.md` identify the exact tested revision and remaining owners.
-- [ ] `docs/master-build-plan.md` marks only P6/P6-02 complete after the evidence record is final.
-- [ ] Dead-end or experimental code introduced during implementation is removed before closure.
+- [x] U1-U4 are complete with no handwritten competing retrieval DTO or abandoned projection path.
+- [x] The endpoint remains stateless and emits no evidence ID, private ID, raw hit, or fabricated anchor.
+- [x] Every item uses canonical content, sanitized labels, opaque document refs, nullable provable anchors, deterministic deduplication, and dense response-scoped citations.
+- [x] Pre/post authorization proves current selected-domain/runtime/source eligibility, including PostgreSQL lifecycle and generation races.
+- [x] Every public failure uses the approved status/code/message envelope with request-ID correlation and private no-store caching.
+- [x] OpenAPI, public JSON Schema, SSE generation artifacts, and generated browser types are synchronized and verified.
+- [x] PostgreSQL 16 retrieval and lifecycle-race proof passes; focused unit, HTTP, indexing/retrieval regression, lint, privacy, phase-scope, and applicable broad gates pass or carry an explicit authoritative environment boundary only where that gate permits one.
+- [x] Decision-gate documentation is resolved in place; P7 remains the sole owner of durable evidence refs, location resolution, replay, and redaction.
+- [x] `docs/_scratch/p6-02-evidence-inventory.md` and `docs/_scratch/p6-02-evidence.md` identify the exact tested revision and remaining owners.
+- [x] `docs/master-build-plan.md` marks only P6/P6-02 complete after the evidence record is final.
+- [x] Dead-end or experimental code introduced during implementation is removed before closure.
