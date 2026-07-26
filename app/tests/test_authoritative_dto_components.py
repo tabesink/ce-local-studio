@@ -57,6 +57,16 @@ def test_authoritative_dto_catalog_is_generated_without_placeholder_routes() -> 
     assert all("schema" not in path.lower() for path in document["paths"])
 
 
+def test_retrieval_evidence_operation_declares_canonical_error_envelopes() -> None:
+    operation = _openapi()["paths"]["/api/v1/domains/{domainId}/evidence"]["post"]
+
+    assert set(operation["responses"]) == {"200", "404", "409", "422", "503"}
+    for status_code in ("404", "409", "422", "503"):
+        assert operation["responses"][status_code]["content"]["application/json"]["schema"] == {
+            "$ref": "#/components/schemas/ErrorEnvelope"
+        }
+
+
 def test_authoritative_components_are_closed_camel_case_contracts() -> None:
     schemas = _openapi()["components"]["schemas"]
 

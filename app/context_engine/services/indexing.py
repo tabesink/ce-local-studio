@@ -332,11 +332,15 @@ class LocalLightRAGIndexClient:
         if deadline is not None and time.monotonic() >= deadline:
             raise ScopedRetrievalError("retrieval_timeout", "Scoped retrieval timed out.")
         index_dir = self._index_dir(domain)
+        if not index_dir.is_dir():
+            raise ScopedRetrievalError("retrieval_unavailable", "Scoped retrieval is unavailable.")
         texts: list[str] = []
         try:
             record_paths = sorted(index_dir.glob("*.json"))
         except OSError as exc:
             raise ScopedRetrievalError("retrieval_unavailable", "Scoped retrieval is unavailable.") from exc
+        if not record_paths:
+            raise ScopedRetrievalError("retrieval_unavailable", "Scoped retrieval is unavailable.")
         for record_path in record_paths:
             if len(texts) >= self._settings.retrieval_max_candidates:
                 break
@@ -608,8 +612,23 @@ class LightRAGClient:
                 result = await rag.aquery_data(question, QueryParam(mode="naive", top_k=10, chunk_top_k=10))
             finally:
                 await self._close_rag(rag, runtime)
-            if not isinstance(result, dict) or result.get("status") != "success":
+            if (
+                isinstance(result, dict)
+                and result.get("status") == "failure"
+                and isinstance(result.get("metadata"), dict)
+                and result["metadata"].get("failure_reason") == "no_results"
+            ):
                 return _bounded_adapter_result((), self._settings)
+            if not isinstance(result, dict):
+                raise ScopedRetrievalError("retrieval_malformed", "Scoped retrieval returned an invalid result.")
+            status = result.get("status")
+            if status == "failure":
+                raise ScopedRetrievalError(
+                    "retrieval_malformed",
+                    "Scoped retrieval returned an invalid result.",
+                )
+            if status != "success":
+                raise ScopedRetrievalError("retrieval_malformed", "Scoped retrieval returned an invalid result.")
             data = result.get("data")
             if not isinstance(data, dict):
                 raise ScopedRetrievalError("retrieval_malformed", "Scoped retrieval returned an invalid result.")

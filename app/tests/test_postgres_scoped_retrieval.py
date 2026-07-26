@@ -22,6 +22,7 @@ from context_engine.models import (
     SOURCE_STATE_DELETING,
     SOURCE_STATE_PREPARED,
     Domain,
+    DomainOperation,
     SourceBlock,
     SourceDocument,
 )
@@ -129,7 +130,10 @@ class _ConcurrentClient:
         return ScopedRetrievalResult(candidates=(ScopedRetrievalCandidate(text=self._candidate),))
 
 
-@pytest.mark.parametrize("fence", ["stop_restart", "reindex_ready", "delete", "replace"])
+@pytest.mark.parametrize(
+    "fence",
+    ["stop_restart", "active_operation", "reindex_ready", "delete", "replace"],
+)
 def test_p6_01_post_call_snapshot_rejects_committed_fences(tmp_path: Path, fence: str) -> None:
     """C-01: a committed lifecycle/source fence during retrieval cannot map stale provenance."""
     admin_url = _required_admin_url()
@@ -241,6 +245,15 @@ def test_p6_01_post_call_snapshot_rejects_committed_fences(tmp_path: Path, fence
                         current_domain.control_generation += 2
                         current_domain.runtime_instance_id = "runtime-after"
                         current_domain.state = DOMAIN_STATE_RUNNING
+                    elif fence == "active_operation":
+                        other.add(
+                            DomainOperation(
+                                domain_id=domain_id,
+                                operation_type="stop",
+                                status="queued",
+                                control_generation_at_start=1,
+                            )
+                        )
                     elif fence == "reindex_ready":
                         current_source = other.get(SourceDocument, source_id)
                         assert current_source is not None
@@ -268,7 +281,11 @@ def test_p6_01_post_call_snapshot_rejects_committed_fences(tmp_path: Path, fence
                 assert results == []
                 assert len(failures) == 1
                 assert isinstance(failures[0], EvidenceRetrievalError)
-                expected_code = "domain_state_conflict" if fence == "stop_restart" else "domain_no_eligible_sources"
+                expected_code = (
+                    "domain_state_conflict"
+                    if fence in {"stop_restart", "active_operation"}
+                    else "domain_no_eligible_sources"
+                )
                 assert failures[0].code == expected_code
             finally:
                 engine.dispose()

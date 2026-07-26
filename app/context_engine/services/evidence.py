@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -189,6 +190,34 @@ def _acquire_before(gate: threading.BoundedSemaphore, deadline: float) -> bool:
     return remaining > 0 and gate.acquire(timeout=remaining)
 
 
+def _ensure_before_deadline(deadline: float) -> None:
+    if time.monotonic() > deadline:
+        raise _retrieval_failure("retrieval_timeout")
+
+
+@contextmanager
+def _retrieval_admission(settings: Settings, domain_id: str):
+    deadline = time.monotonic() + settings.retrieval_timeout_seconds
+    global_gate, domain_key, domain_entry = _retrieval_gates(settings, domain_id)
+    domain_gate = domain_entry.gate
+    global_acquired = False
+    domain_acquired = False
+    try:
+        domain_acquired = _acquire_before(domain_gate, deadline)
+        if not domain_acquired:
+            raise _retrieval_failure("retrieval_saturated")
+        global_acquired = _acquire_before(global_gate, deadline)
+        if not global_acquired:
+            raise _retrieval_failure("retrieval_saturated")
+        yield deadline
+    finally:
+        if domain_acquired:
+            domain_gate.release()
+        if global_acquired:
+            global_gate.release()
+        _release_domain_gate_reference(domain_key, domain_entry)
+
+
 def normalize_scoped_retrieval_result(
     result: object,
     *,
@@ -254,35 +283,34 @@ def retrieve_bounded_candidates(
     if not isinstance(question, str) or not question.strip():
         raise _retrieval_failure("retrieval_malformed")
 
-    deadline = time.monotonic() + settings.retrieval_timeout_seconds
-    global_gate, domain_key, domain_entry = _retrieval_gates(settings, domain.id)
-    domain_gate = domain_entry.gate
-    global_acquired = False
-    domain_acquired = False
-    try:
-        domain_acquired = _acquire_before(domain_gate, deadline)
-        if not domain_acquired:
-            raise _retrieval_failure("retrieval_saturated")
-        global_acquired = _acquire_before(global_gate, deadline)
-        if not global_acquired:
-            raise _retrieval_failure("retrieval_saturated")
-        result, failure_code = _call_scoped_retrieval(
-            client,
-            domain,
+    with _retrieval_admission(settings, domain.id) as deadline:
+        return _retrieve_bounded_candidates_before_deadline(
+            settings=settings,
+            domain=domain,
             question=question,
+            client=client,
             deadline=deadline,
         )
-        if failure_code is not None:
-            raise _retrieval_failure(failure_code)
-        if time.monotonic() > deadline:
-            raise _retrieval_failure("retrieval_timeout")
-        return normalize_scoped_retrieval_result(result, settings=settings)
-    finally:
-        if domain_acquired:
-            domain_gate.release()
-        if global_acquired:
-            global_gate.release()
-        _release_domain_gate_reference(domain_key, domain_entry)
+
+
+def _retrieve_bounded_candidates_before_deadline(
+    *,
+    settings: Settings,
+    domain: Domain,
+    question: str,
+    client: ScopedRetrievalPort,
+    deadline: float,
+) -> tuple[ScopedRetrievalCandidate, ...]:
+    result, failure_code = _call_scoped_retrieval(
+        client,
+        domain,
+        question=question,
+        deadline=deadline,
+    )
+    if failure_code is not None:
+        raise _retrieval_failure(failure_code)
+    _ensure_before_deadline(deadline)
+    return normalize_scoped_retrieval_result(result, settings=settings)
 
 
 def parse_ce_block_marker(text: str) -> CEBlockMarker | None:
@@ -490,10 +518,23 @@ def reauthorize_frozen_retrieval_scope(
 
     _assert_runtime_healthy(controller, current_domain)
 
-    eligible_sources = eligible_sources_for_domain(db, domain=current_domain)
+    frozen_source_ids = tuple(source.source_document_id for source in frozen_scope.sources)
+    eligible_sources = db.scalars(
+        select(SourceDocument)
+        .where(
+            SourceDocument.id.in_(frozen_source_ids),
+            SourceDocument.domain_id == current_domain.id,
+            SourceDocument.state == SOURCE_STATE_PREPARED,
+            SourceDocument.index_state == SOURCE_INDEX_STATE_READY,
+            SourceDocument.index_request_id.is_not(None),
+            SourceDocument.index_content_hash.is_not(None),
+        )
+        .execution_options(populate_existing=True)
+    ).all()
     current_identities = {
         identity.source_document_id: identity
         for source in eligible_sources
+        if source_has_current_index_identity(source)
         if (identity := _frozen_source_identity(source)) is not None
     }
     if not current_identities or any(
@@ -623,36 +664,50 @@ def retrieve_internal_scoped_evidence(
     client: ScopedRetrievalPort | None = None,
     controller: DomainRuntimeController | None = None,
 ) -> InternalScopedRetrievalResult:
-    domain, controller = resolve_available_domain(db, settings=settings, domain_id=domain_id, controller=controller)
-    eligible_sources = eligible_sources_for_domain(db, domain=domain)
-    if not eligible_sources:
-        return InternalScopedRetrievalResult(had_eligible_sources=False)
+    if not isinstance(question, str) or not question.strip():
+        raise _retrieval_failure("retrieval_malformed")
 
-    frozen_scope = freeze_retrieval_scope(domain, eligible_sources)
-    db.commit()
-    client = client or index_client_from_settings(settings, controller)
-    hits = retrieve_bounded_candidates(
-        settings=settings,
-        domain=domain,
-        question=question,
-        client=client,
-    )
-    mapped_evidence = tuple(
-        map_retrieval_hits_to_internal_evidence(
+    with _retrieval_admission(settings, domain_id) as deadline:
+        domain, controller = resolve_available_domain(
             db,
-            hits=hits,
-            frozen_scope=frozen_scope,
+            settings=settings,
+            domain_id=domain_id,
+            controller=controller,
         )
-    )
-    reauthorize_frozen_retrieval_scope(
-        db,
-        frozen_scope=frozen_scope,
-        controller=controller,
-    )
-    return InternalScopedRetrievalResult(
-        had_eligible_sources=True,
-        evidence=mapped_evidence,
-    )
+        _ensure_before_deadline(deadline)
+        eligible_sources = eligible_sources_for_domain(db, domain=domain)
+        _ensure_before_deadline(deadline)
+        if not eligible_sources:
+            return InternalScopedRetrievalResult(had_eligible_sources=False)
+
+        frozen_scope = freeze_retrieval_scope(domain, eligible_sources)
+        db.commit()
+        client = client or index_client_from_settings(settings, controller)
+        hits = _retrieve_bounded_candidates_before_deadline(
+            settings=settings,
+            domain=domain,
+            question=question,
+            client=client,
+            deadline=deadline,
+        )
+        mapped_evidence = tuple(
+            map_retrieval_hits_to_internal_evidence(
+                db,
+                hits=hits,
+                frozen_scope=frozen_scope,
+            )
+        )
+        _ensure_before_deadline(deadline)
+        reauthorize_frozen_retrieval_scope(
+            db,
+            frozen_scope=frozen_scope,
+            controller=controller,
+        )
+        _ensure_before_deadline(deadline)
+        return InternalScopedRetrievalResult(
+            had_eligible_sources=True,
+            evidence=mapped_evidence,
+        )
 
 
 def retrieve_scoped_evidence(
