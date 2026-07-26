@@ -1107,9 +1107,24 @@ export interface components {
              */
             status: "ready";
         };
+        /** RetrievalEvidenceAnchorDto */
+        RetrievalEvidenceAnchorDto: {
+            /**
+             * Fallback
+             * @enum {string}
+             */
+            fallback: "section" | "page";
+            /** Pagenumber */
+            pageNumber: number;
+            /**
+             * Sectionlabel
+             * @default null
+             */
+            sectionLabel: string | null;
+        };
         /** RetrievalEvidenceItemDto */
         RetrievalEvidenceItemDto: {
-            anchor: components["schemas"]["EvidenceAnchorDto"] | null;
+            anchor: components["schemas"]["RetrievalEvidenceAnchorDto"] | null;
             /** Citationlabel */
             citationLabel: string;
             /** Documentlabel */
@@ -1140,7 +1155,15 @@ export interface components {
              * @enum {string}
              */
             result: "evidence_found" | "no_grounded_context";
-        };
+        } & ({
+            evidence?: unknown;
+            /** @constant */
+            result?: "evidence_found";
+        } | {
+            evidence?: unknown;
+            /** @constant */
+            result?: "no_grounded_context";
+        });
         /** RuntimeSettingsDto */
         RuntimeSettingsDto: {
             /**

@@ -196,6 +196,12 @@ type RetrievalEvidenceRequestDto = {
   question: string; // trimmed, 1..2000
 };
 
+type RetrievalEvidenceAnchorDto = {
+  pageNumber: number; // one-based
+  sectionLabel?: string | null; // 1..160 when present
+  fallback: "section" | "page";
+};
+
 type RetrievalEvidenceItemDto = {
   citationLabel: string;
   sourceLabel: SafeLabel;
@@ -203,7 +209,7 @@ type RetrievalEvidenceItemDto = {
   kind: "text" | "table" | "figure";
   documentRef: OpaqueRef;
   documentLabel: SafeLabel;
-  anchor: EvidenceAnchorDto | null;
+  anchor: RetrievalEvidenceAnchorDto | null;
 };
 
 type RetrievalEvidenceResponseDto = {
@@ -212,7 +218,7 @@ type RetrievalEvidenceResponseDto = {
 };
 ```
 
-`RetrievalEvidenceItemDto` has no evidence ID because the route is read-only and creates no owner-bound turn Evidence row. Citation labels are dense and response-scoped after final block deduplication. A nullable anchor means no page can be proved; persisted `EvidenceItemDto.anchor` remains required.
+`RetrievalEvidenceItemDto` has no evidence ID because the route is read-only and creates no owner-bound turn Evidence row. Citation labels are dense and response-scoped after final block deduplication. Its closed anchor never contains a region and never accepts `fallback:"region"`; a nullable anchor means no page can be proved. Persisted `EvidenceItemDto.anchor` remains required and continues to use the separate durable anchor shape. `evidence_found` requires a non-empty `evidence` array, while `no_grounded_context` requires an empty array.
 
 ## Governed-context DTOs
 

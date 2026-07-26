@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 
 from context_engine.api import routes as routes_module
 from context_engine.api.contract_app import (
@@ -57,7 +58,6 @@ def _success_payload() -> dict[str, object]:
                 "documentLabel": "SAFE-DOCUMENT-LABEL.pdf",
                 "anchor": {
                     "pageNumber": 8,
-                    "region": None,
                     "sectionLabel": "Relief valve",
                     "fallback": "section",
                 },
@@ -66,13 +66,23 @@ def _success_payload() -> dict[str, object]:
     }
 
 
+def _database_row_counts(app) -> dict[str, int]:
+    with app.state.session_factory() as db:
+        return {
+            table.name: db.scalar(select(func.count()).select_from(table)) or 0
+            for table in Base.metadata.sorted_tables
+        }
+
+
 @pytest.mark.parametrize("role", ["member", "administrator"])
 def test_m02_stateless_evidence_http_returns_exact_closed_private_projection(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
     role: str,
 ) -> None:
     seen: dict[str, object] = {}
+    private_question = "SENTINEL-PRIVATE-QUESTION"
 
     def retrieve(_db, *, settings, domain_id: str, question: str):
         seen.update(domain_id=domain_id, question=question, testing=settings.testing)
@@ -82,10 +92,12 @@ def test_m02_stateless_evidence_http_returns_exact_closed_private_projection(
     app = _http_app(tmp_path, monkeypatch, role=role)
 
     with TestClient(app) as client:
+        before = _database_row_counts(app)
         response = client.post(
             f"{CANONICAL_API_PREFIX}/domains/domain-http-001/evidence",
-            json={"question": "  Where is the valve?  "},
+            json={"question": f"  {private_question}  "},
         )
+        after = _database_row_counts(app)
 
     assert response.status_code == 200
     assert response.json() == _success_payload()
@@ -93,16 +105,25 @@ def test_m02_stateless_evidence_http_returns_exact_closed_private_projection(
     assert response.headers[CANONICAL_REQUEST_ID_HEADER]
     assert seen == {
         "domain_id": "domain-http-001",
-        "question": "Where is the valve?",
+        "question": private_question,
         "testing": True,
     }
     assert "sourceDocumentId" not in response.text
     assert "sourceBlockId" not in response.text
+    assert after == before
+    rendered_logs = "\n".join(record.getMessage() for record in caplog.records)
+    for private_value in (
+        private_question,
+        "SAFE-EXCERPT-SENTINEL",
+        "SAFE-DOCUMENT-LABEL.pdf",
+    ):
+        assert private_value not in rendered_logs
 
 
 def test_m02_stateless_evidence_http_exhaustively_maps_safe_failures(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     cases = [
         ("domain_not_found", 404, "not_found"),
@@ -138,6 +159,9 @@ def test_m02_stateless_evidence_http_exhaustively_maps_safe_failures(
             assert response.headers["cache-control"] == "private, no-store, no-transform"
             assert "SENTINEL-PRIVATE-DEPENDENCY-EXCEPTION" not in response.text
 
+    rendered_logs = "\n".join(record.getMessage() for record in caplog.records)
+    assert "SENTINEL-PRIVATE-DEPENDENCY-EXCEPTION" not in rendered_logs
+
 
 def test_m02_stateless_evidence_http_rejects_invalid_input_before_retrieval(
     tmp_path: Path,
@@ -170,6 +194,30 @@ def test_m02_stateless_evidence_http_rejects_invalid_input_before_retrieval(
     assert called is False
 
 
+def test_m02_stateless_evidence_http_trims_before_question_length_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[str] = []
+
+    def retrieve(_db, *, settings, domain_id: str, question: str):
+        seen.append(question)
+        return {"result": "no_grounded_context", "evidence": []}
+
+    monkeypatch.setattr(routes_module, "retrieve_scoped_evidence", retrieve)
+    app = _http_app(tmp_path, monkeypatch)
+    normalized = "x" * 2000
+
+    with TestClient(app) as client:
+        response = client.post(
+            f"{CANONICAL_API_PREFIX}/domains/domain-http-001/evidence",
+            json={"question": f" {normalized} "},
+        )
+
+    assert response.status_code == 200
+    assert seen == [normalized]
+
+
 def test_m02_stateless_evidence_http_fails_closed_on_private_response_field(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -189,6 +237,36 @@ def test_m02_stateless_evidence_http_fails_closed_on_private_response_field(
     assert response.json()["error"]["code"] == "dependency_unavailable"
     assert response.headers["cache-control"] == "private, no-store, no-transform"
     assert "SENTINEL-PRIVATE-SOURCE-ID" not in response.text
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda payload: payload["evidence"][0]["anchor"].update({"region": None}),
+        lambda payload: payload["evidence"][0]["anchor"].update({"fallback": "region"}),
+        lambda payload: payload.update({"result": "no_grounded_context"}),
+        lambda payload: payload.update({"evidence": []}),
+    ],
+)
+def test_m02_stateless_evidence_http_fails_closed_on_invalid_anchor_or_result_pairing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutate,
+) -> None:
+    payload = _success_payload()
+    mutate(payload)
+    monkeypatch.setattr(routes_module, "retrieve_scoped_evidence", lambda *_args, **_kwargs: payload)
+    app = _http_app(tmp_path, monkeypatch)
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.post(
+            f"{CANONICAL_API_PREFIX}/domains/domain-http-001/evidence",
+            json={"question": "Where is the valve?"},
+        )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "dependency_unavailable"
+    assert response.headers["cache-control"] == "private, no-store, no-transform"
 
 
 def test_m02_stateless_evidence_http_denies_missing_disabled_revoked_and_expired_sessions(

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.json_schema import models_json_schema
 
 OpaqueRef = Annotated[str, Field(min_length=8, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")]
@@ -187,13 +187,21 @@ class EvidenceItemDto(PublicDto):
 class RetrievalEvidenceRequestDto(PublicDto):
     question: str = Field(min_length=1, max_length=2000)
 
-    @field_validator("question")
+    @field_validator("question", mode="before")
     @classmethod
-    def validate_question(cls, value: str) -> str:
+    def validate_question(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
         normalized = value.strip()
         if not normalized:
             raise ValueError("question must not be blank")
         return normalized
+
+
+class RetrievalEvidenceAnchorDto(PublicDto):
+    page_number: int = Field(alias="pageNumber", ge=1)
+    section_label: str | None = Field(default=None, alias="sectionLabel", min_length=1, max_length=160)
+    fallback: Literal["section", "page"]
 
 
 class RetrievalEvidenceItemDto(PublicDto):
@@ -203,12 +211,41 @@ class RetrievalEvidenceItemDto(PublicDto):
     kind: EvidenceKind
     document_ref: OpaqueRef = Field(alias="documentRef")
     document_label: SafeLabel = Field(alias="documentLabel")
-    anchor: EvidenceAnchorDto | None
+    anchor: RetrievalEvidenceAnchorDto | None
 
 
 class RetrievalEvidenceResponseDto(PublicDto):
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+        json_schema_extra={
+            "oneOf": [
+                {
+                    "properties": {
+                        "result": {"const": "evidence_found"},
+                        "evidence": {"minItems": 1},
+                    }
+                },
+                {
+                    "properties": {
+                        "result": {"const": "no_grounded_context"},
+                        "evidence": {"maxItems": 0},
+                    }
+                },
+            ]
+        },
+    )
+
     result: Literal["evidence_found", "no_grounded_context"]
     evidence: list[RetrievalEvidenceItemDto]
+
+    @model_validator(mode="after")
+    def validate_result_consistency(self) -> Self:
+        if self.result == "evidence_found" and not self.evidence:
+            raise ValueError("evidence_found requires at least one evidence item")
+        if self.result == "no_grounded_context" and self.evidence:
+            raise ValueError("no_grounded_context requires an empty evidence list")
+        return self
 
 
 class TurnErrorDto(PublicDto):
@@ -263,6 +300,7 @@ AUTHORITATIVE_PUBLIC_DTOS = (
     OperationErrorDto,
     OutlineItemDto,
     ProviderSummaryDto,
+    RetrievalEvidenceAnchorDto,
     RetrievalEvidenceItemDto,
     RetrievalEvidenceRequestDto,
     RetrievalEvidenceResponseDto,

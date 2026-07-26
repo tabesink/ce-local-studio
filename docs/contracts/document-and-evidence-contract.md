@@ -51,9 +51,9 @@ Coordinates use the rendered page crop box with origin at top-left. `x`, `y`, `w
 
 ### Stateless retrieval Evidence
 
-`POST /domains/{domainId}/evidence` returns `RetrievalEvidenceItemDto`, not the persisted `EvidenceItemDto` above. It has the same safe `citationLabel`, labels, canonical excerpt, kind, document ref, and anchor projection but no `id`. The endpoint creates no Evidence row and its dense citation labels are stable only inside one response; durable citation stability begins when P7 persists turn Evidence.
+`POST /domains/{domainId}/evidence` returns `RetrievalEvidenceItemDto`, not the persisted `EvidenceItemDto` above. It has the same safe `citationLabel`, labels, canonical excerpt, kind, and document ref but no `id`, and it uses the separate closed `RetrievalEvidenceAnchorDto`. The endpoint creates no Evidence row and its dense citation labels are stable only inside one response; durable citation stability begins when P7 persists turn Evidence.
 
-Its `anchor` is nullable. Text, table, and figure blocks may project a one-based canonical block page; a bounded safe section label is included only when a page is provable. A figure without a block page may use linked Source Image page metadata only when all usable linked image page numbers agree. Conflicting or missing page metadata produces `anchor:null`; the server never fabricates page 1 or a region.
+Its `anchor` is nullable and contains only a one-based `pageNumber`, optional bounded `sectionLabel`, and `fallback:"section"|"page"`. It never contains a region and never accepts `fallback:"region"`. Text, table, and figure blocks may project a one-based canonical block page; a bounded safe section label is included only when a page is provable. A figure without a block page may use linked Source Image page metadata only when all usable linked image page numbers agree. Conflicting or missing page metadata produces `anchor:null`; the server never fabricates page 1 or a region.
 
 ## Document metadata
 

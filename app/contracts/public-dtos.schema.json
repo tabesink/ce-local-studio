@@ -1128,13 +1128,51 @@
       "title": "ProviderSummaryDto",
       "type": "object"
     },
+    "RetrievalEvidenceAnchorDto": {
+      "additionalProperties": false,
+      "properties": {
+        "fallback": {
+          "enum": [
+            "section",
+            "page"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "pageNumber": {
+          "minimum": 1,
+          "title": "Pagenumber",
+          "type": "integer"
+        },
+        "sectionLabel": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sectionlabel"
+        }
+      },
+      "required": [
+        "pageNumber",
+        "fallback"
+      ],
+      "title": "RetrievalEvidenceAnchorDto",
+      "type": "object"
+    },
     "RetrievalEvidenceItemDto": {
       "additionalProperties": false,
       "properties": {
         "anchor": {
           "anyOf": [
             {
-              "$ref": "#/$defs/EvidenceAnchorDto"
+              "$ref": "#/$defs/RetrievalEvidenceAnchorDto"
             },
             {
               "type": "null"
@@ -1212,6 +1250,28 @@
     },
     "RetrievalEvidenceResponseDto": {
       "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "evidence": {
+              "minItems": 1
+            },
+            "result": {
+              "const": "evidence_found"
+            }
+          }
+        },
+        {
+          "properties": {
+            "evidence": {
+              "maxItems": 0
+            },
+            "result": {
+              "const": "no_grounded_context"
+            }
+          }
+        }
+      ],
       "properties": {
         "evidence": {
           "items": {

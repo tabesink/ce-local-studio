@@ -43,14 +43,14 @@ Canonical blocks can prove text/table/figure kind, canonical excerpt, document r
 **Closed contract and projection**
 
 - R1. `POST /api/v1/domains/{domainId}/evidence` accepts only `{question}` with a trimmed length of 1..2,000 and returns only a generated closed `RetrievalEvidenceResponseDto`.
-- R2. Each `RetrievalEvidenceItemDto` contains response-scoped `citationLabel`, sanitized `sourceLabel`, canonical `excerpt`, authoritative `kind`, opaque `documentRef`, sanitized `documentLabel`, and nullable `anchor`; it contains no evidence ID or private identifier.
+- R2. Each `RetrievalEvidenceItemDto` contains response-scoped `citationLabel`, sanitized `sourceLabel`, canonical `excerpt`, authoritative `kind`, opaque `documentRef`, sanitized `documentLabel`, and nullable closed `RetrievalEvidenceAnchorDto`; it contains no evidence ID, region, or private identifier.
 - R3. `excerpt` collapses canonical whitespace before truncation to 500 characters, labels are non-empty and bounded by their safe public scalar limits, and the mapper never uses raw retrieval text as public content.
 - R4. An anchor uses a provable block page plus optional bounded section, or an unambiguous linked-image page for a figure; region remains absent and any missing/conflicting page evidence yields `anchor:null`.
 
 **Ordering and successful outcomes**
 
 - R5. The response preserves the first valid mapped candidate for each block, assigns dense citation labels after filtering, and promises ordering stability only within that response.
-- R6. A valid bounded retrieval with no surviving mapped Evidence returns `200 {"result":"no_grounded_context","evidence":[]}` only while the selected domain still has current eligible sources.
+- R6. A valid bounded retrieval with no surviving mapped Evidence returns `200 {"result":"no_grounded_context","evidence":[]}` only while the selected domain still has current eligible sources; `evidence_found` always contains at least one item and `no_grounded_context` always contains none.
 
 **Authorization, failures, and privacy**
 
@@ -70,7 +70,7 @@ Canonical blocks can prove text/table/figure kind, canonical excerpt, document r
 #### Deferred to Follow-Up Work
 
 - P7-01 through P7-05: durable evidence refs, owner-bound persistence, replay-stable citation order, full `EvidenceItemDto`, location resolution, SSE evidence events, and redaction.
-- P8: broad cross-sink privacy scans, service metrics, and resilience/load acceptance.
+- P8: system-wide privacy scans beyond P6-02's endpoint-specific response, logging, tracing, audit, snapshot, fixture, failure-artifact, and persistence sentinel checks; service metrics; and resilience/load acceptance.
 - P9: document library, governed preview, deep-link, and Evidence inspector behavior.
 
 #### Outside This Slice
@@ -83,7 +83,7 @@ Canonical blocks can prove text/table/figure kind, canonical excerpt, document r
 
 ### Key Technical Decisions
 
-- KTD1. **Generate a separate request/response component family.** (session-settled: user-approved — chosen over reusing `EvidenceItemDto`: the full DTO's persisted `id` semantics cannot apply to a stateless call.) Add closed `RetrievalEvidenceRequestDto`, `RetrievalEvidenceItemDto`, and `RetrievalEvidenceResponseDto` components beside the authoritative catalog models, and bind the route directly to them. Governs R1-R2 and R8.
+- KTD1. **Generate a separate request/response component family.** (session-settled: user-approved — chosen over reusing `EvidenceItemDto`: the full DTO's persisted `id` semantics cannot apply to a stateless call.) Add closed `RetrievalEvidenceRequestDto`, no-region `RetrievalEvidenceAnchorDto`, `RetrievalEvidenceItemDto`, and `RetrievalEvidenceResponseDto` components beside the authoritative catalog models, and bind the route directly to them. Governs R1-R2, R6, and R8.
 - KTD2. **Project only from the joined current block/source rows already proven by P6-01.** Extend the private mapped result with the canonical kind, document public ref, and conservative anchor inputs while raw candidates remain discarded. Reuse `sanitize_original_filename` defensively for legacy rows and validate the final response model before constructing the private JSON response. Governs R2-R5 and R8.
 - KTD3. **Reauthorize the terminal state explicitly.** After dependency work, re-read current domain/source eligibility and runtime health before distinguishing a legitimate no-hit result from a lifecycle fence. A health result of unhealthy is domain ineligibility; a health-check exception is dependency failure. Governs R6-R8.
 - KTD4. **Translate internal failures through an exhaustive route map.** Retrieval/service categories remain internal and `_evidence_api_error` maps every known category to the approved status/code/message. Unknown internal categories fail closed without forwarding their code or text. Governs R7-R8.
@@ -160,23 +160,23 @@ flowchart TB
 - **Files:** `docs/contracts/http-api-catalog.md`, `docs/contracts/dto-schema-catalog.md`, `docs/contracts/document-and-evidence-contract.md`, `docs/_scratch/p6-02-evidence-contract-decision.md`, `docs/phase-scope-manifest.md`, `app/context_engine/api/catalog_schemas.py`, `app/tests/test_authoritative_dto_components.py`, `app/tests/test_generated_contract_gate.py`, `app/contracts/openapi.json`, `app/contracts/public-dtos.schema.json`, `app/contracts/sse-events.openapi.json`, `app/contracts/sse-events.schema.json`, `app/client/src/lib/api/generated/openapi.ts`, `app/client/src/lib/api/generated/sse.ts`.
 - **Approach:**
   1. Amend the three normative catalogs with the approved stateless item/result, nullable-anchor semantics, successful result enum, and exact failure table.
-  2. Add authoritative Pydantic request/item/result components with closed fields, camelCase aliases, bounded scalars, and `EvidenceAnchorDto | null`.
+  2. Add authoritative Pydantic request/anchor/item/result components with closed fields, camelCase aliases, bounded scalars, trim-before-bounds question validation, a stateless anchor that cannot carry a region or `fallback:"region"`, and a response-level result/Evidence consistency invariant.
   3. Register the new public components and regenerate every affected artifact instead of hand-editing generated output.
 - **Execution note:** Start with failing authoritative-component and generated-contract assertions before changing the catalog models.
 - **Patterns to follow:** `EvidenceItemDto`, `EvidenceAnchorDto`, and `authoritative_component_schemas` in `app/context_engine/api/catalog_schemas.py`; P0 generated-contract gates.
 - **Test scenarios:**
-  1. The request schema accepts only `question` with the contracted bounds and rejects unknown fields.
-  2. The item schema has exactly the approved seven fields, no `id`, and a nullable `EvidenceAnchorDto`.
-  3. The result schema allows only `evidence_found` or `no_grounded_context` and contains only the result and Evidence array.
+  1. The request schema accepts only `question`, trims before applying the contracted bounds, accepts padded normalized values at lengths 1 and 2,000, and rejects unknown fields.
+  2. The item schema has exactly the approved seven fields, no `id`, and a nullable `RetrievalEvidenceAnchorDto` that rejects regions and `fallback:"region"`.
+  3. The result schema allows only `evidence_found` or `no_grounded_context`, contains only the result and Evidence array, and rejects both result/Evidence contradictory pairings.
   4. OpenAPI, standalone JSON Schema, and generated TypeScript contain the same component shapes with no handwritten substitute.
 - **Verification:** All authoritative-component tests and generated snapshot comparisons agree with the amended catalogs.
 
 ### U2. Build the safe projection and terminal reauthorization
 
 - **Goal:** Convert P6-01 private mapped rows into deterministic safe stateless Evidence only while the selected scope remains eligible.
-- **Requirements:** R2-R7; KTD2-KTD3.
+- **Requirements:** R2-R8; KTD2-KTD3.
 - **Dependencies:** U1.
-- **Files:** `app/context_engine/services/evidence.py`, `app/context_engine/services/chat_turns.py`, `app/tests/test_scoped_retrieval.py`, `app/tests/test_postgres_scoped_retrieval.py`, and the focused chat-turn service tests that exercise the shared retrieval seam.
+- **Files:** `app/context_engine/services/evidence.py`, `app/context_engine/services/chat_turns.py`, `app/tests/test_scoped_retrieval.py`, `app/tests/test_postgres_scoped_retrieval.py`, `app/tests/test_canonical_turn_event_behavior.py`.
 - **Approach:**
   1. Carry canonical kind, opaque document ref, sanitized labels, and block/image anchor inputs through the private joined mapping without retaining raw candidate text.
   2. Derive a page/section anchor conservatively, normalize/truncate canonical excerpts, deduplicate by block, and assign citations after all filtering.
@@ -211,9 +211,9 @@ flowchart TB
 - **Patterns to follow:** `_private_json_response`, capability-specific route error mappers, and request-security fixtures in `app/tests/`.
 - **Test scenarios:**
   1. Member and administrator requests return the exact closed DTO and `Cache-Control: private, no-store, no-transform`.
-  2. Unauthenticated, disabled-user, revoked-session, expired-session, hostile-Origin, missing/invalid CSRF, whitespace-only, over-2,000-character, and unknown-field requests return canonical safe envelopes; authoritative identity denials occur before any retrieval dependency call.
+  2. Unauthenticated, disabled-user, revoked-session, expired-session, hostile-Origin, missing/invalid CSRF, whitespace-only, normalized-over-2,000-character, padded normalized 1/2,000-character, and unknown-field requests return the contracted result; authoritative identity denials occur before any retrieval dependency call.
   3. Covers AE5. Unknown domain, current ineligibility, saturation, dependency timeout/unavailability/malformed output, health exception, and unexpected internal category map to only approved codes without internal text.
-  4. A response containing an extra/private field fails validation instead of being serialized, and validation failure does not echo the invalid value.
+  4. A response containing an extra/private field, a stateless region, `fallback:"region"`, or a result/Evidence contradiction fails validation instead of being serialized, and validation failure does not echo the invalid value.
   5. Success and every error class carry private no-store headers so an identity-sensitive projection cannot be reused from a shared cache.
   6. The request leaves conversation, turn, evidence-ref, composer-ref, and audit mutation counts unchanged.
 - **Verification:** Real app/TestClient tests prove authentication, request security, strict response shape, failure translation, request-ID correlation, and no mutation.
@@ -233,7 +233,7 @@ flowchart TB
 - **Test scenarios:**
   1. PostgreSQL concurrent selected-domain requests retain independent order, refs, and projections with no cross-domain leakage.
   2. Contract artifacts regenerate byte-identically after the committed update.
-  3. Privacy sentinels for question, raw hit, private source/block IDs, object key, and dependency exception are absent from responses, logs, snapshots, and failure text. A unique safe-excerpt and document-label sentinel appears only in the authorized response and is absent from logs, audit rows, traces, exception text, snapshots, and every persisted mutation surface.
+  3. Privacy sentinels for the submitted question, raw hit, private source/block IDs, object key, dependency exception, safe excerpt, and document label are scanned across responses, logs, audit rows, traces, metrics, snapshots, fixtures, failure artifacts, and persisted mutation surfaces. Forbidden sentinels are absent everywhere; the safe excerpt and document label appear only in the authorized response. Any non-applicable sink has an explicit boundary reason in the closure evidence.
   4. P5 indexing eligibility and P6-01 provenance/fence regressions remain green.
 - **Verification:** Closure evidence names every requirement/case, green gate, exclusion, and residual owner; the master tracker advances only P6.
 
@@ -243,10 +243,10 @@ flowchart TB
 
 | Gate | Command | Proves |
 | --- | --- | --- |
-| Focused service and HTTP | `cd app; .\.venv\Scripts\python.exe -m pytest tests/test_scoped_retrieval.py tests/test_evidence_http_contract.py tests/test_authoritative_dto_components.py tests/test_generated_contract_gate.py -q` | projection, anchors, ordering, strict HTTP/DTO boundary, generated component adoption |
+| Focused service and HTTP | `cd app; .\.venv\Scripts\python.exe -m pytest tests/test_scoped_retrieval.py tests/test_evidence_http_contract.py tests/test_authoritative_dto_components.py tests/test_generated_contract_gate.py tests/test_canonical_turn_event_behavior.py -q` | projection, anchors, ordering, strict HTTP/DTO boundary, generated component adoption, and shared chat-turn Evidence persistence/error translation |
 | PostgreSQL 16 | With the approved disposable-database variables set: `cd app; .\.venv\Scripts\python.exe -m pytest tests/test_postgres_scoped_retrieval.py -q` | current-snapshot mapping, terminal lifecycle/source fences, concurrency isolation |
 | Retrieval regressions | `cd app; .\.venv\Scripts\python.exe -m pytest tests/test_lightrag_renderer_adapter.py tests/test_source_index_eligibility.py tests/test_postgres_source_index_eligibility.py -q` | P5 renderer/index eligibility and P6-01 boundary remain intact |
-| Backend lint | `cd app; .\.venv\Scripts\python.exe -m ruff check context_engine/api/catalog_schemas.py context_engine/api/routes.py context_engine/services/evidence.py tests/test_scoped_retrieval.py tests/test_evidence_http_contract.py tests/test_postgres_scoped_retrieval.py tests/test_authoritative_dto_components.py tests/test_generated_contract_gate.py` | Python correctness and style for the slice |
+| Backend lint | `cd app; .\.venv\Scripts\python.exe -m ruff check context_engine/api/catalog_schemas.py context_engine/api/routes.py context_engine/services/evidence.py context_engine/services/chat_turns.py tests/test_scoped_retrieval.py tests/test_evidence_http_contract.py tests/test_postgres_scoped_retrieval.py tests/test_authoritative_dto_components.py tests/test_generated_contract_gate.py tests/test_canonical_turn_event_behavior.py` | Python correctness and style for the slice |
 | Generated contracts | `& 'C:\Program Files\Git\bin\bash.exe' scripts/check-generated-contracts.sh` | OpenAPI, JSON Schema, SSE generation views, and TypeScript are synchronized |
 | Phase scope | `& 'C:\Program Files\Git\bin\bash.exe' scripts/check-doc-phase-scope.sh` | no Phase 2/3 or unapproved capability enters Phase 1 |
 | Broad regression | Run the applicable backend portion of `scripts/verify.sh` and record any environment-boundary exclusion rather than substituting weaker evidence | current backend/application contracts remain green |
@@ -263,7 +263,7 @@ PostgreSQL concurrency tests use barriers/latches rather than sleeps. If the app
 - [ ] Pre/post authorization proves current selected-domain/runtime/source eligibility, including PostgreSQL lifecycle and generation races.
 - [ ] Every public failure uses the approved status/code/message envelope with request-ID correlation and private no-store caching.
 - [ ] OpenAPI, public JSON Schema, SSE generation artifacts, and generated browser types are synchronized and verified.
-- [ ] Focused unit, HTTP, PostgreSQL, indexing/retrieval regression, lint, privacy, phase-scope, and applicable broad gates pass or carry an explicit authoritative environment boundary.
+- [ ] PostgreSQL 16 retrieval and lifecycle-race proof passes; focused unit, HTTP, indexing/retrieval regression, lint, privacy, phase-scope, and applicable broad gates pass or carry an explicit authoritative environment boundary only where that gate permits one.
 - [ ] Decision-gate documentation is resolved in place; P7 remains the sole owner of durable evidence refs, location resolution, replay, and redaction.
 - [ ] `docs/_scratch/p6-02-evidence-inventory.md` and `docs/_scratch/p6-02-evidence.md` identify the exact tested revision and remaining owners.
 - [ ] `docs/master-build-plan.md` marks only P6/P6-02 complete after the evidence record is final.
