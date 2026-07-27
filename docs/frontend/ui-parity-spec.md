@@ -128,7 +128,7 @@ Catalog states are `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED_CONTRACT`, and `FACTOR
 | Input | `src/ui` | FACTORY_READY | migrate + retain-and-reverify live API; P9-01 shared/HTML/React (Vitest/RTL) + R10 subset proven |
 | StatusPill | `src/ui` | FACTORY_READY | migrate + retain-and-reverify live tones (`default`↔neutral, `good`↔success); P9-01 parity proven |
 | SettingsRow | `src/features/settings-panel` | FACTORY_READY | Settings-owned composition; P9-01 shared/HTML/React (Vitest/RTL) + R10 subset proven |
-| Settings Domain accordion | `src/features/settings-panel` | IN_PROGRESS | P9-04 interaction amendment approved; earn `FACTORY_READY` via shared/HTML/React (Vitest/RTL) + applicable accessibility assertions — no ProgressBar-on-expand / storageSummary requirement; production-boundary Playwright F3 remains P12-07 |
+| Settings Domain accordion | `src/features/settings-panel` | FACTORY_READY | Settings-owned `DomainAccordionRow`; P9-04 shared/HTML/React (Vitest/RTL) + R10 subset proven — no ProgressBar-on-expand / storageSummary; production-boundary Playwright F3 remains P12-07 |
 
 The starter set is not a complete UI allowlist. Uncovered roles continue using the contracted canonical CE control; agents record a parity gap rather than inventing local chrome.
 

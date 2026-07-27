@@ -2,11 +2,9 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, Database, KeyRound, Palette, Users } from "lucide-react";
+import { Database, KeyRound, Palette, Users } from "lucide-react";
 import {
-  cx,
   EmptySafeNotice,
-  IconButton,
   Input,
   PageState,
   Select,
@@ -24,6 +22,7 @@ import {
 } from "@/components/ui";
 import { isApiError } from "@/lib/api/errors";
 import { useAuthStore } from "@/state/auth-store";
+import { DomainAccordionRow } from "@/features/settings-panel/DomainAccordionRow";
 import { SettingsRow } from "@/features/settings-panel/SettingsRow";
 import { PreferencesPanel } from "@/features/user-preferences/PreferencesPanel";
 import {
@@ -491,28 +490,16 @@ function DomainsSection({
             const panelId = `knowledge-domain-${domain.id}-panel`;
             const embeddingLabel = domain.embeddingProfile.name?.trim() || domain.embeddingProfile.id;
             return (
-              <div key={domain.id}>
-                <div className="flex items-center gap-3 px-3.5 py-2.5 transition-colors hover:bg-(--ui-hover)/35">
-                  <IconButton
-                    aria-expanded={expanded}
-                    aria-controls={panelId}
-                    aria-label={`${expanded ? "Collapse" : "Expand"} ${domain.displayName}`}
-                    title={`${expanded ? "Collapse" : "Expand"} Knowledge Domain`}
-                    onClick={() => setExpandedId((current) => nextExpandedDomainId(current, domain.id))}
-                    className="shrink-0 text-(--ui-muted) hover:bg-(--ui-hover) hover:text-(--ui-fg)"
-                  >
-                    <ChevronDown
-                      className={cx("h-3.5 w-3.5 transition-transform", expanded ? "" : "-rotate-90")}
-                      aria-hidden
-                    />
-                  </IconButton>
-                  <div className="min-w-0 flex-1">
-                    <span className="truncate text-[length:var(--fs-base)] font-medium text-(--ui-fg)">
-                      {domain.displayName}
-                    </span>
-                    <div className="truncate font-mono text-[length:var(--fs-xs)] text-(--ui-muted)">{domain.id}</div>
-                  </div>
-                  <StatusPill tone={domainStateTone(domain.state)}>{domainStateLabel(domain.state)}</StatusPill>
+              <DomainAccordionRow
+                key={domain.id}
+                displayName={domain.displayName}
+                domainId={domain.id}
+                expanded={expanded}
+                panelId={panelId}
+                stateLabel={domainStateLabel(domain.state)}
+                stateTone={domainStateTone(domain.state)}
+                onToggleExpand={() => setExpandedId((current) => nextExpandedDomainId(current, domain.id))}
+                lifecycleControl={
                   <ToggleSwitch
                     checked={lifecycle === "stop"}
                     aria-label={`${lifecycle === "stop" ? "Stop" : "Start"} ${domain.displayName}`}
@@ -522,79 +509,71 @@ function DomainsSection({
                       if (lifecycle) void run(domain, lifecycle);
                     }}
                   />
-                </div>
-                {expanded ? (
-                  <div
-                    id={panelId}
-                    role="region"
-                    aria-label={`${domain.displayName} details`}
-                    className="bg-(--ui-bg)/35 px-3.5 py-3"
-                  >
-                    <div className="space-y-3">
-                      <div className="flex gap-3">
-                        <div className="w-7 shrink-0" aria-hidden />
-                        <div className="min-w-0 flex-1 space-y-3">
-                          <label className="grid gap-1.5">
-                            <span className="text-[length:var(--fs-xs)] text-(--ui-muted)">Embedding model</span>
-                            <Input
-                              value={`${embeddingLabel} · ${domain.embeddingProfile.vectorDimensions}d · locked`}
-                              readOnly
-                              aria-label={`${domain.displayName} embedding model`}
-                              className="h-7 cursor-default font-mono text-(--ui-muted) focus:border-(--ui-separator) focus:ring-0"
-                            />
-                          </label>
-                          <SettingsFactRows
-                            rows={[
-                              {
-                                label: "Query eligible",
-                                value: domain.queryEligible ? "Yes" : "No",
-                                status: {
-                                  tone: domain.queryEligible ? "good" : "default",
-                                  label: domain.queryEligible ? "Eligible" : "Not eligible",
-                                },
-                              },
-                              {
-                                label: "Runtime ready",
-                                value: domain.runtimeReady ? "Yes" : "No",
-                                status: {
-                                  tone: domain.runtimeReady ? "good" : "warning",
-                                  label: domain.runtimeReady ? "Ready" : "Not ready",
-                                },
-                              },
-                              {
-                                label: "Control generation",
-                                value: String(domain.controlGeneration),
-                                mono: true,
-                                dim: true,
-                              },
-                              {
-                                label: "Version",
-                                value: String(domain.version),
-                                mono: true,
-                                dim: true,
-                              },
-                            ]}
-                          />
-                        </div>
-                        <div className="w-9 shrink-0" aria-hidden />
-                      </div>
-                      <div className="flex gap-3">
-                        <div className="w-7 shrink-0" aria-hidden />
-                        <div className="min-w-0 flex-1" aria-hidden />
-                        <div className="shrink-0">
-                          <SettingsButton
-                            tone="danger"
-                            disabled={anyBusy || domain.state === "deleting"}
-                            onClick={() => setPendingDelete(domain)}
-                          >
-                            Delete
-                          </SettingsButton>
-                        </div>
-                      </div>
+                }
+              >
+                <div className="space-y-3">
+                  <div className="flex gap-3">
+                    <div className="w-7 shrink-0" aria-hidden />
+                    <div className="min-w-0 flex-1 space-y-3">
+                      <label className="grid gap-1.5">
+                        <span className="text-[length:var(--fs-xs)] text-(--ui-muted)">Embedding model</span>
+                        <Input
+                          value={`${embeddingLabel} · ${domain.embeddingProfile.vectorDimensions}d · locked`}
+                          readOnly
+                          aria-label={`${domain.displayName} embedding model`}
+                          className="h-7 cursor-default font-mono text-(--ui-muted) focus:border-(--ui-separator) focus:ring-0"
+                        />
+                      </label>
+                      <SettingsFactRows
+                        rows={[
+                          {
+                            label: "Query eligible",
+                            value: domain.queryEligible ? "Yes" : "No",
+                            status: {
+                              tone: domain.queryEligible ? "good" : "default",
+                              label: domain.queryEligible ? "Eligible" : "Not eligible",
+                            },
+                          },
+                          {
+                            label: "Runtime ready",
+                            value: domain.runtimeReady ? "Yes" : "No",
+                            status: {
+                              tone: domain.runtimeReady ? "good" : "warning",
+                              label: domain.runtimeReady ? "Ready" : "Not ready",
+                            },
+                          },
+                          {
+                            label: "Control generation",
+                            value: String(domain.controlGeneration),
+                            mono: true,
+                            dim: true,
+                          },
+                          {
+                            label: "Version",
+                            value: String(domain.version),
+                            mono: true,
+                            dim: true,
+                          },
+                        ]}
+                      />
+                    </div>
+                    <div className="w-9 shrink-0" aria-hidden />
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="w-7 shrink-0" aria-hidden />
+                    <div className="min-w-0 flex-1" aria-hidden />
+                    <div className="shrink-0">
+                      <SettingsButton
+                        tone="danger"
+                        disabled={anyBusy || domain.state === "deleting"}
+                        onClick={() => setPendingDelete(domain)}
+                      >
+                        Delete
+                      </SettingsButton>
                     </div>
                   </div>
-                ) : null}
-              </div>
+                </div>
+              </DomainAccordionRow>
             );
           })
         )}

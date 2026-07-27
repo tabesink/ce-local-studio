@@ -52,8 +52,6 @@ function isUiReexportOnly(source, symbol) {
 const SHARED_UI_IMPORT_ALLOWLIST = new Set([
   "components/ui/index.ts",
   "components/ui/AppLogo.tsx",
-  "features/chat-shell/ChatShell.tsx",
-  "features/chat-shell/EvidencePanel.tsx",
   "features/documents/DocumentsPage.tsx",
   "features/documents/PdfPreview.tsx",
   "features/graph/GraphPage.tsx",

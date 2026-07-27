@@ -224,22 +224,25 @@ describe("Domain settings helpers (F-009 deploy)", () => {
     const { FORBIDDEN_DOMAIN_UI_FIELD_TOKENS } = await loadHelpers();
 
     const panel = read("src/features/settings-panel/SettingsPanel.tsx");
+    const accordionRow = read("src/features/settings-panel/DomainAccordionRow.tsx");
     const sharedUi = read("src/_shared/ui/index.tsx");
     const domainsApi = read("src/features/domains/api.ts");
 
     assert.match(panel, /from "@\/components\/ui"/);
     assert.match(panel, /UiModal/);
-    assert.match(panel, /IconButton/);
+    assert.match(panel, /DomainAccordionRow/);
+    assert.match(accordionRow, /IconButton/);
+    assert.match(accordionRow, /ChevronDown/);
+    assert.match(accordionRow, /aria-expanded/);
     assert.match(panel, /Input/);
     assert.match(panel, /Select/);
     assert.doesNotMatch(panel, /ProgressBar/);
+    assert.doesNotMatch(accordionRow, /ProgressBar/);
     assert.match(panel, /Knowledge Domains/);
     assert.match(panel, /New Knowledge Domain/);
     assert.doesNotMatch(panel, /LightRAG Containers/);
     assert.match(panel, /deployDomain/);
     assert.match(panel, /Deploy/);
-    assert.match(panel, /ChevronDown/);
-    assert.match(panel, /aria-expanded/);
     assert.match(panel, /ToggleSwitch/);
     assert.match(panel, /checked=\{lifecycle === "stop"\}/);
     assert.match(panel, /embeddingProfile\.name/);
@@ -278,13 +281,15 @@ describe("Domain settings helpers (F-009 deploy)", () => {
     assert.doesNotMatch(accordionCard, /storageSummary/);
     assert.match(panel.slice(listGroupEnd), /draftName|onDeploy|Deploy/);
 
-    const collapsedHeader = panel.slice(
-      panel.indexOf('className="flex items-center gap-3 px-3.5 py-2.5'),
-      panel.indexOf("{expanded ? ("),
+    const collapsedHeader = accordionRow.slice(
+      accordionRow.indexOf('className="flex items-center gap-3 px-3.5 py-2.5'),
+      accordionRow.indexOf("{expanded ? ("),
     );
+    assert.ok(collapsedHeader.length > 0, "DomainAccordionRow collapsed header chrome must exist");
     assert.doesNotMatch(collapsedHeader, /storageSummary|domain-storage-summary|Storage/);
     assert.doesNotMatch(collapsedHeader, />\s*Delete\s*</);
-    assert.match(panel.slice(panel.indexOf("{expanded ? ("), listGroupEnd), />\s*Delete\s*</);
+    assert.doesNotMatch(accordionRow, />\s*Delete\s*</);
+    assert.match(accordionCard, />\s*Delete\s*</);
 
     // DomainsSection should not render both Start and Stop on the same row template
     assert.match(panel, /primaryLifecycleAction/);
