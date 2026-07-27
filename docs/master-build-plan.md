@@ -149,12 +149,29 @@ system-wide cross-sink privacy with P8, and browser navigation with P9.
 | --- | --- | --- | --- |
 | P7-01 | DONE | P6 | conversations, turns and opaque public evidence-ref migrations plus owner CRUD |
 | P7-02 | DONE | P7-01 | server intent gate and direct/domain route invariants |
-| P7-03 | NOT_STARTED | P7-02 | bounded plan/retrieve/repair/synthesize orchestration |
+| P7-03 | DONE | P7-02 | bounded plan/retrieve/repair/synthesize orchestration |
 | P7-04 | NOT_STARTED | P7-03 | sealed versioned SSE live/resume/replay pipeline, terminal persistence, idempotent attach/replay, and grounded-refusal/evidence-only terminal projections |
 | P7-05 | NOT_STARTED | P7-04 | source/domain delete redaction hooks and public omission tests |
 | P8-01 | NOT_STARTED | P1-06,P7 | transactional audit-write allowlist coverage, denial events and privacy/adversarial audit tests |
 | P8-02 | NOT_STARTED | P8-01 | safe JSON logs, request/trace correlation and bounded-cardinality service metrics |
 | P8-03 | NOT_STARTED | P8-02 | liveness/readiness, privacy scans and resilience/load evidence with no observability read API or UI |
+
+P7-03 closure evidence (2026-07-27):
+`docs/_scratch/p7-03-orchestration-inventory.md` records retain/modify/defer for
+`TurnOrchestrator`, the synthesis stand-in, `P6RetrievalPort`, event emission vs
+P7-04/P7-05, and the single-shot / `evidence_only` sequencing constraints. The
+deterministic synthesis stand-in is replaced by a typed OpenAI adapter plus
+fail-closed registry (`adapters/synthesis.py`) with no-network fixtures.
+Domain RAG synthesizes only from mapped Evidence or completes
+`no_grounded_context`; post-answer provider failure uses safe `turn.failed`
+rather than `evidence_only`; budgets remain `domain 1/1/0` and `direct 0/0/0`.
+Results were 29 focused orchestration/adapter/SSE/turn-route HTTP tests and
+changed-file Ruff passing. OpenAPI/generated TS were untouched (Windows CRLF
+vs LF check residual only). `docs/_scratch/p7-03-orchestration-evidence.md`
+records commands, privacy assertions, and keeps sealed SSE with P7-04,
+redaction with P7-05, system-wide privacy with P8, chat UI with P9, and
+Bedrock/Ollama synthesis adapters as fail-closed residuals. DRIFT-22 synthesis
+half is closed.
 
 P7-02 closure evidence (2026-07-27):
 `docs/_scratch/p7-02-intent-route-inventory.md` records retain/modify/defer for

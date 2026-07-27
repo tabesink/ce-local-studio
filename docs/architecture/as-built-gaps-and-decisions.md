@@ -15,7 +15,7 @@ Every foundation stays `NOT_STARTED` until the targeted boundary proof in the br
 ## Partial or scaffolded capabilities
 
 - **Parsers:** P4-03 lands a `DocumentParser` port with Docling/Reducto adapters, injectable fixtures, bounded timeouts, and typed fail-closed errors. Live workers still require optional `parsers` extras (`docling`, `reductoai`); CI proves behavior via injected transports without network.
-- **Model providers:** OpenAI, Bedrock, and Ollama are represented in configuration/ports, but their SDK dependencies and production adapters are not proven by the root manifest.
+- **Model providers:** P7-03 proves an OpenAI synthesis outbound adapter with injectable transport, timeout/output bounds, and fail-closed typed errors; Bedrock/Ollama synthesis kinds remain fail-closed registry entries. Live OpenAI calls still require the optional `synthesis` extra (`openai`); CI proves behavior without network. Embedding and other provider SDK paths remain unproven by the root manifest.
 - **LightRAG/runtime:** local Compose deliberately uses local client/controller modes. Native per-domain LightRAG and Docker lifecycle need separate integration evidence.
 - **Tracing:** the optional tracer currently resolves to a disabled/no-op port and has no Langfuse dependency/configuration.
 - **Frontend chat layout:** current UI has a timeline/composer and one Evidence aside. The approved persistent left discovery plus right Evidence/Refs/Source tabbed three-region workbench is not fully present.
