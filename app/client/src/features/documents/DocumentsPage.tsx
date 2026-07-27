@@ -65,6 +65,35 @@ function errorRequestId(error: unknown): string | null {
   return null;
 }
 
+function mapDocumentPreviewError(error: unknown): Extract<PreviewState, { kind: "unavailable" | "failed" }> {
+  if (isApiError(error) && (error.code === "document_preview_unavailable" || error.status === 409)) {
+    return {
+      kind: "unavailable",
+      message: "Governed preview is not available for this document.",
+      requestId: error.requestId,
+    };
+  }
+  if (isApiError(error) && (error.status === 404 || error.code === "document_not_found")) {
+    return {
+      kind: "unavailable",
+      message: "Document is not available.",
+      requestId: error.requestId,
+    };
+  }
+  if (isApiError(error) && (error.status === 410 || error.code === "evidence_unavailable")) {
+    return {
+      kind: "unavailable",
+      message: "Evidence no longer available.",
+      requestId: error.requestId,
+    };
+  }
+  return {
+    kind: "failed",
+    message: errorMessage(error),
+    requestId: errorRequestId(error),
+  };
+}
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -117,11 +146,14 @@ function DocumentsPageInner() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const listGenerationRef = useRef(0);
+  const adminGenerationRef = useRef(0);
   const selectionGenerationRef = useRef(0);
   const locationGenerationRef = useRef(0);
   const contentAbortRef = useRef<AbortController | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const adminSourcesRef = useRef<AdminSource[]>([]);
+  const selectedRefRef = useRef<string | null>(null);
+  const handledDeepLinkRef = useRef<string | null>(null);
   const identityKey = user ? `${user.id}:${user.role}` : null;
 
   const clearObjectUrl = useCallback(() => {
@@ -153,6 +185,7 @@ function DocumentsPageInner() {
     contentAbortRef.current = null;
     selectionGenerationRef.current += 1;
     locationGenerationRef.current += 1;
+    selectedRefRef.current = null;
     setSelectedRef(null);
     setDetail(null);
     setOutline([]);
@@ -169,6 +202,11 @@ function DocumentsPageInner() {
   }, [clearObjectUrl]);
 
   useEffect(() => {
+    listGenerationRef.current += 1;
+    adminGenerationRef.current += 1;
+    handledDeepLinkRef.current = null;
+    adminSourcesRef.current = [];
+    setLoadingMore(false);
     closeViewer();
     setDocuments([]);
     setNextCursor(null);
@@ -198,22 +236,23 @@ function DocumentsPageInner() {
   }, [user, urlDomain]);
 
   const reloadLibrary = useCallback(async () => {
-    if (!user) return;
+    if (!user || !domainId) return;
     const generation = ++listGenerationRef.current;
     setLoading(true);
     setLoadingMore(false);
     setError(null);
     try {
       const { documents: rows, nextCursor: cursor } = await listDocuments({
-        domainId: domainId || null,
+        domainId,
       });
       if (listGenerationRef.current !== generation) return;
       setDocuments(rows);
       setNextCursor(cursor);
+      const currentSelected = selectedRefRef.current;
       if (
-        selectedRef &&
-        !rows.some((row) => row.ref === selectedRef) &&
-        !adminSourcesRef.current.some((source) => source.documentRef === selectedRef)
+        currentSelected &&
+        !rows.some((row) => row.ref === currentSelected) &&
+        !adminSourcesRef.current.some((source) => source.documentRef === currentSelected)
       ) {
         closeViewer();
       }
@@ -225,16 +264,16 @@ function DocumentsPageInner() {
     } finally {
       if (listGenerationRef.current === generation) setLoading(false);
     }
-  }, [user, domainId, selectedRef, closeViewer]);
+  }, [user, domainId, closeViewer]);
 
   const loadMoreDocuments = useCallback(async () => {
-    if (!user || !nextCursor || loadingMore) return;
+    if (!user || !domainId || !nextCursor || loadingMore) return;
     const generation = listGenerationRef.current;
     setLoadingMore(true);
     setError(null);
     try {
       const { documents: rows, nextCursor: cursor } = await listDocuments({
-        domainId: domainId || null,
+        domainId,
         cursor: nextCursor,
       });
       if (listGenerationRef.current !== generation) return;
@@ -249,7 +288,7 @@ function DocumentsPageInner() {
     } finally {
       if (listGenerationRef.current === generation) setLoadingMore(false);
     }
-  }, [user, nextCursor, loadingMore, domainId]);
+  }, [user, domainId, nextCursor, loadingMore]);
 
   useEffect(() => {
     void reloadLibrary();
@@ -257,15 +296,22 @@ function DocumentsPageInner() {
 
   const reloadAdminSources = useCallback(async () => {
     if (!user || !isAdmin || !domainId) {
+      adminGenerationRef.current += 1;
       adminSourcesRef.current = [];
       setAdminSources([]);
       return;
     }
+    const requestDomainId = domainId;
+    const generation = ++adminGenerationRef.current;
+    adminSourcesRef.current = [];
+    setAdminSources([]);
     try {
-      const rows = await listAdminSources(domainId);
+      const rows = await listAdminSources(requestDomainId);
+      if (adminGenerationRef.current !== generation) return;
       adminSourcesRef.current = rows;
       setAdminSources(rows);
     } catch (err) {
+      if (adminGenerationRef.current !== generation) return;
       setError(errorMessage(err));
       adminSourcesRef.current = [];
       setAdminSources([]);
@@ -298,35 +344,7 @@ function DocumentsPageInner() {
         setPreviewSafe({ kind: "pdf", objectUrl, page, exactLocationUnavailable });
       } catch (err) {
         if (controller.signal.aborted || selectionGenerationRef.current !== generation) return;
-        if (isApiError(err) && (err.code === "document_preview_unavailable" || err.status === 409)) {
-          setPreviewSafe({
-            kind: "unavailable",
-            message: "Governed preview is not available for this document.",
-            requestId: err.requestId,
-          });
-          return;
-        }
-        if (isApiError(err) && (err.status === 404 || err.code === "document_not_found")) {
-          setPreviewSafe({
-            kind: "unavailable",
-            message: "Document is not available.",
-            requestId: err.requestId,
-          });
-          return;
-        }
-        if (isApiError(err) && (err.status === 410 || err.code === "evidence_unavailable")) {
-          setPreviewSafe({
-            kind: "unavailable",
-            message: "Evidence no longer available.",
-            requestId: err.requestId,
-          });
-          return;
-        }
-        setPreviewSafe({
-          kind: "failed",
-          message: errorMessage(err),
-          requestId: errorRequestId(err),
-        });
+        setPreviewSafe(mapDocumentPreviewError(err));
       }
     },
     [setPreviewSafe],
@@ -336,6 +354,7 @@ function DocumentsPageInner() {
     async (documentRef: string, options?: { page?: number | null; exactLocationUnavailable?: boolean }) => {
       locationGenerationRef.current += 1;
       const generation = ++selectionGenerationRef.current;
+      selectedRefRef.current = documentRef;
       setSelectedRef(documentRef);
       setDetail(null);
       setAnchorNotice(null);
@@ -355,27 +374,7 @@ function DocumentsPageInner() {
         }
       } catch (err) {
         if (selectionGenerationRef.current !== generation) return;
-        if (isApiError(err) && (err.status === 404 || err.code === "document_not_found")) {
-          setPreviewSafe({
-            kind: "unavailable",
-            message: "Document is not available.",
-            requestId: err.requestId,
-          });
-          return;
-        }
-        if (isApiError(err) && (err.status === 410 || err.code === "evidence_unavailable")) {
-          setPreviewSafe({
-            kind: "unavailable",
-            message: "Evidence no longer available.",
-            requestId: err.requestId,
-          });
-          return;
-        }
-        setPreviewSafe({
-          kind: "failed",
-          message: errorMessage(err),
-          requestId: errorRequestId(err),
-        });
+        setPreviewSafe(mapDocumentPreviewError(err));
       }
     },
     [loadPdfContent, setPreviewSafe],
@@ -387,6 +386,7 @@ function DocumentsPageInner() {
       selectionGenerationRef.current += 1;
       contentAbortRef.current?.abort();
       contentAbortRef.current = null;
+      selectedRefRef.current = source.documentRef;
       setSelectedRef(source.documentRef);
       setDetail(null);
       setAnchorNotice(null);
@@ -400,7 +400,6 @@ function DocumentsPageInner() {
 
   // Inbound deep link: evidence location (server anchor wins over URL page hint).
   const deepLinkKey = `${deepLink.document ?? ""}|${deepLink.evidence ?? ""}|${deepLink.page ?? ""}`;
-  const handledDeepLinkRef = useRef<string | null>(null);
   useEffect(() => {
     if (!user) return;
     const evidenceRef = deepLink.evidence;
@@ -430,6 +429,10 @@ function DocumentsPageInner() {
         })
         .catch((err) => {
           if (locationGenerationRef.current !== generation) return;
+          setDetail(null);
+          setOutline([]);
+          setOutlineStatus("idle");
+          setAnchorNotice(null);
           setPreviewSafe({
             kind: "unavailable",
             message:
@@ -438,7 +441,10 @@ function DocumentsPageInner() {
                 : errorMessage(err),
             requestId: errorRequestId(err),
           });
-          if (documentHint) setSelectedRef(documentHint);
+          if (documentHint) {
+            selectedRefRef.current = documentHint;
+            setSelectedRef(documentHint);
+          }
         });
       return;
     }

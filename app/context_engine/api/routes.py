@@ -1652,6 +1652,7 @@ def list_available_domains(
     responses={
         410: {"model": ErrorEnvelope, "description": "Cursor expired."},
         422: {"model": ErrorEnvelope, "description": "Request validation failed."},
+        503: {"model": ErrorEnvelope, "description": "Dependency unavailable."},
     },
 )
 def list_member_documents(
@@ -1691,6 +1692,7 @@ def list_member_documents(
     responses={
         404: {"model": ErrorEnvelope, "description": "Document not found."},
         422: {"model": ErrorEnvelope, "description": "Request validation failed."},
+        503: {"model": ErrorEnvelope, "description": "Dependency unavailable."},
     },
 )
 def get_member_document(
@@ -1713,18 +1715,38 @@ def get_member_document(
 
 @api_router.get(
     "/documents/{documentRef}/content",
+    response_class=Response,
     responses={
         200: {
             "content": {"application/pdf": {"schema": {"type": "string", "format": "binary"}}},
             "description": "Full governed PDF preview.",
+            "headers": {
+                "Accept-Ranges": {"schema": {"type": "string"}},
+                "ETag": {"schema": {"type": "string"}},
+                "Content-Disposition": {"schema": {"type": "string"}},
+                "Cache-Control": {"schema": {"type": "string"}},
+                "X-Content-Type-Options": {"schema": {"type": "string"}},
+            },
         },
         206: {
             "content": {"application/pdf": {"schema": {"type": "string", "format": "binary"}}},
             "description": "Partial governed PDF preview.",
+            "headers": {
+                "Accept-Ranges": {"schema": {"type": "string"}},
+                "Content-Range": {"schema": {"type": "string"}},
+                "ETag": {"schema": {"type": "string"}},
+                "Content-Disposition": {"schema": {"type": "string"}},
+                "Cache-Control": {"schema": {"type": "string"}},
+                "X-Content-Type-Options": {"schema": {"type": "string"}},
+            },
         },
         404: {"model": ErrorEnvelope, "description": "Document not found."},
         409: {"model": ErrorEnvelope, "description": "Governed preview unavailable."},
-        416: {"model": ErrorEnvelope, "description": "Range not satisfiable."},
+        416: {
+            "model": ErrorEnvelope,
+            "description": "Range not satisfiable.",
+            "headers": {"Content-Range": {"schema": {"type": "string"}}},
+        },
         422: {"model": ErrorEnvelope, "description": "Request validation failed."},
         503: {"model": ErrorEnvelope, "description": "Document content unavailable."},
     },

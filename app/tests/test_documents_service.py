@@ -6,8 +6,12 @@ from uuid import uuid4
 
 import pytest
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session as DbSession
+
 from context_engine.api.catalog_schemas import DocumentSummaryDto, EvidenceLocationResponseDto
 from context_engine.config import Settings
+from context_engine.db import Base
 from context_engine.models import (
     SOURCE_BLOCK_KIND_TEXT,
     SOURCE_INDEX_STATE_READY,
@@ -20,6 +24,8 @@ from context_engine.models import (
     ConversationTurn,
     ConversationTurnEvidenceRef,
     Domain,
+    ModelProfile,
+    ProviderConfig,
     SourceBlock,
     SourceDocument,
 )
@@ -29,11 +35,13 @@ from context_engine.services.documents import (
     content_disposition_for_label,
     get_document_content,
     get_evidence_location,
+    list_documents,
     parse_byte_range,
     preview_etag,
     preview_kind_for_source,
     safe_document_summary,
 )
+from context_engine.services.indexing import compute_index_request_id
 from context_engine.services.sources import SourceStorage, new_document_public_ref
 
 
@@ -525,3 +533,101 @@ def test_get_evidence_location_non_pdf_preview_unavailable(
         )
     assert exc_info.value.status_code == 409
     assert exc_info.value.code == "document_preview_unavailable"
+
+
+def _library_db(tmp_path: Path) -> tuple[DbSession, Domain]:
+    engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'docs-library.db'}")
+    Base.metadata.create_all(engine)
+    db = DbSession(engine)
+    db.add(ProviderConfig(provider_kind="openai", display_name="OpenAI", requires_credentials=False))
+    db.add(
+        ModelProfile(
+            id="emb-1",
+            name="embedding",
+            profile_kind="embedding",
+            provider_kind="openai",
+            model_name="text-embedding-3-small",
+            vector_dimensions=1536,
+        )
+    )
+    domain = _domain()
+    domain.embedding_profile_id = "emb-1"
+    db.add(domain)
+    db.flush()
+    return db, domain
+
+
+def _eligible_library_source(
+    domain_id: str,
+    *,
+    filename: str,
+    updated_at: datetime,
+    sha_suffix: str,
+) -> SourceDocument:
+    source_id = str(uuid4())
+    content_hash = "b" * 64
+    generation = 1
+    return SourceDocument(
+        id=source_id,
+        public_ref=new_document_public_ref(),
+        domain_id=domain_id,
+        original_filename=filename,
+        content_type="application/pdf",
+        original_sha256=(sha_suffix * 64)[:64],
+        original_size_bytes=2048,
+        original_object_key=f"obj_{sha_suffix}{uuid4().hex[:12]}",
+        state=SOURCE_STATE_PREPARED,
+        parser_kind="docling",
+        preparation_generation=1,
+        index_state=SOURCE_INDEX_STATE_READY,
+        index_generation=generation,
+        index_content_hash=content_hash,
+        index_request_id=compute_index_request_id(source_id, generation, content_hash),
+        version=1,
+        created_at=updated_at,
+        updated_at=updated_at,
+    )
+
+
+def test_list_documents_paginates_and_rejects_expired_cursor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db, domain = _library_db(tmp_path)
+    try:
+        newer = _eligible_library_source(
+            domain.id,
+            filename="newer.pdf",
+            updated_at=datetime(2026, 7, 25, 13, 0, 0),
+            sha_suffix="1",
+        )
+        older = _eligible_library_source(
+            domain.id,
+            filename="older.pdf",
+            updated_at=datetime(2026, 7, 25, 12, 0, 0),
+            sha_suffix="2",
+        )
+        db.add_all([newer, older])
+        db.commit()
+        monkeypatch.setattr(documents_module, "_available_domains", lambda *_a, **_k: [domain])
+        settings = Settings(
+            database_url=f"sqlite+pysqlite:///{tmp_path / 'docs-library.db'}",
+            testing=True,
+            source_storage_root=str(tmp_path / "source-root"),
+        )
+
+        page_one = list_documents(db, settings, limit=1)
+        assert len(page_one["documents"]) == 1
+        assert page_one["documents"][0]["label"] == "newer.pdf"
+        assert page_one["nextCursor"] is not None
+
+        page_two = list_documents(db, settings, cursor=page_one["nextCursor"], limit=1)
+        assert len(page_two["documents"]) == 1
+        assert page_two["documents"][0]["label"] == "older.pdf"
+        assert page_two["nextCursor"] is None
+
+        with pytest.raises(DocumentError) as exc_info:
+            list_documents(db, settings, cursor="not-a-cursor")
+        assert exc_info.value.code == "cursor_expired"
+    finally:
+        db.close()

@@ -2647,6 +2647,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
+            /** @description Dependency unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     get_member_document_api_v1_documents__documentRef__get: {
@@ -2687,6 +2696,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
+            /** @description Dependency unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     get_member_document_content_api_v1_documents__documentRef__content_get: {
@@ -2706,16 +2724,26 @@ export interface operations {
             /** @description Full governed PDF preview. */
             200: {
                 headers: {
+                    "Accept-Ranges"?: string;
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    ETag?: string;
+                    "X-Content-Type-Options"?: string;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
                     "application/pdf": string;
                 };
             };
             /** @description Partial governed PDF preview. */
             206: {
                 headers: {
+                    "Accept-Ranges"?: string;
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    "Content-Range"?: string;
+                    ETag?: string;
+                    "X-Content-Type-Options"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2743,6 +2771,7 @@ export interface operations {
             /** @description Range not satisfiable. */
             416: {
                 headers: {
+                    "Content-Range"?: string;
                     [name: string]: unknown;
                 };
                 content: {

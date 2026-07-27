@@ -15,7 +15,9 @@ from sqlalchemy.orm import Session
 from context_engine.adapters.object_storage import ObjectStorageError
 from context_engine.config import Settings
 from context_engine.models import (
+    SOURCE_INDEX_STATE_READY,
     SOURCE_STATE_DELETING,
+    SOURCE_STATE_PREPARED,
     TURN_STATUS_REDACTED,
     Conversation,
     ConversationTurn,
@@ -31,7 +33,7 @@ from context_engine.services.domains import (
     safe_member_domain,
 )
 from context_engine.services.evidence import safe_section_label
-from context_engine.services.indexing import source_is_query_eligible
+from context_engine.services.indexing import source_has_current_index_identity, source_is_query_eligible
 from context_engine.services.sources import (
     SourceStorageError,
     sanitize_original_filename,
@@ -104,13 +106,33 @@ def document_page_count(db: Session, source: SourceDocument) -> int | None:
     return int(maximum)
 
 
+def document_page_counts(db: Session, source_ids: list[str]) -> dict[str, int]:
+    if not source_ids:
+        return {}
+    page_expr = func.max(func.coalesce(SourceBlock.page_end, SourceBlock.page_start))
+    rows = db.execute(
+        select(SourceBlock.source_document_id, page_expr)
+        .where(SourceBlock.source_document_id.in_(source_ids))
+        .group_by(SourceBlock.source_document_id)
+    ).all()
+    counts: dict[str, int] = {}
+    for source_id, maximum in rows:
+        if maximum is None or int(maximum) < 1:
+            continue
+        counts[str(source_id)] = int(maximum)
+    return counts
+
+
 def safe_document_summary(
     db: Session,
     source: SourceDocument,
     domain: Domain,
     *,
     query_eligible: bool,
+    page_count: int | None = None,
+    page_count_resolved: bool = False,
 ) -> dict[str, Any]:
+    resolved_page_count = page_count if page_count_resolved else document_page_count(db, source)
     return {
         "ref": source.public_ref,
         "label": sanitize_original_filename(source.original_filename),
@@ -120,7 +142,7 @@ def safe_document_summary(
         },
         "contentType": PDF_CONTENT_TYPE,
         "previewKind": preview_kind_for_source(source),
-        "pageCount": document_page_count(db, source),
+        "pageCount": resolved_page_count,
         "updatedAt": iso_utc(source.updated_at),
     }
 
@@ -208,8 +230,11 @@ def list_documents(
         return {"documents": [], "nextCursor": None}
 
     domain_by_id = {domain.id: domain for domain in domains}
-    controller = controller_from_settings(settings)
-    statement = select(SourceDocument).where(SourceDocument.domain_id.in_(list(domain_by_id.keys())))
+    statement = select(SourceDocument).where(
+        SourceDocument.domain_id.in_(list(domain_by_id.keys())),
+        SourceDocument.state == SOURCE_STATE_PREPARED,
+        SourceDocument.index_state == SOURCE_INDEX_STATE_READY,
+    )
     if cursor:
         anchor_ref = _decode_cursor(cursor)
         anchor = db.scalar(select(SourceDocument).where(SourceDocument.public_ref == anchor_ref))
@@ -229,27 +254,38 @@ def list_documents(
         statement.order_by(SourceDocument.updated_at.desc(), SourceDocument.id.desc())
     )
 
-    matched: list[tuple[SourceDocument, dict[str, Any]]] = []
+    matched_sources: list[SourceDocument] = []
     for source in candidates:
         domain = domain_by_id.get(source.domain_id)
         if domain is None:
             continue
-        if source.state == SOURCE_STATE_DELETING:
-            continue
-        if not source_is_query_eligible(db, source, domain, settings=settings, controller=controller):
+        # Domains in domain_by_id are already available; only re-check frozen index identity.
+        if not source_has_current_index_identity(source):
             continue
         label = sanitize_original_filename(source.original_filename)
         if not _matches_query(query=query, values=(label, source.content_type)):
             continue
-        matched.append((source, safe_document_summary(db, source, domain, query_eligible=True)))
-        if len(matched) >= limit + 1:
+        matched_sources.append(source)
+        if len(matched_sources) >= limit + 1:
             break
 
-    has_more = len(matched) > limit
-    page_rows = matched[:limit]
+    has_more = len(matched_sources) > limit
+    page_sources = matched_sources[:limit]
+    page_counts = document_page_counts(db, [source.id for source in page_sources])
+    documents = [
+        safe_document_summary(
+            db,
+            source,
+            domain_by_id[source.domain_id],
+            query_eligible=True,
+            page_count=page_counts.get(source.id),
+            page_count_resolved=True,
+        )
+        for source in page_sources
+    ]
     return {
-        "documents": [projection for _source, projection in page_rows],
-        "nextCursor": _encode_cursor(page_rows[-1][0]) if has_more and page_rows else None,
+        "documents": documents,
+        "nextCursor": _encode_cursor(page_sources[-1]) if has_more and page_sources else None,
     }
 
 

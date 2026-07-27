@@ -30,9 +30,8 @@ test.describe("Phase 1 documents library preview (P9-03)", () => {
     await expect(page.getByTestId("documents-preview-panel")).toBeVisible();
     await expect(page.getByTestId("documents-text-preview")).toHaveCount(0);
 
-    const pdfPreview = page.getByTestId("documents-pdf-preview");
-    const unavailable = page.getByTestId("documents-preview-unavailable");
-    await expect(pdfPreview.or(unavailable)).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId("documents-pdf-preview")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId("documents-preview-unavailable")).toHaveCount(0);
     await expect(page.getByTestId("documents-admin-ops")).toBeVisible();
     await logout(page);
   });

@@ -232,15 +232,18 @@ describe("F-012 chat via LS chat-shell", () => {
 
   it("bootstraps /chat return params by loading conversation and selecting the jump-from turn", () => {
     const hook = read("src/features/chat-shell/use-chat-shell.ts");
-    assert.match(hook, /loadConversation = useCallback\(\s*async \(conversationId: string, options\?: \{ turnId\?/);
+    assert.match(hook, /loadConversation = useCallback\(/);
+    assert.match(hook, /evidenceId\?: string \| null/);
     assert.match(hook, /setSelectedTurnId\(restoreTurn\.id\)/);
+    assert.match(hook, /setSelectedEvidenceId\(matchedEvidence\)/);
     assert.match(hook, /setPanelOpen\(restoreTurn\.evidence\.length > 0\)/);
 
     const component = read("src/features/chat-shell/ChatShell.tsx");
     assert.match(component, /useSearchParams/);
     assert.match(component, /conversationId/);
     assert.match(component, /turnId/);
-    assert.match(component, /loadConversation\(conversationId, \{ turnId \}\)/);
+    assert.match(component, /evidenceId/);
+    assert.match(component, /loadConversation\(conversationId, \{ turnId, evidenceId \}\)/);
   });
 
   it("migrates covered chat-shell kit imports to @/ui", () => {

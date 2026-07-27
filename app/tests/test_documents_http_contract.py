@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from context_engine.api import routes as routes_module
 from context_engine.api.contract_app import CANONICAL_API_PREFIX, CANONICAL_REQUEST_ID_HEADER
@@ -11,17 +13,25 @@ from context_engine.api.dependencies import CurrentSession, require_current_sess
 from context_engine.app import create_app
 from context_engine.config import Settings
 from context_engine.db import Base
-from context_engine.models import User
+from context_engine.models import (
+    TURN_ROUTE_DIRECT_LLM,
+    TURN_STATUS_COMPLETED,
+    Conversation,
+    ConversationTurn,
+    ConversationTurnEvidenceRef,
+    User,
+)
 from context_engine.services.documents import DocumentContentResult, DocumentError
 
 
-def _http_app(tmp_path: Path, *, role: str = "member"):
-    settings = Settings(database_url=f"sqlite+pysqlite:///{tmp_path / f'docs-{role}.db'}", testing=True)
+def _http_app(tmp_path: Path, *, role: str = "member", user_id: str = "user-docs-001"):
+    settings = Settings(database_url=f"sqlite+pysqlite:///{tmp_path / f'docs-{role}-{user_id}.db'}", testing=True)
     app = create_app(settings)
     Base.metadata.create_all(app.state.engine)
+    # Keep the session user transient so CurrentSession can read attributes without a live ORM session.
     user = User(
-        id="user-docs-001",
-        username=f"{role}@example.test",
+        id=user_id,
+        username=f"{role}-{user_id}@example.test",
         password_hash="synthetic-password-hash",
         role=role,
     )
@@ -169,7 +179,7 @@ def test_document_content_http_non_pdf_preview_unavailable(
     assert response.json()["error"]["code"] == "document_preview_unavailable"
 
 
-def test_evidence_location_http_ownership_and_delete_fence(
+def test_evidence_location_http_error_code_map(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -191,6 +201,51 @@ def test_evidence_location_http_ownership_and_delete_fence(
             response = client.get(f"{CANONICAL_API_PREFIX}/evidence/ev_locationref000000000001/location")
             assert response.status_code == status
             assert response.json()["error"]["code"] == public
+
+
+def test_evidence_location_http_wrong_owner_is_404_without_service_mock(tmp_path: Path) -> None:
+    owner_id = "user-owner-docs"
+    caller_id = "user-caller-docs"
+    app = _http_app(tmp_path, user_id=caller_id)
+    evidence_ref = "ev_" + "e" * 32
+    with Session(app.state.engine) as db:
+        # Ownership fails before source/domain eligibility — seed only the private chat graph.
+        owner = User(id=owner_id, username="owner@example.test", password_hash="synthetic")
+        conversation = Conversation(
+            id=str(uuid4()),
+            public_ref="conv_" + "c" * 32,
+            owner_user_id=owner_id,
+            title="Owned",
+        )
+        turn = ConversationTurn(
+            id=str(uuid4()),
+            public_ref="turn_" + "t" * 32,
+            conversation_id=conversation.id,
+            client_request_id="loc-http-1",
+            route=TURN_ROUTE_DIRECT_LLM,
+            status=TURN_STATUS_COMPLETED,
+            user_message="q",
+            assistant_answer="a",
+        )
+        evidence = ConversationTurnEvidenceRef(
+            id=str(uuid4()),
+            public_ref=evidence_ref,
+            turn_id=turn.id,
+            evidence_order=1,
+            source_document_id=str(uuid4()),
+            source_block_id=str(uuid4()),
+            citation_label="[1]",
+            source_label="pump.pdf",
+            excerpt="excerpt",
+        )
+        db.add_all([owner, conversation, turn, evidence])
+        db.commit()
+
+    with TestClient(app) as client:
+        response = client.get(f"{CANONICAL_API_PREFIX}/evidence/{evidence_ref}/location")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "evidence_not_found"
 
 
 def test_evidence_location_http_success_projection(

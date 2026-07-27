@@ -76,6 +76,8 @@ describe("Phase 1 Library deep-link boundary (P9-03)", () => {
     const chatShell = readFileSync(join(root, "src/features/chat-shell/ChatShell.tsx"), "utf8");
     assert.match(chatShell, /searchParams\.get\("conversation"\)/);
     assert.match(chatShell, /searchParams\.get\("turn"\)/);
+    assert.match(chatShell, /searchParams\.get\("evidence"\)/);
+    assert.match(chatShell, /evidenceId/);
 
     assert.match(api, /DocumentSummaryDto|DocumentSummary/);
     assert.match(api, /AdminSourceDto|AdminSource/);

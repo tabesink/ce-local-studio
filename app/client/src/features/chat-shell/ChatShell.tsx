@@ -39,7 +39,7 @@ function ChatShellInner() {
   }, [chat.messages.length, chat.streaming]);
 
   /* Back to chat / citation return: restore conversation + jump-from turn once.
-     Canonical query keys are conversation/turn; accept legacy conversationId/turnId. */
+     Canonical query keys are conversation/turn/evidence; accept legacy conversationId/turnId. */
   useEffect(() => {
     if (returnRestoredRef.current) return;
     const conversationId =
@@ -48,9 +48,10 @@ function ChatShellInner() {
       null;
     const turnId =
       searchParams.get("turn")?.trim() || searchParams.get("turnId")?.trim() || null;
+    const evidenceId = searchParams.get("evidence")?.trim() || null;
     if (!conversationId || !turnId) return;
     returnRestoredRef.current = true;
-    void chat.loadConversation(conversationId, { turnId });
+    void chat.loadConversation(conversationId, { turnId, evidenceId });
   }, [chat.loadConversation, searchParams]);
 
   return (
