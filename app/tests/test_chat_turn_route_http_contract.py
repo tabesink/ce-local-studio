@@ -106,6 +106,7 @@ def _seed_domain(db, *, domain_id: str, state: str) -> Domain:
 
 def _http_context(monkeypatch: pytest.MonkeyPatch):
     database_path = Path(f".data/ce-turn-route-http-{uuid4().hex}.db").resolve()
+    database_path.parent.mkdir(parents=True, exist_ok=True)
     settings = Settings(
         database_url=f"sqlite+pysqlite:///{database_path}",
         testing=True,

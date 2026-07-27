@@ -57,6 +57,7 @@ def _remove_test_database(path: Path) -> None:
 
 def _http_context(monkeypatch: pytest.MonkeyPatch):
     database_path = Path(f".data/ce-chat-http-{uuid4().hex}.db").resolve()
+    database_path.parent.mkdir(parents=True, exist_ok=True)
     settings = Settings(database_url=f"sqlite+pysqlite:///{database_path}", testing=True)
     app = create_app(settings)
     app.state.test_database_path = database_path
