@@ -5,9 +5,7 @@ import { E2E_DOMAIN_QUESTION, readSeedInfo } from "./helpers/stack-seed";
 test.describe.configure({ mode: "serial" });
 
 test.describe("Phase 1 evidence document-navigation boundary", () => {
-  test("Evidence inspector tabs stay useful while Library navigation is deliberately unavailable", async ({
-    page,
-  }) => {
+  test("Evidence inspector enables Open in Library with opaque deep links", async ({ page }) => {
     const seed = readSeedInfo();
     await loginAsAdmin(page);
     await page.getByLabel("Knowledge Domain").selectOption({ label: seed.displayName });
@@ -33,12 +31,9 @@ test.describe("Phase 1 evidence document-navigation boundary", () => {
 
     await page.getByTestId("inspector-tab-source").click();
     const openInLibrary = page.getByTestId("open-in-library");
-    const openCount = await openInLibrary.count();
-    if (openCount > 0) {
-      await expect(openInLibrary.first()).toBeDisabled();
-    }
-    await expect(page.getByTestId("document-navigation-unavailable")).toContainText(/unavailable/i);
-    await expect(page).toHaveURL(/\/chat/);
+    await expect(openInLibrary).toBeEnabled();
+    await openInLibrary.click();
+    await expect(page).toHaveURL(/\/documents\?.*document=.+&evidence=/);
     await logout(page);
   });
 });

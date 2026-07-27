@@ -18,44 +18,51 @@ import {
   TH,
   THead,
   TRow,
-  type UiTone,
 } from "@/_shared/ui";
 import { isApiError } from "@/lib/api/errors";
 import { useAuthStore } from "@/state/auth-store";
 import { PageState } from "@/components/ui/PageState";
-import { listAdminDomains, type AdminDomain } from "@/features/domains/api";
+import { listMemberDomains, type MemberDomain } from "@/features/domains/api";
 import {
   cancelSourceIndex,
   cancelSourcePreparation,
   deleteSource,
+  fetchDocumentContent,
+  getDocument,
+  getEvidenceLocation,
+  getSourceOutline,
+  isAdminActionEnabled,
   listAdminSources,
+  listDocuments,
   retrySourceIndex,
   retrySourcePreparation,
   uploadSource,
-  type SourceDocument,
+  type AdminSource,
+  type DocumentSummary,
+  type OutlineItem,
 } from "@/features/documents/api";
+import { PdfPreview } from "@/features/documents/PdfPreview";
 import {
   buildChatReturnHref,
   hasChatReturn,
   parseLibraryDeepLink,
 } from "@/features/documents/libraryDeepLink";
 
-type DomainOption = Pick<AdminDomain, "id" | "displayName">;
-
 type PreviewState =
   | { kind: "idle" }
-  | { kind: "unavailable"; message: string };
+  | { kind: "loading" }
+  | { kind: "pdf"; objectUrl: string; page: number; exactLocationUnavailable?: boolean }
+  | { kind: "unavailable"; message: string; requestId?: string | null }
+  | { kind: "failed"; message: string; requestId?: string | null };
 
 function errorMessage(error: unknown): string {
   if (isApiError(error)) return error.message;
   return "Request failed.";
 }
 
-function stateTone(state: string): UiTone {
-  if (state === "ready") return "good";
-  if (state === "failed" || state === "error") return "danger";
-  if (state === "cancelled") return "default";
-  return "warning";
+function errorRequestId(error: unknown): string | null {
+  if (isApiError(error)) return error.requestId;
+  return null;
 }
 
 function formatBytes(bytes: number): string {
@@ -64,9 +71,15 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/* Phase 1 administrator source operations. Member library/content and
-   evidence deep-links stay explicitly unavailable until the governed opaque
-   document/evidence routes are implemented by P4/P6/P9. */
+function revokeObjectUrl(url: string | null | undefined) {
+  if (!url) return;
+  try {
+    URL.revokeObjectURL(url);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function DocumentsPage() {
   return (
     <Suspense fallback={<PageState title="Library" message="Loading Source Documents…" />}>
@@ -82,33 +95,94 @@ function DocumentsPageInner() {
   const searchParams = useSearchParams();
   const deepLink = useMemo(() => parseLibraryDeepLink(searchParams), [searchParams]);
   const showBackToChat = hasChatReturn(deepLink);
+  const urlDomain = searchParams.get("domain")?.trim() || "";
 
-  const [domains, setDomains] = useState<DomainOption[]>([]);
-  const [domainId, setDomainId] = useState("");
-  const [sources, setSources] = useState<SourceDocument[]>([]);
-  const [selected, setSelected] = useState<SourceDocument | null>(null);
+  const [domains, setDomains] = useState<MemberDomain[]>([]);
+  const [domainId, setDomainId] = useState(urlDomain);
+  const [documents, setDocuments] = useState<DocumentSummary[]>([]);
+  const [selectedRef, setSelectedRef] = useState<string | null>(null);
+  const [detail, setDetail] = useState<DocumentSummary | null>(null);
   const [preview, setPreview] = useState<PreviewState>({ kind: "idle" });
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [busySourceId, setBusySourceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const loadGenerationRef = useRef(0);
+  const [adminSources, setAdminSources] = useState<AdminSource[]>([]);
+  const [outline, setOutline] = useState<OutlineItem[]>([]);
+  const [outlineStatus, setOutlineStatus] = useState<"idle" | "loading" | "ready" | "unavailable">("idle");
+  const [anchorNotice, setAnchorNotice] = useState<string | null>(null);
 
-  const setPreviewState = useCallback((next: PreviewState) => {
-    setPreview(next);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const listGenerationRef = useRef(0);
+  const selectionGenerationRef = useRef(0);
+  const locationGenerationRef = useRef(0);
+  const contentAbortRef = useRef<AbortController | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+  const identityKey = user ? `${user.id}:${user.role}` : null;
+
+  const clearObjectUrl = useCallback(() => {
+    revokeObjectUrl(objectUrlRef.current);
+    objectUrlRef.current = null;
   }, []);
 
+  const setPreviewSafe = useCallback(
+    (next: PreviewState) => {
+      setPreview((current) => {
+        if (current.kind === "pdf" && (next.kind !== "pdf" || next.objectUrl !== current.objectUrl)) {
+          if (objectUrlRef.current === current.objectUrl) {
+            clearObjectUrl();
+          } else {
+            revokeObjectUrl(current.objectUrl);
+          }
+        }
+        if (next.kind === "pdf") {
+          objectUrlRef.current = next.objectUrl;
+        }
+        return next;
+      });
+    },
+    [clearObjectUrl],
+  );
+
+  const closeViewer = useCallback(() => {
+    contentAbortRef.current?.abort();
+    contentAbortRef.current = null;
+    selectionGenerationRef.current += 1;
+    setSelectedRef(null);
+    setDetail(null);
+    setOutline([]);
+    setOutlineStatus("idle");
+    setAnchorNotice(null);
+    setPreviewSafe({ kind: "idle" });
+  }, [setPreviewSafe]);
+
   useEffect(() => {
-    if (!user || !isAdmin) return;
+    return () => {
+      contentAbortRef.current?.abort();
+      clearObjectUrl();
+    };
+  }, [clearObjectUrl]);
+
+  useEffect(() => {
+    closeViewer();
+    setDocuments([]);
+    setAdminSources([]);
+    setError(null);
+  }, [identityKey, closeViewer]);
+
+  useEffect(() => {
+    if (!user) return;
     let cancelled = false;
-    const loadDomains = listAdminDomains();
-    loadDomains
+    listMemberDomains()
       .then((rows) => {
         if (cancelled) return;
         setDomains(rows);
-        setDomainId((current) => current || (rows[0]?.id ?? ""));
+        setDomainId((current) => {
+          if (current && rows.some((row) => row.id === current)) return current;
+          if (urlDomain && rows.some((row) => row.id === urlDomain)) return urlDomain;
+          return rows[0]?.id ?? "";
+        });
       })
       .catch((err) => {
         if (!cancelled) setError(errorMessage(err));
@@ -116,69 +190,217 @@ function DocumentsPageInner() {
     return () => {
       cancelled = true;
     };
-  }, [user, isAdmin]);
+  }, [user, urlDomain]);
 
-  const reload = useCallback(async () => {
-    if (!domainId || !user || !isAdmin) return;
-    const generation = ++loadGenerationRef.current;
-    const requestDomainId = domainId;
+  const reloadLibrary = useCallback(async () => {
+    if (!user) return;
+    const generation = ++listGenerationRef.current;
     setLoading(true);
     setError(null);
     try {
-      const rows = await listAdminSources(requestDomainId);
-      if (loadGenerationRef.current !== generation) return;
-      setSources(rows);
-      setSelected((current) => rows.find((row) => row.id === current?.id) ?? null);
+      const { documents: rows } = await listDocuments({
+        domainId: domainId || null,
+      });
+      if (listGenerationRef.current !== generation) return;
+      setDocuments(rows);
+      if (selectedRef && !rows.some((row) => row.ref === selectedRef)) {
+        closeViewer();
+      }
     } catch (err) {
-      if (loadGenerationRef.current !== generation) return;
-      setSources([]);
-      setSelected(null);
+      if (listGenerationRef.current !== generation) return;
+      setDocuments([]);
       setError(errorMessage(err));
     } finally {
-      if (loadGenerationRef.current === generation) {
-        setLoading(false);
-      }
+      if (listGenerationRef.current === generation) setLoading(false);
     }
-  }, [domainId, user, isAdmin]);
+  }, [user, domainId, selectedRef, closeViewer]);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    void reloadLibrary();
+  }, [reloadLibrary]);
 
-  useEffect(() => {
-    setSources([]);
-    setSelected(null);
-    setPreviewState({ kind: "idle" });
-  }, [domainId, setPreviewState]);
-
-  useEffect(() => {
-    if (!selected || !domainId || selected.domainId !== domainId) {
-      setPreviewState({ kind: "idle" });
+  const reloadAdminSources = useCallback(async () => {
+    if (!user || !isAdmin || !domainId) {
+      setAdminSources([]);
       return;
     }
-    setPreviewState({
-      kind: "unavailable",
-      message: "Governed document preview is not available until the opaque document content contract is implemented.",
-    });
-  }, [selected, domainId, setPreviewState]);
+    try {
+      const rows = await listAdminSources(domainId);
+      setAdminSources(rows);
+    } catch (err) {
+      setError(errorMessage(err));
+      setAdminSources([]);
+    }
+  }, [user, isAdmin, domainId]);
+
+  useEffect(() => {
+    void reloadAdminSources();
+  }, [reloadAdminSources]);
+
+  const selectedAdminSource = useMemo(() => {
+    if (!selectedRef) return null;
+    return adminSources.find((source) => source.documentRef === selectedRef) ?? null;
+  }, [adminSources, selectedRef]);
+
+  const loadPdfContent = useCallback(
+    async (documentRef: string, page: number, generation: number, exactLocationUnavailable = false) => {
+      contentAbortRef.current?.abort();
+      const controller = new AbortController();
+      contentAbortRef.current = controller;
+      setPreviewSafe({ kind: "loading" });
+      try {
+        const { blob } = await fetchDocumentContent(documentRef, { signal: controller.signal });
+        if (selectionGenerationRef.current !== generation) return;
+        const objectUrl = URL.createObjectURL(blob);
+        setPreviewSafe({ kind: "pdf", objectUrl, page, exactLocationUnavailable });
+      } catch (err) {
+        if (controller.signal.aborted || selectionGenerationRef.current !== generation) return;
+        if (isApiError(err) && (err.code === "document_preview_unavailable" || err.status === 409)) {
+          setPreviewSafe({
+            kind: "unavailable",
+            message: "Governed preview is not available for this document.",
+            requestId: err.requestId,
+          });
+          return;
+        }
+        if (isApiError(err) && (err.status === 404 || err.status === 410 || err.code === "evidence_unavailable")) {
+          setPreviewSafe({
+            kind: "unavailable",
+            message: "Evidence no longer available.",
+            requestId: err.requestId,
+          });
+          return;
+        }
+        setPreviewSafe({
+          kind: "failed",
+          message: errorMessage(err),
+          requestId: errorRequestId(err),
+        });
+      }
+    },
+    [setPreviewSafe],
+  );
+
+  const openDocument = useCallback(
+    async (documentRef: string, options?: { page?: number | null; exactLocationUnavailable?: boolean }) => {
+      const generation = ++selectionGenerationRef.current;
+      setSelectedRef(documentRef);
+      setDetail(null);
+      setAnchorNotice(null);
+      setPreviewSafe({ kind: "loading" });
+      try {
+        const doc = await getDocument(documentRef);
+        if (selectionGenerationRef.current !== generation) return;
+        setDetail(doc);
+        const page = options?.page && options.page > 0 ? options.page : 1;
+        if (doc.previewKind === "pdf") {
+          await loadPdfContent(documentRef, page, generation, options?.exactLocationUnavailable ?? false);
+        } else {
+          setPreviewSafe({
+            kind: "unavailable",
+            message: "Governed preview is not available for this document type.",
+          });
+        }
+      } catch (err) {
+        if (selectionGenerationRef.current !== generation) return;
+        if (isApiError(err) && (err.status === 404 || err.status === 410)) {
+          setPreviewSafe({
+            kind: "unavailable",
+            message: "Evidence no longer available.",
+            requestId: err.requestId,
+          });
+          return;
+        }
+        setPreviewSafe({
+          kind: "failed",
+          message: errorMessage(err),
+          requestId: errorRequestId(err),
+        });
+      }
+    },
+    [loadPdfContent, setPreviewSafe],
+  );
+
+  // Inbound deep link: evidence location (server anchor wins over URL page hint).
+  const deepLinkKey = `${deepLink.document ?? ""}|${deepLink.evidence ?? ""}|${deepLink.page ?? ""}`;
+  const handledDeepLinkRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    const evidenceRef = deepLink.evidence;
+    const documentHint = deepLink.document;
+    const pageHint = deepLink.page;
+
+    if (!evidenceRef && !documentHint) return;
+    if (handledDeepLinkRef.current === deepLinkKey) return;
+    handledDeepLinkRef.current = deepLinkKey;
+
+    const generation = ++locationGenerationRef.current;
+
+    if (evidenceRef) {
+      void getEvidenceLocation(evidenceRef)
+        .then((location) => {
+          if (locationGenerationRef.current !== generation) return;
+          const page = location.anchor.pageNumber > 0 ? location.anchor.pageNumber : pageHint;
+          const exactUnavailable =
+            location.anchor.fallback === "page" && location.anchor.region == null;
+          if (exactUnavailable) {
+            setAnchorNotice("Exact location unavailable — opened the nearest authorized page.");
+          }
+          void openDocument(location.document.ref, {
+            page,
+            exactLocationUnavailable: exactUnavailable,
+          });
+        })
+        .catch((err) => {
+          if (locationGenerationRef.current !== generation) return;
+          setPreviewSafe({
+            kind: "unavailable",
+            message:
+              isApiError(err) && (err.status === 404 || err.status === 410)
+                ? "Evidence no longer available."
+                : errorMessage(err),
+            requestId: errorRequestId(err),
+          });
+          if (documentHint) setSelectedRef(documentHint);
+        });
+      return;
+    }
+
+    void openDocument(documentHint!, { page: pageHint });
+  }, [user, deepLinkKey, deepLink.evidence, deepLink.document, deepLink.page, openDocument, setPreviewSafe]);
+
+  useEffect(() => {
+    if (!isAdmin || !selectedAdminSource) {
+      setOutline([]);
+      setOutlineStatus("idle");
+      return;
+    }
+    let cancelled = false;
+    setOutlineStatus("loading");
+    getSourceOutline(selectedAdminSource.domainId, selectedAdminSource.id)
+      .then((items) => {
+        if (cancelled) return;
+        setOutline(items);
+        setOutlineStatus("ready");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setOutline([]);
+        setOutlineStatus("unavailable");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, selectedAdminSource]);
 
   const filtered = useMemo(() => {
     const needle = filter.trim().toLowerCase();
-    if (!needle) return sources;
-    return sources.filter((row) => row.originalFilename.toLowerCase().includes(needle));
-  }, [filter, sources]);
+    if (!needle) return documents;
+    return documents.filter((row) => row.label.toLowerCase().includes(needle));
+  }, [filter, documents]);
 
   if (!user) {
     return <PageState title="Library" message="Sign in to browse Source Documents." />;
-  }
-
-  if (!isAdmin) {
-    return (
-      <PageState
-        title="Library"
-        message="The governed member document library is not available until opaque document metadata and content routes are implemented."
-      />
-    );
   }
 
   const onUpload = async (file: File) => {
@@ -187,7 +409,7 @@ function DocumentsPageInner() {
     setError(null);
     try {
       await uploadSource(domainId, file);
-      await reload();
+      await Promise.all([reloadLibrary(), reloadAdminSources()]);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -196,13 +418,13 @@ function DocumentsPageInner() {
     }
   };
 
-  const runSourceAction = async (source: SourceDocument, action: () => Promise<void>): Promise<boolean> => {
+  const runSourceAction = async (source: AdminSource, action: () => Promise<void>): Promise<boolean> => {
     if (!isAdmin) return false;
     setBusySourceId(source.id);
     setError(null);
     try {
       await action();
-      await reload();
+      await Promise.all([reloadLibrary(), reloadAdminSources()]);
       return true;
     } catch (err) {
       setError(errorMessage(err));
@@ -212,19 +434,12 @@ function DocumentsPageInner() {
     }
   };
 
-  const closePreview = () => {
-    setSelected(null);
-    setPreviewState({ kind: "idle" });
-  };
-
-  const selectSource = (source: SourceDocument) => {
-    setSelected(source);
-  };
-
   const onBackToChat = () => {
-    if (!deepLink.conversationId || !deepLink.turnId) return;
-    router.push(buildChatReturnHref(deepLink.conversationId, deepLink.turnId));
+    if (!deepLink.conversation || !deepLink.turn) return;
+    router.push(buildChatReturnHref(deepLink.conversation, deepLink.turn, deepLink.evidence));
   };
+
+  const viewerOpen = Boolean(selectedRef) || preview.kind !== "idle";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -242,7 +457,7 @@ function DocumentsPageInner() {
         </div>
       ) : null}
       <div className="flex min-h-0 flex-1">
-        <div className={cx("min-w-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6", selected ? "hidden lg:block" : "")}>
+        <div className={cx("min-w-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6", viewerOpen ? "hidden lg:block" : "")}>
           <PageHeader
             eyebrow="Library"
             title="Source Documents"
@@ -250,13 +465,16 @@ function DocumentsPageInner() {
               <>
                 <select
                   value={domainId}
-                  onChange={(event) => setDomainId(event.target.value)}
+                  onChange={(event) => {
+                    setDomainId(event.target.value);
+                    closeViewer();
+                  }}
                   aria-label="Knowledge Domain"
                   className="h-8 rounded-md border border-[var(--ui-border)] bg-[var(--ui-bg)] px-2.5 text-[length:var(--fs-sm)] text-[var(--fg)] outline-none"
                 >
                   {domains.length === 0 ? <option value="">No domains</option> : null}
                   {domains.map((domain) => (
-                    <option key={domain.id} value={domain.id}>
+                    <option key={domain.id} value={domain.id} disabled={!domain.available}>
                       {domain.displayName}
                     </option>
                   ))}
@@ -285,79 +503,89 @@ function DocumentsPageInner() {
                     </span>
                   </>
                 ) : null}
-                <RefreshIconButton onClick={() => void reload()} loading={loading} label="Refresh sources" />
+                <RefreshIconButton
+                  onClick={() => {
+                    void reloadLibrary();
+                    void reloadAdminSources();
+                  }}
+                  loading={loading}
+                  label="Refresh documents"
+                />
               </>
             }
           />
           {error ? <SettingsNotice tone="danger" className="mb-3">{error}</SettingsNotice> : null}
           <SearchInput value={filter} onChange={setFilter} placeholder="Filter by filename..." className="mb-3 max-w-sm" />
           {filtered.length === 0 && !loading ? (
-            <EmptySafeNotice>No Source Documents loaded for this Knowledge Domain.</EmptySafeNotice>
+            <EmptySafeNotice>No Source Documents available for this Knowledge Domain.</EmptySafeNotice>
           ) : (
             <Table>
               <THead>
                 <tr>
                   <TH>Filename</TH>
-                  <TH>Preparation</TH>
-                  <TH>Index</TH>
-                  <TH align="right">Size</TH>
-                  <TH align="right">Blocks</TH>
+                  <TH>Preview</TH>
+                  <TH>Domain</TH>
+                  <TH align="right">Pages</TH>
                   <TH align="right">Updated</TH>
                 </tr>
               </THead>
               <TBody>
-                {filtered.map((source) => (
+                {filtered.map((doc) => (
                   <TRow
-                    key={source.id}
+                    key={doc.ref}
                     interactive
-                    onClick={() => selectSource(source)}
+                    onClick={() => void openDocument(doc.ref)}
+                    data-selected={selectedRef === doc.ref ? "true" : undefined}
                   >
                     <TCell className="max-w-64">
                       <span
                         className="flex items-center gap-2"
-                        data-testid={`documents-row-${source.id}`}
-                        data-filename={source.originalFilename}
+                        data-testid={`documents-row-${doc.ref}`}
+                        data-filename={doc.label}
+                        data-document-ref={doc.ref}
                       >
                         <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--dim)]" />
-                        <span className="truncate text-[length:var(--fs-sm)] text-[var(--fg)]">
-                          {source.originalFilename}
-                        </span>
+                        <span className="truncate text-[length:var(--fs-sm)] text-[var(--fg)]">{doc.label}</span>
                       </span>
                     </TCell>
                     <TCell>
-                      <StatusPill tone={stateTone(source.state)}>{source.state}</StatusPill>
+                      <StatusPill tone={doc.previewKind === "pdf" ? "good" : "warning"}>
+                        {doc.previewKind}
+                      </StatusPill>
                     </TCell>
-                    <TCell>
-                      <StatusPill tone={stateTone(source.indexState)}>{source.indexState}</StatusPill>
-                    </TCell>
-                    <TCell align="right" className="whitespace-nowrap font-mono text-[length:var(--fs-xs)] text-[var(--dim)]">
-                      {formatBytes(source.originalSizeBytes)}
+                    <TCell className="max-w-40 truncate text-[length:var(--fs-sm)] text-[var(--dim)]">
+                      {doc.domain.displayName}
                     </TCell>
                     <TCell align="right" className="font-mono text-[length:var(--fs-xs)] text-[var(--dim)]">
-                      {source.blockCount}
+                      {doc.pageCount ?? "—"}
                     </TCell>
                     <TCell align="right" className="whitespace-nowrap font-mono text-[length:var(--fs-xs)] text-[var(--dim)]">
-                      {new Date(source.updatedAt).toLocaleString()}
+                      {new Date(doc.updatedAt).toLocaleString()}
                     </TCell>
                   </TRow>
                 ))}
               </TBody>
             </Table>
           )}
+          {!isAdmin ? (
+            <div data-testid="documents-member-readonly" className="sr-only">
+              Member read-only library
+            </div>
+          ) : null}
         </div>
 
-        {selected ? (
+        {viewerOpen ? (
           <aside
             className="flex w-full min-w-0 flex-col border-l border-[var(--ui-border)] bg-[var(--ui-bg)] lg:w-1/2"
             data-testid="documents-preview-panel"
           >
             <header className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-[var(--ui-border)] px-3">
               <span className="truncate text-[length:var(--fs-sm)] font-medium text-[var(--fg)]">
-                {selected.originalFilename}
+                {detail?.label ?? "Document"}
               </span>
               <button
                 type="button"
-                onClick={closePreview}
+                onClick={closeViewer}
                 aria-label="Close preview"
                 className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--dim)] hover:bg-[var(--hover)] hover:text-[var(--fg)]"
               >
@@ -366,70 +594,76 @@ function DocumentsPageInner() {
             </header>
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                <PreviewBody preview={preview} />
-                <dl className="mt-4 space-y-2 text-[length:var(--fs-sm)]">
-                  <PreviewFact label="Content type" value={selected.contentType} mono />
-                  <PreviewFact label="Size" value={formatBytes(selected.originalSizeBytes)} mono />
-                  <PreviewFact label="Parser" value={selected.parserKind} mono />
-                  <PreviewFact label="Preparation state" value={selected.state} />
-                  <PreviewFact label="Index state" value={selected.indexState} />
-                  {selected.indexErrorMessage ? (
-                    <PreviewFact label="Index error" value={selected.indexErrorMessage} />
-                  ) : null}
-                  <PreviewFact label="Blocks" value={String(selected.blockCount)} mono />
-                  <PreviewFact label="Images" value={String(selected.imageCount)} mono />
-                  <PreviewFact label="Created" value={new Date(selected.createdAt).toLocaleString()} />
-                </dl>
-                {isAdmin ? (
-                  <div className="mt-5 flex flex-wrap gap-1.5" data-testid="documents-admin-actions">
-                    <SettingsButton
-                      disabled={busySourceId === selected.id}
-                      onClick={() => void runSourceAction(selected, () => retrySourcePreparation(domainId, selected.id))}
-                    >
-                      Retry preparation
-                    </SettingsButton>
-                    <SettingsButton
-                      disabled={busySourceId === selected.id}
-                      onClick={() => void runSourceAction(selected, () => cancelSourcePreparation(domainId, selected.id))}
-                    >
-                      Cancel preparation
-                    </SettingsButton>
-                    <SettingsButton
-                      disabled={busySourceId === selected.id}
-                      onClick={() => void runSourceAction(selected, () => retrySourceIndex(domainId, selected.id))}
-                    >
-                      Retry index
-                    </SettingsButton>
-                    <SettingsButton
-                      disabled={busySourceId === selected.id}
-                      onClick={() => void runSourceAction(selected, () => cancelSourceIndex(domainId, selected.id))}
-                    >
-                      Cancel index
-                    </SettingsButton>
-                    <SettingsButton
-                      tone="danger"
-                      disabled={busySourceId === selected.id}
-                      onClick={() => {
-                        if (window.confirm(`Delete "${selected.originalFilename}"? This cannot be undone.`)) {
-                          const sourceId = selected.id;
-                          void runSourceAction(selected, async () => {
-                            await deleteSource(domainId, sourceId);
-                          }).then((ok) => {
-                            if (!ok) return;
-                            setSelected(null);
-                            setPreviewState({ kind: "idle" });
-                          });
-                        }
-                      }}
-                    >
-                      Delete
-                    </SettingsButton>
-                  </div>
-                ) : (
-                  <div data-testid="documents-member-readonly" className="sr-only">
-                    Member read-only library
-                  </div>
-                )}
+                {anchorNotice ? (
+                  <SettingsNotice tone="warning" className="mb-3">
+                    {anchorNotice}
+                  </SettingsNotice>
+                ) : null}
+                <PreviewBody preview={preview} filename={detail?.label ?? "Document"} />
+                {detail ? (
+                  <dl className="mt-4 space-y-2 text-[length:var(--fs-sm)]">
+                    <PreviewFact label="Content type" value={detail.contentType} mono />
+                    <PreviewFact label="Preview" value={detail.previewKind} />
+                    <PreviewFact label="Domain" value={detail.domain.displayName} />
+                    <PreviewFact
+                      label="Pages"
+                      value={detail.pageCount != null ? String(detail.pageCount) : "—"}
+                      mono
+                    />
+                    <PreviewFact label="Updated" value={new Date(detail.updatedAt).toLocaleString()} />
+                  </dl>
+                ) : null}
+
+                {isAdmin && selectedAdminSource ? (
+                  <AdminOpsPanel
+                    source={selectedAdminSource}
+                    busy={busySourceId === selectedAdminSource.id}
+                    outline={outline}
+                    outlineStatus={outlineStatus}
+                    onRetryPreparation={() =>
+                      void runSourceAction(selectedAdminSource, () =>
+                        retrySourcePreparation(selectedAdminSource.domainId, selectedAdminSource.id),
+                      )
+                    }
+                    onCancelPreparation={() =>
+                      void runSourceAction(selectedAdminSource, () =>
+                        cancelSourcePreparation(
+                          selectedAdminSource.domainId,
+                          selectedAdminSource.id,
+                          selectedAdminSource.version,
+                        ),
+                      )
+                    }
+                    onRetryIndex={() =>
+                      void runSourceAction(selectedAdminSource, () =>
+                        retrySourceIndex(selectedAdminSource.domainId, selectedAdminSource.id),
+                      )
+                    }
+                    onCancelIndex={() =>
+                      void runSourceAction(selectedAdminSource, () =>
+                        cancelSourceIndex(selectedAdminSource.domainId, selectedAdminSource.id),
+                      )
+                    }
+                    onDelete={() => {
+                      if (
+                        !window.confirm(
+                          `Delete "${selectedAdminSource.displayName}"? This cannot be undone.`,
+                        )
+                      ) {
+                        return;
+                      }
+                      void runSourceAction(selectedAdminSource, async () => {
+                        await deleteSource(
+                          selectedAdminSource.domainId,
+                          selectedAdminSource.id,
+                          selectedAdminSource.version,
+                        );
+                      }).then((ok) => {
+                        if (ok) closeViewer();
+                      });
+                    }}
+                  />
+                ) : null}
               </div>
             </div>
           </aside>
@@ -439,15 +673,46 @@ function DocumentsPageInner() {
   );
 }
 
-function PreviewBody({ preview }: { preview: PreviewState }) {
-  const message =
-    preview.kind === "unavailable"
-      ? preview.message
-      : "Select a Source Document to inspect its safe administrative metadata.";
+function PreviewBody({ preview, filename }: { preview: PreviewState; filename: string }) {
+  if (preview.kind === "loading") {
+    return (
+      <div data-testid="documents-preview-loading">
+        <SettingsNotice tone="default" className="mb-4">
+          Loading document preview…
+        </SettingsNotice>
+      </div>
+    );
+  }
+  if (preview.kind === "pdf") {
+    return (
+      <>
+        {preview.exactLocationUnavailable ? (
+          <SettingsNotice tone="warning" className="mb-3">
+            Exact location unavailable.
+          </SettingsNotice>
+        ) : null}
+        <PdfPreview objectUrl={preview.objectUrl} filename={filename} initialPage={preview.page} />
+      </>
+    );
+  }
+  if (preview.kind === "unavailable" || preview.kind === "failed") {
+    return (
+      <div data-testid="documents-preview-unavailable">
+        <SettingsNotice tone="warning" className="mb-4">
+          {preview.message}
+          {preview.requestId ? (
+            <span className="mt-1 block font-mono text-[length:var(--fs-xs)]">
+              Request ID: {preview.requestId}
+            </span>
+          ) : null}
+        </SettingsNotice>
+      </div>
+    );
+  }
   return (
-    <div data-testid="documents-preview-unavailable">
-      <SettingsNotice tone="warning" className="mb-4">
-        {message}
+    <div data-testid="documents-preview-idle">
+      <SettingsNotice tone="default" className="mb-4">
+        Select a Source Document to open its governed preview.
       </SettingsNotice>
     </div>
   );
@@ -460,6 +725,111 @@ function PreviewFact({ label, value, mono = false }: { label: string; value: str
       <dd className={cx("min-w-0 truncate text-right text-[var(--fg)]/85", mono ? "font-mono text-[length:var(--fs-xs)]" : "")}>
         {value}
       </dd>
+    </div>
+  );
+}
+
+function AdminOpsPanel({
+  source,
+  busy,
+  outline,
+  outlineStatus,
+  onRetryPreparation,
+  onCancelPreparation,
+  onRetryIndex,
+  onCancelIndex,
+  onDelete,
+}: {
+  source: AdminSource;
+  busy: boolean;
+  outline: OutlineItem[];
+  outlineStatus: "idle" | "loading" | "ready" | "unavailable";
+  onRetryPreparation: () => void;
+  onCancelPreparation: () => void;
+  onRetryIndex: () => void;
+  onCancelIndex: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="mt-5 space-y-4" data-testid="documents-admin-ops">
+      <div>
+        <p className="mb-2 font-mono text-[length:var(--fs-xs)] uppercase tracking-[0.12em] text-[var(--dim)]/70">
+          Administrator operations
+        </p>
+        <dl className="mb-3 space-y-2 text-[length:var(--fs-sm)]">
+          <PreviewFact label="Preparation" value={source.state} />
+          <PreviewFact label="Index" value={source.indexState} />
+          <PreviewFact label="Size" value={formatBytes(source.sizeBytes)} mono />
+          <PreviewFact label="Parser" value={source.parserKind} mono />
+        </dl>
+        <div className="flex flex-wrap gap-1.5" data-testid="documents-admin-actions">
+          <SettingsButton
+            disabled={busy || !isAdminActionEnabled(source, "retry")}
+            onClick={onRetryPreparation}
+          >
+            Retry preparation
+          </SettingsButton>
+          <SettingsButton
+            disabled={busy || !isAdminActionEnabled(source, "cancel")}
+            onClick={onCancelPreparation}
+          >
+            Cancel preparation
+          </SettingsButton>
+          <SettingsButton
+            disabled={busy || !isAdminActionEnabled(source, "indexRetry")}
+            onClick={onRetryIndex}
+          >
+            Retry index
+          </SettingsButton>
+          <SettingsButton
+            disabled={busy || !isAdminActionEnabled(source, "indexCancel")}
+            onClick={onCancelIndex}
+          >
+            Cancel index
+          </SettingsButton>
+          <SettingsButton
+            tone="danger"
+            disabled={busy || !isAdminActionEnabled(source, "delete")}
+            onClick={onDelete}
+          >
+            Delete
+          </SettingsButton>
+        </div>
+      </div>
+
+      <div data-testid="documents-admin-outline">
+        <p className="mb-2 font-mono text-[length:var(--fs-xs)] uppercase tracking-[0.12em] text-[var(--dim)]/70">
+          Outline
+        </p>
+        {outlineStatus === "loading" ? (
+          <SettingsNotice tone="default">Loading outline…</SettingsNotice>
+        ) : null}
+        {outlineStatus === "unavailable" ? (
+          <SettingsNotice tone="warning">Outline is not available for this source.</SettingsNotice>
+        ) : null}
+        {outlineStatus === "ready" && outline.length === 0 ? (
+          <EmptySafeNotice>No outline items for this source.</EmptySafeNotice>
+        ) : null}
+        {outline.length > 0 ? (
+          <ul className="space-y-1">
+            {outline.map((item, index) => (
+              <li
+                key={`${item.kind}-${item.label}-${item.pageNumber ?? "x"}-${index}`}
+                className="rounded-md border border-[var(--ui-border)]/50 px-2.5 py-1.5 text-[length:var(--fs-sm)]"
+                data-testid="documents-outline-item"
+                data-outline-kind={item.kind}
+              >
+                <span className="font-mono text-[length:var(--fs-xs)] uppercase text-[var(--dim)]">
+                  {item.kind}
+                  {item.level != null ? ` L${item.level}` : ""}
+                  {item.pageNumber != null ? ` · p.${item.pageNumber}` : ""}
+                </span>
+                <span className="mt-0.5 block truncate text-[var(--fg)]">{item.label}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
     </div>
   );
 }

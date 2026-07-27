@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useRouter } from "next/navigation";
 import { PanelRightClose } from "lucide-react";
 import { cx } from "@/lib/cx";
 import { Button } from "@/ui";
@@ -453,6 +454,8 @@ function SourceTab({
   libraryHref: string | null;
   libraryEnabled: boolean;
 }) {
+  const router = useRouter();
+
   if (!selected) {
     return (
       <p className="px-1 text-[length:var(--fs-sm)] leading-6 text-[var(--dim)]">
@@ -507,19 +510,28 @@ function SourceTab({
           aria-disabled={!libraryEnabled}
           onClick={(event) => {
             event.preventDefault();
+            if (libraryEnabled && libraryHref) {
+              router.push(libraryHref);
+            }
           }}
         >
           Open in Library
         </Button>
-        <p
-          role="status"
-          data-testid="document-navigation-unavailable"
-          className="mt-2 px-1 text-[length:var(--fs-sm)] leading-5 text-[var(--dim)]"
-        >
-          {!libraryHref
-            ? "Open in Library is disabled because required opaque document or evidence references are missing."
-            : "Document navigation is unavailable until the Library preview surface is ready (P9-03)."}
-        </p>
+        {!libraryEnabled ? (
+          <p
+            role="status"
+            data-testid="document-navigation-unavailable"
+            className="mt-2 px-1 text-[length:var(--fs-sm)] leading-5 text-[var(--dim)]"
+          >
+            {!libraryHref
+              ? "Open in Library is disabled because required opaque document or evidence references are missing."
+              : "Document navigation is unavailable until the Library preview surface is ready."}
+          </p>
+        ) : (
+          <p role="status" className="mt-2 px-1 text-[length:var(--fs-sm)] leading-5 text-[var(--dim)]">
+            Opens the authorized Library preview for this evidence.
+          </p>
+        )}
       </div>
     </div>
   );

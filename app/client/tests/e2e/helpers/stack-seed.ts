@@ -46,8 +46,11 @@ type SourceRow = {
   id?: string;
   state?: string;
   indexState?: string;
+  displayName?: string;
+  /** @deprecated lifted field — prefer displayName */
   originalFilename?: string;
   contentType?: string;
+  documentRef?: string;
 };
 
 export function readSeedInfo(): SeedInfo {
@@ -158,7 +161,7 @@ async function ensureNamedSource(
 ): Promise<string> {
   const { filename, mimeType, buffer, waitReady } = options;
   const existing = (await listSources(api, E2E_DOMAIN_ID)).find(
-    (row) => row.originalFilename === filename,
+    (row) => row.displayName === filename || row.originalFilename === filename,
   );
   if (existing?.id) {
     if (waitReady && !isReadySource(existing)) {
