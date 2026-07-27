@@ -13,6 +13,7 @@ const REQUEST_HEADERS = [
   "cookie",
   "if-match",
   "if-none-match",
+  "if-range",
   "range",
   "x-csrf-token",
   "x-request-id",

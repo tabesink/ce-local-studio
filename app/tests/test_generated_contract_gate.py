@@ -119,12 +119,7 @@ def test_registered_route_delta_is_explicit() -> None:
     }
 
     assert registered - authoritative == set()
-    assert authoritative - registered == {
-        ("GET", f"{CANONICAL_API_PREFIX}/documents"),
-        ("GET", f"{CANONICAL_API_PREFIX}/documents/{{}}"),
-        ("GET", f"{CANONICAL_API_PREFIX}/documents/{{}}/content"),
-        ("GET", f"{CANONICAL_API_PREFIX}/evidence/{{}}/location"),
-    }
+    assert authoritative - registered == set()
 
 
 def test_registered_path_parameters_are_camel_case() -> None:
@@ -161,7 +156,9 @@ def test_registered_path_parameters_are_camel_case() -> None:
 
     assert observed == {
         "conversationId",
+        "documentRef",
         "domainId",
+        "evidenceRef",
         "id",
         "kind",
         "sourceId",

@@ -27,7 +27,9 @@ from context_engine.api.catalog_schemas import (
     CONVERSATION_PUBLIC_REF_PATTERN,
     ConversationDetailResponseDto,
     ConversationSummaryDto,
+    DocumentSummaryDto,
     DomainSummaryDto,
+    EvidenceLocationResponseDto,
     ModelProfileDto,
     OperationDto,
     OutlineItemDto,
@@ -91,6 +93,15 @@ from context_engine.services.conversations import (
     update_conversation_title,
 )
 from context_engine.services.csrf import CSRF_PREAUTH_BINDING, issue_csrf_token
+from context_engine.services.documents import (
+    DEFAULT_DOCUMENT_PAGE_SIZE,
+    MAX_DOCUMENT_PAGE_SIZE,
+    DocumentError,
+    get_document,
+    get_document_content,
+    get_evidence_location,
+    list_documents,
+)
 from context_engine.services.domains import (
     DOMAIN_ID_PATTERN,
     DomainError,
@@ -309,6 +320,19 @@ class MemberDomainListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
+class DocumentsListResponse(BaseModel):
+    documents: list[DocumentSummaryDto]
+    next_cursor: str | None = Field(alias="nextCursor")
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class DocumentDetailResponse(BaseModel):
+    document: DocumentSummaryDto
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
 class ComposerRefDiscoverRequest(BaseModel):
     conversation_id: str | None = Field(
         default=None,
@@ -523,6 +547,34 @@ def _domain_api_error(exc: DomainError) -> ApiError:
 
 def _source_api_error(exc: SourceError) -> ApiError:
     return ApiError(exc.status_code, exc.code, exc.message)
+
+
+_DOCUMENT_HTTP_ERROR_MAP: dict[str, tuple[int, str, str]] = {
+    "document_not_found": (404, "document_not_found", "Document not found."),
+    "document_preview_unavailable": (
+        409,
+        "document_preview_unavailable",
+        "A governed PDF preview is not available for this document.",
+    ),
+    "document_content_unavailable": (
+        503,
+        "document_content_unavailable",
+        "Document content is temporarily unavailable.",
+    ),
+    "evidence_not_found": (404, "evidence_not_found", "Evidence not found."),
+    "evidence_unavailable": (410, "evidence_unavailable", "Evidence is no longer available."),
+    "range_not_satisfiable": (416, "range_not_satisfiable", "Requested range is not satisfiable."),
+    "cursor_expired": (410, "cursor_expired", "The cursor has expired."),
+    "validation_error": (422, "validation_error", "Request validation failed."),
+}
+
+
+def _document_api_error(exc: DocumentError) -> ApiError:
+    mapped = _DOCUMENT_HTTP_ERROR_MAP.get(exc.code)
+    if mapped is None:
+        return ApiError(503, "dependency_unavailable", "Document service is temporarily unavailable.")
+    status_code, code, message = mapped
+    return ApiError(status_code, code, message, headers=exc.headers or None)
 
 
 _SOURCE_INDEX_HTTP_ERROR_MAP: dict[str, tuple[int, str]] = {
@@ -1592,3 +1644,156 @@ def list_available_domains(
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
     return _private_json_response({"domains": member_domain_list(db, settings)})
+
+
+@api_router.get(
+    "/documents",
+    response_model=DocumentsListResponse,
+    responses={
+        410: {"model": ErrorEnvelope, "description": "Cursor expired."},
+        422: {"model": ErrorEnvelope, "description": "Request validation failed."},
+    },
+)
+def list_member_documents(
+    request: Request,
+    domain_id: Annotated[str | None, Query(alias="domainId", pattern=DOMAIN_ID_PATTERN)] = None,
+    query: Annotated[str | None, Query(max_length=200)] = None,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+    limit: Annotated[int, Query(ge=1, le=MAX_DOCUMENT_PAGE_SIZE)] = DEFAULT_DOCUMENT_PAGE_SIZE,
+    _: CurrentSession = Depends(require_current_session),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    _reject_unknown_query(request, {"domainId", "query", "cursor", "limit"})
+    normalized_query = query.strip() if query is not None else None
+    if normalized_query == "":
+        normalized_query = None
+    try:
+        payload = list_documents(
+            db,
+            settings,
+            domain_id=domain_id,
+            query=normalized_query,
+            cursor=cursor,
+            limit=limit,
+        )
+        response = DocumentsListResponse.model_validate(payload)
+    except DocumentError as exc:
+        raise _document_api_error(exc) from exc
+    except ValidationError:
+        raise ApiError(503, "dependency_unavailable", "Document library is temporarily unavailable.") from None
+    return _private_json_response(response.model_dump(by_alias=True, mode="json"))
+
+
+@api_router.get(
+    "/documents/{documentRef}",
+    response_model=DocumentDetailResponse,
+    responses={
+        404: {"model": ErrorEnvelope, "description": "Document not found."},
+    },
+)
+def get_member_document(
+    request: Request,
+    document_ref: Annotated[str, Path(alias="documentRef", min_length=8, max_length=128)],
+    _: CurrentSession = Depends(require_current_session),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    _reject_unknown_query(request)
+    try:
+        payload = get_document(db, settings, document_ref)
+        response = DocumentDetailResponse.model_validate(payload)
+    except DocumentError as exc:
+        raise _document_api_error(exc) from exc
+    except ValidationError:
+        raise ApiError(503, "dependency_unavailable", "Document library is temporarily unavailable.") from None
+    return _private_json_response(response.model_dump(by_alias=True, mode="json"))
+
+
+@api_router.get(
+    "/documents/{documentRef}/content",
+    responses={
+        200: {
+            "content": {"application/pdf": {"schema": {"type": "string", "format": "binary"}}},
+            "description": "Full governed PDF preview.",
+        },
+        206: {
+            "content": {"application/pdf": {"schema": {"type": "string", "format": "binary"}}},
+            "description": "Partial governed PDF preview.",
+        },
+        404: {"model": ErrorEnvelope, "description": "Document not found."},
+        409: {"model": ErrorEnvelope, "description": "Governed preview unavailable."},
+        416: {"model": ErrorEnvelope, "description": "Range not satisfiable."},
+        503: {"model": ErrorEnvelope, "description": "Document content unavailable."},
+    },
+)
+def get_member_document_content(
+    request: Request,
+    document_ref: Annotated[str, Path(alias="documentRef", min_length=8, max_length=128)],
+    range_header: Annotated[str | None, Header(alias="Range")] = None,
+    if_range: Annotated[str | None, Header(alias="If-Range")] = None,
+    _: CurrentSession = Depends(require_current_session),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    _reject_unknown_query(request)
+    try:
+        result = get_document_content(
+            db,
+            settings,
+            document_ref,
+            range_header=range_header,
+            if_range=if_range,
+        )
+    except DocumentError as exc:
+        raise _document_api_error(exc) from exc
+
+    headers = {
+        "Cache-Control": "private, no-store, no-transform",
+        "X-Content-Type-Options": "nosniff",
+        "Accept-Ranges": "bytes",
+        "ETag": result.etag,
+        "Content-Disposition": result.content_disposition,
+        "Content-Length": str(len(result.body)),
+    }
+    if result.content_range is not None:
+        headers["Content-Range"] = result.content_range
+    return Response(
+        content=result.body,
+        status_code=result.status_code,
+        media_type="application/pdf",
+        headers=headers,
+    )
+
+
+@api_router.get(
+    "/evidence/{evidenceRef}/location",
+    response_model=EvidenceLocationResponseDto,
+    responses={
+        404: {"model": ErrorEnvelope, "description": "Evidence not found."},
+        409: {"model": ErrorEnvelope, "description": "Governed preview unavailable."},
+        410: {"model": ErrorEnvelope, "description": "Evidence unavailable."},
+        503: {"model": ErrorEnvelope, "description": "Document content unavailable."},
+    },
+)
+def get_member_evidence_location(
+    request: Request,
+    evidence_ref: Annotated[str, Path(alias="evidenceRef", min_length=8, max_length=128)],
+    current: CurrentSession = Depends(require_current_session),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    _reject_unknown_query(request)
+    try:
+        payload = get_evidence_location(
+            db,
+            settings,
+            owner_user_id=current.user.id,
+            evidence_ref=evidence_ref,
+        )
+        response = EvidenceLocationResponseDto.model_validate(payload)
+    except DocumentError as exc:
+        raise _document_api_error(exc) from exc
+    except ValidationError:
+        raise ApiError(503, "dependency_unavailable", "Evidence location is temporarily unavailable.") from None
+    return _private_json_response(response.model_dump(by_alias=True, mode="json"))

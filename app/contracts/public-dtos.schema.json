@@ -720,6 +720,107 @@
       "title": "EvidenceItemDto",
       "type": "object"
     },
+    "EvidenceLocationDocumentDto": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "pageCount": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pagecount"
+        },
+        "previewKind": {
+          "enum": [
+            "pdf",
+            "unavailable"
+          ],
+          "title": "Previewkind",
+          "type": "string"
+        },
+        "ref": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "label",
+        "previewKind",
+        "pageCount"
+      ],
+      "title": "EvidenceLocationDocumentDto",
+      "type": "object"
+    },
+    "EvidenceLocationEvidenceDto": {
+      "additionalProperties": false,
+      "properties": {
+        "citationLabel": {
+          "maxLength": 32,
+          "minLength": 1,
+          "title": "Citationlabel",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 128,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "text",
+            "table",
+            "figure"
+          ],
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "citationLabel",
+        "kind"
+      ],
+      "title": "EvidenceLocationEvidenceDto",
+      "type": "object"
+    },
+    "EvidenceLocationResponseDto": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor": {
+          "$ref": "#/$defs/EvidenceAnchorDto"
+        },
+        "document": {
+          "$ref": "#/$defs/EvidenceLocationDocumentDto"
+        },
+        "evidence": {
+          "$ref": "#/$defs/EvidenceLocationEvidenceDto"
+        }
+      },
+      "required": [
+        "evidence",
+        "document",
+        "anchor"
+      ],
+      "title": "EvidenceLocationResponseDto",
+      "type": "object"
+    },
     "EvidenceRegionDto": {
       "additionalProperties": false,
       "properties": {
