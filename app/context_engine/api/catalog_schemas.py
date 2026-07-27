@@ -6,6 +6,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from pydantic.json_schema import models_json_schema
 
 OpaqueRef = Annotated[str, Field(min_length=8, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")]
+CONVERSATION_PUBLIC_REF_PATTERN = r"^conv_[0-9a-f]{32}$"
+TURN_PUBLIC_REF_PATTERN = r"^turn_[0-9a-f]{32}$"
 SafeLabel = Annotated[str, Field(min_length=1, max_length=255)]
 SafeMessage = Annotated[str, Field(min_length=1, max_length=500)]
 UtcTimestamp = Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")]
@@ -269,7 +271,8 @@ class TurnDto(PublicDto):
     completed_at: UtcTimestamp | None = Field(alias="completedAt")
 
 
-class ConversationDetailDto(ConversationSummaryDto):
+class ConversationDetailResponseDto(PublicDto):
+    conversation: ConversationSummaryDto
     turns: list[TurnDto]
 
 
@@ -287,7 +290,7 @@ AUTHORITATIVE_PUBLIC_DTOS = (
     AdminSourceDto,
     AllowedAction,
     ComposerRefDto,
-    ConversationDetailDto,
+    ConversationDetailResponseDto,
     ConversationSummaryDto,
     CurrentUserDto,
     DocumentSummaryDto,

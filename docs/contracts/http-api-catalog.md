@@ -14,7 +14,7 @@ This catalog is the production v1 browser contract. Paths are relative to `/api/
 | IDs/time | opaque case-sensitive refs; RFC 3339 UTC timestamps use `Z` at whole-second precision |
 | Pagination | `limit` default 50, max 100; opaque `cursor`; stable `(createdAt,id)` ordering; `{items,nextCursor}` naming may be capability-specific |
 | Concurrency | mutable records may return strong `ETag`; `If-Match` is required only where the endpoint row explicitly lists it; when required, missing is `428` and stale is `409 stale_revision` |
-| Idempotency | chat uses `clientRequestId`; create/operation routes use `Idempotency-Key` where listed; same key+fingerprint reuses result, mismatch is `409 idempotency_conflict` |
+| Idempotency | chat uses `clientRequestId`; create/operation routes use `Idempotency-Key` only where explicitly listed; same key+fingerprint reuses result, mismatch is `409 idempotency_conflict`; conversation creation is explicitly deferred pending the shared durable create-idempotency record contract |
 | Caching | authenticated JSON, SSE, preview bytes, and errors are `private, no-store`; health may be `no-store` |
 | Content | JSON bodies default 1 MiB; turn 4,000 chars; query 2,000; upload limit is configured and never below the accepted fixture size |
 
@@ -85,8 +85,8 @@ Document/evidence DTOs and byte-range behavior are normative in `document-and-ev
 | --- | --- | --- | --- |
 | `POST /domains/{domainId}/evidence` | M | `200 RetrievalEvidenceResponseDto` | `RetrievalEvidenceRequestDto`; authenticated membership plus current query eligibility; bounded safe projection; no mutation |
 | `GET /conversations` | O | `200 {conversations,nextCursor}` | current user's rows only |
-| `POST /conversations` | M | `201 {conversation}` | optional `{title}`; key supported |
-| `GET /conversations/{conversationId}` | O | `200 {conversation,turns}` | redacted projections omit answer/evidence |
+| `POST /conversations` | M | `201 {conversation}` | optional `{title}`; `Idempotency-Key` deferred pending the shared durable create-idempotency record contract |
+| `GET /conversations/{conversationId}` | O | `200 ConversationDetailResponseDto` | nested `{conversation,turns}`; redacted projections omit answer/evidence |
 | `PATCH /conversations/{conversationId}` | O | `200 {conversation}` | `If-Match`; `{title}` |
 | `DELETE /conversations/{conversationId}` | O | `204` | `If-Match`; serialize against submit; M-08 |
 | `POST /conversations/{conversationId}/turns:stream` | O | `200 text/event-stream` | `{clientRequestId,message,domainId?,composerRefTokens?}`; CSRF; pre-stream errors JSON |
@@ -95,6 +95,8 @@ Document/evidence DTOs and byte-range behavior are normative in `document-and-ev
 | `POST /composer-refs:discover` | M | `200 {refs}` | domain/conversation-scoped opaque one-use tokens; max 25 |
 
 The server computes the stream-start fingerprint from the normalized message, effective route/domain, and ordered resolved refs; no request fingerprint field is accepted. Same request ID/server-computed fingerprint attaches or replays without provider/retrieval work; different effective input returns `idempotency_conflict` (`M-10`). A domain question without a domain returns `domain_required`; no grounded evidence never falls back to direct LLM.
+
+Conversation lists follow the global stable `(createdAt,id)` order. Their opaque cursor carries only a versioned prior conversation public ref; the service owner-filters that ref before deriving the next keyset position. A malformed, deleted, or other-owner cursor target returns `cursor_expired`. Conversation and turn `id` values are dedicated public refs, never their private row primary keys.
 
 For `POST /domains/{domainId}/evidence`, the server trims `question` before enforcing its 1..2,000-character bounds. Mapped candidates retain first-valid order after block deduplication and receive dense response-local citation labels. `evidence_found` always carries at least one Evidence item; a valid bounded retrieval with no surviving mapped Evidence returns only `200 {"result":"no_grounded_context","evidence":[]}`. The closed failures are: unknown domain `404 not_found`; stopped, deleting, transitioning, runtime-not-ready, or no-eligible-source domain `409 domain_not_query_eligible`; admission saturation `503 capacity_unavailable`; dependency timeout, unavailability, malformed output, or health exception `503 dependency_unavailable`; and invalid input `422 validation_error`. Success and failure are `private, no-store`.
 

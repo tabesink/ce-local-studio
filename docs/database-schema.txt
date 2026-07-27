@@ -140,11 +140,14 @@ CHAT, EVIDENCE, AND GOVERNED CONTEXT
 ------------------------------------
 
 conversations
-  id PK; owner_user_id FK users.id CASCADE; title varchar(120) NULL
-  created_at, updated_at; INDEX(owner_user_id, updated_at DESC)
+  id PK private; public_ref varchar(64) NOT NULL UNIQUE INDEX, format conv_ + 32 lowercase hex from UUID4
+  owner_user_id FK users.id CASCADE; title varchar(120) NULL
+  version integer NOT NULL DEFAULT 1 CHECK >=1; created_at, updated_at
+  INDEX(owner_user_id, created_at DESC, id DESC)
 
 conversation_turns
-  id PK; conversation_id FK conversations.id CASCADE
+  id PK private; public_ref varchar(64) NOT NULL UNIQUE INDEX, format turn_ + 32 lowercase hex from UUID4
+  conversation_id FK conversations.id CASCADE
   client_request_id varchar(80); trace_id varchar(80) NULL INDEX
   domain_id varchar(64) NULL INDEX (private logical domain link retained for redaction)
   route CHECK IN ('direct_llm','domain_rag')
@@ -210,6 +213,7 @@ AUDIT
 
 audit_events
   id PK; event_name varchar(80) closed allowlist
+  conversation events: conversation.created/conversation.renamed/conversation.deleted
   actor_kind CHECK IN ('public','member','administrator','worker','system')
   actor_user_id FK users.id SET NULL; target_kind varchar(40); target_id varchar(128)
   request_id varchar(80); trace_id varchar(80)

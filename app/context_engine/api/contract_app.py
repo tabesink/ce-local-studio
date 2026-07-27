@@ -28,6 +28,14 @@ def _install_authoritative_components(app: FastAPI) -> None:
             # when the same model is nested under a route response_model (for example
             # omitting an optional property default); the catalog component wins.
             schemas[name] = component
+        for path_item in document.get("paths", {}).values():
+            for operation in path_item.values():
+                if not isinstance(operation, dict):
+                    continue
+                for parameter in operation.get("parameters", []):
+                    if parameter.get("in") == "header" and parameter.get("name") == "If-Match":
+                        parameter["required"] = True
+                        parameter["schema"] = {"type": "string", "title": "If-Match"}
         return document
 
     app.openapi = contract_openapi

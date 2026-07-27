@@ -24,6 +24,9 @@ from sqlalchemy.orm import Session
 from context_engine.api.catalog_schemas import (
     AdminDomainDto,
     AdminSourceDto,
+    CONVERSATION_PUBLIC_REF_PATTERN,
+    ConversationDetailResponseDto,
+    ConversationSummaryDto,
     DomainSummaryDto,
     ModelProfileDto,
     OperationDto,
@@ -32,6 +35,8 @@ from context_engine.api.catalog_schemas import (
     RetrievalEvidenceRequestDto,
     RetrievalEvidenceResponseDto,
     RuntimeSettingsDto,
+    TURN_PUBLIC_REF_PATTERN,
+    TurnDto,
 )
 from context_engine.api.dependencies import (
     CurrentSession,
@@ -65,7 +70,7 @@ from context_engine.services.chat_turns import (
     cancel_turn,
     conversation_turn_summaries,
     encode_sse_event,
-    safe_turn_summary,
+    safe_turn_dto,
     stream_turn_events,
     stream_turn_events_by_turn,
 )
@@ -79,7 +84,7 @@ from context_engine.services.conversations import (
     ConversationError,
     create_conversation,
     delete_conversation,
-    get_owned_conversation,
+    get_owned_conversation_detail,
     list_conversations,
     safe_conversation_summary,
     update_conversation_title,
@@ -304,7 +309,11 @@ class MemberDomainListResponse(BaseModel):
 
 
 class ComposerRefDiscoverRequest(BaseModel):
-    conversation_id: str | None = Field(default=None, alias="conversationId", max_length=36)
+    conversation_id: str | None = Field(
+        default=None,
+        alias="conversationId",
+        pattern=CONVERSATION_PUBLIC_REF_PATTERN,
+    )
     domain_id: str | None = Field(default=None, alias="domainId", max_length=64)
     kinds: list[Literal["source", "evidence", "template"]] | None = Field(default=None, max_length=3)
     query: str | None = Field(default=None, max_length=200)
@@ -325,6 +334,25 @@ class ConversationTitleRequest(BaseModel):
     title: str | None = None
 
     model_config = ConfigDict(extra="forbid")
+
+
+class ConversationMutationResponse(BaseModel):
+    conversation: ConversationSummaryDto
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class ConversationListResponse(BaseModel):
+    conversations: list[ConversationSummaryDto]
+    next_cursor: str | None = Field(alias="nextCursor")
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class TurnMutationResponse(BaseModel):
+    turn: TurnDto
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
 class TurnStreamRequest(BaseModel):
@@ -563,6 +591,11 @@ def _conversation_api_error(exc: ConversationError) -> ApiError:
     return ApiError(exc.status_code, exc.code, exc.message)
 
 
+def _reject_unknown_query(request: Request, allowed: set[str] | None = None) -> None:
+    if set(request.query_params) - (allowed or set()):
+        raise ApiError(422, "validation_error", "Request validation failed.")
+
+
 def _composer_ref_api_error(exc: ComposerRefError) -> ApiError:
     return ApiError(exc.status_code, exc.code, exc.message)
 
@@ -618,70 +651,164 @@ def post_composer_refs_discover(
     return {"refs": refs}
 
 
-@api_router.get("/conversations")
+@api_router.get("/conversations", response_model=ConversationListResponse)
 def get_conversations(
+    request: Request,
+    cursor: str | None = Query(default=None, min_length=1, max_length=512),
+    limit: int = Query(default=50, ge=1, le=100),
     current: CurrentSession = Depends(require_current_session),
     db: Session = Depends(get_db),
-) -> dict[str, object]:
-    return {"conversations": list_conversations(db, owner=current.user)}
-
-
-@api_router.post("/conversations", status_code=201)
-def post_conversation(
-    payload: ConversationTitleRequest | None = Body(default=None),
-    current: CurrentSession = Depends(require_current_session),
-    db: Session = Depends(get_db),
-) -> dict[str, object]:
+) -> JSONResponse:
+    _reject_unknown_query(request, {"cursor", "limit"})
     try:
-        conversation = create_conversation(db, owner=current.user, title=payload.title if payload else None)
-    except ConversationError as exc:
-        raise _conversation_api_error(exc) from exc
-    return {"conversation": safe_conversation_summary(conversation)}
-
-
-@api_router.get("/conversations/{conversationId}")
-def get_conversation(
-    conversation_id: Annotated[str, Path(alias="conversationId", min_length=1, max_length=36)],
-    current: CurrentSession = Depends(require_current_session),
-    db: Session = Depends(get_db),
-) -> dict[str, object]:
-    try:
-        conversation = get_owned_conversation(db, owner=current.user, conversation_id=conversation_id)
-    except ConversationError as exc:
-        raise _conversation_api_error(exc) from exc
-    return {"conversation": safe_conversation_summary(conversation), "turns": conversation_turn_summaries(db, conversation)}
-
-
-@api_router.patch("/conversations/{conversationId}")
-def patch_conversation(
-    payload: ConversationTitleRequest,
-    conversation_id: Annotated[str, Path(alias="conversationId", min_length=1, max_length=36)],
-    current: CurrentSession = Depends(require_current_session),
-    db: Session = Depends(get_db),
-) -> dict[str, object]:
-    try:
-        conversation = update_conversation_title(
-            db,
-            owner=current.user,
-            conversation_id=conversation_id,
-            title=payload.title,
+        page = list_conversations(db, owner=current.user, cursor=cursor, limit=limit)
+        response = ConversationListResponse.model_validate(
+            {"conversations": page.conversations, "nextCursor": page.next_cursor}
         )
     except ConversationError as exc:
         raise _conversation_api_error(exc) from exc
-    return {"conversation": safe_conversation_summary(conversation)}
+    return _private_json_response(response.model_dump(by_alias=True, mode="json"))
+
+
+@api_router.post(
+    "/conversations",
+    status_code=201,
+    response_model=ConversationMutationResponse,
+)
+def post_conversation(
+    request: Request,
+    payload: ConversationTitleRequest | None = Body(default=None),
+    current: CurrentSession = Depends(require_current_session),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    _reject_unknown_query(request)
+    try:
+        conversation = create_conversation(
+            db,
+            settings=settings,
+            owner=current.user,
+            title=payload.title if payload else None,
+            auth_session=current.auth_session,
+            audit_context=_audit_context(request, current.user),
+        )
+        response = ConversationMutationResponse.model_validate(
+            {"conversation": safe_conversation_summary(conversation)}
+        )
+    except ConversationError as exc:
+        raise _conversation_api_error(exc) from exc
+    return _private_json_response(
+        response.model_dump(by_alias=True, mode="json"),
+        status_code=201,
+        etag=strong_etag(conversation.version),
+    )
+
+
+@api_router.get(
+    "/conversations/{conversationId}",
+    response_model=ConversationDetailResponseDto,
+)
+def get_conversation(
+    request: Request,
+    conversation_id: Annotated[
+        str,
+        Path(alias="conversationId", pattern=CONVERSATION_PUBLIC_REF_PATTERN),
+    ],
+    current: CurrentSession = Depends(require_current_session),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    _reject_unknown_query(request)
+    try:
+        conversation = get_owned_conversation_detail(db, owner=current.user, conversation_id=conversation_id)
+        response = ConversationDetailResponseDto.model_validate(
+            {
+                "conversation": safe_conversation_summary(conversation),
+                "turns": conversation_turn_summaries(db, settings, conversation),
+            }
+        )
+    except ConversationError as exc:
+        raise _conversation_api_error(exc) from exc
+    return _private_json_response(
+        response.model_dump(by_alias=True, mode="json"),
+        etag=strong_etag(conversation.version),
+    )
+
+
+@api_router.patch(
+    "/conversations/{conversationId}",
+    response_model=ConversationMutationResponse,
+)
+def patch_conversation(
+    request: Request,
+    payload: ConversationTitleRequest,
+    conversation_id: Annotated[
+        str,
+        Path(alias="conversationId", pattern=CONVERSATION_PUBLIC_REF_PATTERN),
+    ],
+    current: CurrentSession = Depends(require_current_session),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+) -> JSONResponse:
+    _reject_unknown_query(request)
+    try:
+        expected_version = parse_if_match_version(if_match)
+        conversation = update_conversation_title(
+            db,
+            settings=settings,
+            owner=current.user,
+            conversation_id=conversation_id,
+            title=payload.title,
+            expected_version=expected_version,
+            auth_session=current.auth_session,
+            audit_context=_audit_context(request, current.user),
+        )
+        response = ConversationMutationResponse.model_validate(
+            {"conversation": safe_conversation_summary(conversation)}
+        )
+    except RuntimeConfigError as exc:
+        raise _runtime_config_api_error(exc) from exc
+    except ConversationError as exc:
+        raise _conversation_api_error(exc) from exc
+    return _private_json_response(
+        response.model_dump(by_alias=True, mode="json"),
+        etag=strong_etag(conversation.version),
+    )
 
 
 @api_router.delete("/conversations/{conversationId}", status_code=204)
 def remove_conversation(
-    conversation_id: Annotated[str, Path(alias="conversationId", min_length=1, max_length=36)],
+    request: Request,
+    conversation_id: Annotated[
+        str,
+        Path(alias="conversationId", pattern=CONVERSATION_PUBLIC_REF_PATTERN),
+    ],
     current: CurrentSession = Depends(require_current_session),
     db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> Response:
+    _reject_unknown_query(request)
     try:
-        delete_conversation(db, owner=current.user, conversation_id=conversation_id)
+        expected_version = parse_if_match_version(if_match)
+        delete_conversation(
+            db,
+            settings=settings,
+            owner=current.user,
+            conversation_id=conversation_id,
+            expected_version=expected_version,
+            auth_session=current.auth_session,
+            audit_context=_audit_context(request, current.user),
+        )
+    except RuntimeConfigError as exc:
+        raise _runtime_config_api_error(exc) from exc
     except ConversationError as exc:
         raise _conversation_api_error(exc) from exc
-    return Response(status_code=204)
+    return Response(
+        status_code=204,
+        headers={"Cache-Control": "private, no-store, no-transform"},
+    )
 
 
 
@@ -712,15 +839,17 @@ def _streaming_sse_response(first_event: TurnStreamEvent | None, remaining_event
 def post_conversation_turn_stream(
     payload: TurnStreamRequest,
     request: Request,
-    conversation_id: Annotated[str, Path(alias="conversationId", min_length=1, max_length=36)],
+    conversation_id: Annotated[str, Path(alias="conversationId", pattern=CONVERSATION_PUBLIC_REF_PATTERN)],
     current: CurrentSession = Depends(require_current_session),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> StreamingResponse:
+    _reject_unknown_query(request)
     events = stream_turn_events(
         db,
         settings=settings,
         owner=current.user,
+        auth_session=current.auth_session,
         conversation_id=conversation_id,
         client_request_id=payload.client_request_id,
         message=payload.message,
@@ -743,39 +872,58 @@ def post_conversation_turn_stream(
 
 @api_router.get("/conversations/{conversationId}/turns/{turnId}/events")
 def get_conversation_turn_events(
-    conversation_id: Annotated[str, Path(alias="conversationId", min_length=1, max_length=36)],
-    turn_id: Annotated[str, Path(alias="turnId", min_length=1, max_length=36)],
+    request: Request,
+    conversation_id: Annotated[str, Path(alias="conversationId", pattern=CONVERSATION_PUBLIC_REF_PATTERN)],
+    turn_id: Annotated[str, Path(alias="turnId", pattern=TURN_PUBLIC_REF_PATTERN)],
     after: int = Query(default=0, ge=0),
     current: CurrentSession = Depends(require_current_session),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
-    events = stream_turn_events_by_turn(
-        db,
-        owner=current.user,
-        conversation_id=conversation_id,
-        turn_id=turn_id,
-        after=after,
-    )
-    return _streaming_sse_response(None, events)
-
-
-@api_router.post("/conversations/{conversationId}/turns/{turnId}:cancel", status_code=202)
-def post_conversation_turn_cancel(
-    conversation_id: Annotated[str, Path(alias="conversationId", min_length=1, max_length=36)],
-    turn_id: Annotated[str, Path(alias="turnId", min_length=1, max_length=36)],
-    current: CurrentSession = Depends(require_current_session),
-    db: Session = Depends(get_db),
-) -> dict[str, object]:
+    _reject_unknown_query(request, {"after"})
     try:
-        turn = cancel_turn(
+        events = stream_turn_events_by_turn(
             db,
             owner=current.user,
             conversation_id=conversation_id,
             turn_id=turn_id,
+            after=after,
         )
+    except ConversationError as exc:
+        raise _conversation_api_error(exc) from exc
     except ChatTurnError as exc:
         raise _chat_turn_api_error(exc) from exc
-    return {"turn": safe_turn_summary(turn)}
+    return _streaming_sse_response(None, events)
+
+
+@api_router.post(
+    "/conversations/{conversationId}/turns/{turnId}:cancel",
+    status_code=202,
+    response_model=TurnMutationResponse,
+)
+def post_conversation_turn_cancel(
+    request: Request,
+    conversation_id: Annotated[str, Path(alias="conversationId", pattern=CONVERSATION_PUBLIC_REF_PATTERN)],
+    turn_id: Annotated[str, Path(alias="turnId", pattern=TURN_PUBLIC_REF_PATTERN)],
+    current: CurrentSession = Depends(require_current_session),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    _reject_unknown_query(request)
+    try:
+        turn = cancel_turn(
+            db,
+            settings=settings,
+            owner=current.user,
+            auth_session=current.auth_session,
+            conversation_id=conversation_id,
+            turn_id=turn_id,
+        )
+    except ConversationError as exc:
+        raise _conversation_api_error(exc) from exc
+    except ChatTurnError as exc:
+        raise _chat_turn_api_error(exc) from exc
+    response = TurnMutationResponse.model_validate({"turn": safe_turn_dto(db, settings, turn)})
+    return _private_json_response(response.model_dump(by_alias=True, mode="json"), status_code=202)
 
 
 def _private_json_response(payload: dict[str, object], *, status_code: int = 200, etag: str | None = None) -> JSONResponse:

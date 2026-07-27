@@ -147,7 +147,7 @@ system-wide cross-sink privacy with P8, and browser navigation with P9.
 
 | Task | Status | Depends on | Deliverable |
 | --- | --- | --- | --- |
-| P7-01 | NOT_STARTED | P6 | conversations, turns and opaque public evidence-ref migrations plus owner CRUD |
+| P7-01 | DONE | P6 | conversations, turns and opaque public evidence-ref migrations plus owner CRUD |
 | P7-02 | NOT_STARTED | P7-01 | server intent gate and direct/domain route invariants |
 | P7-03 | NOT_STARTED | P7-02 | bounded plan/retrieve/repair/synthesize orchestration |
 | P7-04 | NOT_STARTED | P7-03 | sealed versioned SSE live/resume/replay pipeline, terminal persistence, idempotent attach/replay, and grounded-refusal/evidence-only terminal projections |

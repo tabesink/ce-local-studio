@@ -241,7 +241,7 @@ def _discover_evidence(
         .join(ConversationTurn, ConversationTurnEvidenceRef.turn_id == ConversationTurn.id)
         .join(Conversation, ConversationTurn.conversation_id == Conversation.id)
         .where(
-            Conversation.id == conversation_id,
+            Conversation.public_ref == conversation_id,
             Conversation.owner_user_id == owner.id,
             ConversationTurn.domain_id == domain_id,
             ConversationTurn.status == TURN_STATUS_COMPLETED,

@@ -500,7 +500,7 @@
           "conversationId": {
             "anyOf": [
               {
-                "maxLength": 36,
+                "pattern": "^conv_[0-9a-f]{32}$",
                 "type": "string"
               },
               {
@@ -617,32 +617,11 @@
         "title": "ComposerRefDto",
         "type": "object"
       },
-      "ConversationDetailDto": {
+      "ConversationDetailResponseDto": {
         "additionalProperties": false,
         "properties": {
-          "createdAt": {
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
-            "title": "Createdat",
-            "type": "string"
-          },
-          "id": {
-            "maxLength": 128,
-            "minLength": 8,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Id",
-            "type": "string"
-          },
-          "title": {
-            "anyOf": [
-              {
-                "maxLength": 120,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title"
+          "conversation": {
+            "$ref": "#/components/schemas/ConversationSummaryDto"
           },
           "turns": {
             "items": {
@@ -650,27 +629,55 @@
             },
             "title": "Turns",
             "type": "array"
-          },
-          "updatedAt": {
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
-            "title": "Updatedat",
-            "type": "string"
-          },
-          "version": {
-            "exclusiveMinimum": 0,
-            "title": "Version",
-            "type": "integer"
           }
         },
         "required": [
-          "id",
-          "title",
-          "createdAt",
-          "updatedAt",
-          "version",
+          "conversation",
           "turns"
         ],
-        "title": "ConversationDetailDto",
+        "title": "ConversationDetailResponseDto",
+        "type": "object"
+      },
+      "ConversationListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "conversations": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationSummaryDto"
+            },
+            "title": "Conversations",
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "conversations",
+          "nextCursor"
+        ],
+        "title": "ConversationListResponse",
+        "type": "object"
+      },
+      "ConversationMutationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation": {
+            "$ref": "#/components/schemas/ConversationSummaryDto"
+          }
+        },
+        "required": [
+          "conversation"
+        ],
+        "title": "ConversationMutationResponse",
         "type": "object"
       },
       "ConversationSummaryDto": {
@@ -2197,6 +2204,19 @@
         "title": "TurnErrorDto",
         "type": "object"
       },
+      "TurnMutationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "turn": {
+            "$ref": "#/components/schemas/TurnDto"
+          }
+        },
+        "required": [
+          "turn"
+        ],
+        "title": "TurnMutationResponse",
+        "type": "object"
+      },
       "TurnStreamRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2359,17 +2379,10 @@
           {
             "in": "header",
             "name": "If-Match",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "If-Match"
+              "title": "If-Match",
+              "type": "string"
             }
           }
         ],
@@ -2603,17 +2616,10 @@
           {
             "in": "header",
             "name": "If-Match",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "If-Match"
+              "title": "If-Match",
+              "type": "string"
             }
           }
         ],
@@ -2719,17 +2725,10 @@
           {
             "in": "header",
             "name": "If-Match",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "If-Match"
+              "title": "If-Match",
+              "type": "string"
             }
           }
         ],
@@ -3156,17 +3155,10 @@
           {
             "in": "header",
             "name": "If-Match",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "If-Match"
+              "title": "If-Match",
+              "type": "string"
             }
           }
         ],
@@ -3289,17 +3281,10 @@
           {
             "in": "header",
             "name": "If-Match",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "If-Match"
+              "title": "If-Match",
+              "type": "string"
             }
           }
         ],
@@ -3354,17 +3339,10 @@
           {
             "in": "header",
             "name": "If-Match",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "If-Match"
+              "title": "If-Match",
+              "type": "string"
             }
           }
         ],
@@ -3555,18 +3533,58 @@
     "/api/v1/conversations": {
       "get": {
         "operationId": "get_conversations_api_v1_conversations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Conversations Api V1 Conversations Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ConversationListResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Get Conversations"
@@ -3595,9 +3613,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Post Conversation Api V1 Conversations Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ConversationMutationResponse"
                 }
               }
             },
@@ -3626,9 +3642,17 @@
             "name": "conversationId",
             "required": true,
             "schema": {
-              "maxLength": 36,
-              "minLength": 1,
+              "pattern": "^conv_[0-9a-f]{32}$",
               "title": "Conversationid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "title": "If-Match",
               "type": "string"
             }
           }
@@ -3658,8 +3682,7 @@
             "name": "conversationId",
             "required": true,
             "schema": {
-              "maxLength": 36,
-              "minLength": 1,
+              "pattern": "^conv_[0-9a-f]{32}$",
               "title": "Conversationid",
               "type": "string"
             }
@@ -3670,9 +3693,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Conversation Api V1 Conversations  Conversationid  Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ConversationDetailResponseDto"
                 }
               }
             },
@@ -3699,9 +3720,17 @@
             "name": "conversationId",
             "required": true,
             "schema": {
-              "maxLength": 36,
-              "minLength": 1,
+              "pattern": "^conv_[0-9a-f]{32}$",
               "title": "Conversationid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "title": "If-Match",
               "type": "string"
             }
           }
@@ -3721,9 +3750,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Patch Conversation Api V1 Conversations  Conversationid  Patch",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ConversationMutationResponse"
                 }
               }
             },
@@ -3752,8 +3779,7 @@
             "name": "conversationId",
             "required": true,
             "schema": {
-              "maxLength": 36,
-              "minLength": 1,
+              "pattern": "^conv_[0-9a-f]{32}$",
               "title": "Conversationid",
               "type": "string"
             }
@@ -3763,8 +3789,7 @@
             "name": "turnId",
             "required": true,
             "schema": {
-              "maxLength": 36,
-              "minLength": 1,
+              "pattern": "^turn_[0-9a-f]{32}$",
               "title": "Turnid",
               "type": "string"
             }
@@ -3813,8 +3838,7 @@
             "name": "conversationId",
             "required": true,
             "schema": {
-              "maxLength": 36,
-              "minLength": 1,
+              "pattern": "^conv_[0-9a-f]{32}$",
               "title": "Conversationid",
               "type": "string"
             }
@@ -3824,8 +3848,7 @@
             "name": "turnId",
             "required": true,
             "schema": {
-              "maxLength": 36,
-              "minLength": 1,
+              "pattern": "^turn_[0-9a-f]{32}$",
               "title": "Turnid",
               "type": "string"
             }
@@ -3836,9 +3859,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Post Conversation Turn Cancel Api V1 Conversations  Conversationid  Turns  Turnid  Cancel Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TurnMutationResponse"
                 }
               }
             },
@@ -3867,8 +3888,7 @@
             "name": "conversationId",
             "required": true,
             "schema": {
-              "maxLength": 36,
-              "minLength": 1,
+              "pattern": "^conv_[0-9a-f]{32}$",
               "title": "Conversationid",
               "type": "string"
             }

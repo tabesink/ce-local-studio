@@ -169,6 +169,25 @@ def test_registered_path_parameters_are_camel_case() -> None:
     }
 
 
+def test_conversation_mutation_preconditions_and_list_default_match_catalog() -> None:
+    document = json.loads(OPENAPI.read_text(encoding="utf-8"))
+    paths = document["paths"]
+
+    list_parameters = paths[f"{CANONICAL_API_PREFIX}/conversations"]["get"]["parameters"]
+    limit = next(parameter for parameter in list_parameters if parameter["name"] == "limit")
+    assert limit["schema"]["default"] == 50
+
+    for method in ("patch", "delete"):
+        parameters = paths[f"{CANONICAL_API_PREFIX}/conversations/{{conversationId}}"][method][
+            "parameters"
+        ]
+        if_match = next(parameter for parameter in parameters if parameter["name"] == "If-Match")
+        assert if_match["in"] == "header"
+        assert if_match["required"] is True
+        assert if_match["schema"]["type"] == "string"
+        assert "anyOf" not in if_match["schema"]
+
+
 def test_stateless_evidence_route_uses_authoritative_generated_components() -> None:
     document = json.loads(OPENAPI.read_text(encoding="utf-8"))
     operation = document["paths"][f"{CANONICAL_API_PREFIX}/domains/{{domainId}}/evidence"]["post"]

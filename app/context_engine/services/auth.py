@@ -13,6 +13,10 @@ from context_engine.models import AuthSession, ROLE_ADMINISTRATOR, ROLE_MEMBER, 
 from context_engine.security import generate_session_token, hash_password, hash_session_token, verify_password
 
 
+class MutationAuthenticationError(Exception):
+    pass
+
+
 def iso_utc(value: datetime) -> str:
     return format_utc_timestamp(value)
 
@@ -110,3 +114,40 @@ def revoke_session_token(db: Session, token: str) -> bool:
     auth_session.revoked_at = utc_now()
     db.commit()
     return True
+
+
+def revalidate_mutation_actor(
+    db: Session,
+    *,
+    settings: Settings,
+    owner: User,
+    auth_session: AuthSession,
+) -> User:
+    locked_owner = db.scalar(
+        select(User)
+        .where(User.id == owner.id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
+    if locked_owner is None or locked_owner.is_disabled:
+        raise MutationAuthenticationError
+    locked_session = db.scalar(
+        select(AuthSession)
+        .where(
+            AuthSession.id == auth_session.id,
+            AuthSession.user_id == locked_owner.id,
+        )
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
+    if locked_session is None:
+        raise MutationAuthenticationError
+    now = utc_now()
+    last_used_at = locked_session.last_used_at or locked_session.created_at
+    if (
+        locked_session.revoked_at is not None
+        or locked_session.expires_at <= now
+        or last_used_at.timestamp() + settings.session_idle_ttl_seconds <= now.timestamp()
+    ):
+        raise MutationAuthenticationError
+    return locked_owner
