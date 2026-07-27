@@ -22,7 +22,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | P5 | LightRAG indexing eligibility | DONE | P4 | vendored fixture proves idempotent submit, readiness, delete, provenance markers, eligibility |
 | P6 | Scoped Evidence retrieval | DONE | P5 | single-domain authorized retrieval maps only valid local blocks to safe Evidence |
 | P7 | Durable grounded streaming chat | DONE | P6 | conversation ownership, intent gate, bounded RAG, SSE, idempotent replay, redaction pass |
-| P8 | Operational safety and Phase 1 gate | IN_PROGRESS | P1-P7 | transactional audit writes, allowlisted logs, request/trace correlation, health, privacy scans, and resilience evidence pass |
+| P8 | Operational safety and Phase 1 gate | DONE | P1-P7 | transactional audit writes, allowlisted logs, request/trace correlation, health, privacy scans, and resilience evidence pass |
 | P9 | Thin Next.js frontend | NOT_STARTED | P1-P8 | login/chat/documents/settings and the reserved graph state use only versioned APIs and pass parity/accessibility checks |
 | P10 | Deployable application stack | NOT_STARTED | P8-P9 | runnable Compose stack, explicit migrations/bootstrap, worker lifecycle, smoke path, and operator runbook pass |
 | P11 | Governed context assembly | NOT_STARTED | P6-P7 | opaque refs for sources/evidence/templates, private bounded assembly, replay fingerprint and invalidation pass |
@@ -154,7 +154,22 @@ system-wide cross-sink privacy with P8, and browser navigation with P9.
 | P7-05 | DONE | P7-04 | source/domain delete redaction hooks and public omission tests |
 | P8-01 | DONE | P1-06,P7 | transactional audit-write allowlist coverage, denial events and privacy/adversarial audit tests |
 | P8-02 | DONE | P8-01 | safe JSON logs, request/trace correlation and bounded-cardinality service metrics |
-| P8-03 | NOT_STARTED | P8-02 | liveness/readiness, privacy scans and resilience/load evidence with no observability read API or UI |
+| P8-03 | DONE | P8-02 | liveness/readiness, privacy scans and resilience/load evidence with no observability read API or UI |
+
+P8-03 closure evidence (2026-07-27):
+`docs/_scratch/p8-03-operational-safety-inventory.md` freezes health
+live/ready surfaces, the four-sink privacy union, resilience cite matrix,
+`DisabledTracingPort` retain-absence, and as-built bootstrap semantics
+(any enabled administrator; configured-username residual). Health re-proof
+extends live-under-failure, schema-edge safe `503`, and ready with stopped
+domain plus unready provider. `test_cross_sink_privacy_scan.py` plants once
+across audit + JSON logs + metrics + health. Focused resilience executes
+`413 content_rejected`, login-throttle `429`+Retry-After, capacity `503`,
+and domain/index/turn lease reclaim (PostgreSQL 16). Results: focused unit
+suite green + opted-in PostgreSQL throttle/lease/readiness green. `docs/_scratch/p8-03-operational-safety-evidence.md` records
+commands and residuals (P10-02 object-store ready / DRIFT-15, concurrent-stream
+429, SIGTERM/stream-drain / P12, Phase 2 read). DRIFT-20 / DRIFT-29
+cross-sink/health halves closed; P8 phase exit complete.
 
 P8-02 closure evidence (2026-07-27):
 `docs/_scratch/p8-02-telemetry-inventory.md` freezes every production
