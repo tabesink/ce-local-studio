@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "generate:api": "openapi-typescript ../contracts/openapi.json -o src/lib/api/generated/openapi.ts",
     "generate:sse": "openapi-typescript ../contracts/sse-events.openapi.json -o src/lib/api/generated/sse.ts",
-    "test": "node --experimental-strip-types --test tests/*.mjs",
+    "test": "node --experimental-strip-types --test tests/*.mjs tests/structure/**/*.test.ts",
     "test:foundation": "node --test tests/foundation.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed"
