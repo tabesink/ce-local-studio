@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "targetId": "settings-row",
+  "owner": "src/features/settings-panel",
+  "catalogState": "IN_PROGRESS",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical composition: app/client/src/features/settings-panel/SettingsRow.tsx wrapping residual ListRow.",
+      "Settings-owned; not a product-neutral src/ui primitive.",
+      "Inventory: docs/_scratch/p9-01-ui-inventory.md.",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "row": "Notification preference",
+      "description": "Synthetic preference description for parity only",
+      "control": "Edit",
+      "status": "Ready"
+    },
+    "variants": ["settings"],
+    "states": ["with-control", "with-status"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": [
+      "--ui-fg",
+      "--ui-muted",
+      "--ui-hover",
+      "--fs-base",
+      "--fs-sm"
+    ],
+    "geometry": {
+      "layout": "two-column settings grid on md+; stacked on narrow",
+      "density": "compact row padding px-3.5 py-2.5"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark", "theme-light", "row-with-control", "row-with-status"],
+    "expectedTokenGeometry": [
+      "Label uses --ui-fg at --fs-base",
+      "Description uses --ui-muted",
+      "Control and status align to the trailing column on desktop density"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "actionable control slot (button) is keyboard-focusable and activatable",
+      "focus": "control inside the row receives focus; row chrome itself is not a widget",
+      "screenReader": "row label text is present; status slot may host StatusPill with text",
+      "reducedMotion": "no motion-dependent behavior claimed for the row shell",
+      "validationBusyDisabledStatus": "status slot can host StatusPill; control can be a Button",
+      "zoom": "label remains present at component level",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "grid stacks to one column below md; claimed via shared viewport labels"
+    }
+  }
+}

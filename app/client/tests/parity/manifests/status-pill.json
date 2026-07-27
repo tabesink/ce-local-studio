@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "targetId": "status-pill",
+  "owner": "src/ui",
+  "catalogState": "IN_PROGRESS",
+  "disposition": "migrate+retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical body: app/client/src/ui/StatusPill.tsx (live _shared API retained).",
+      "Tone mapping (docs/tests only; do not rename live values): live default↔contract neutral; live good↔contract success.",
+      "Live tones: default | info | good | warning | danger. Variants: dot | badge.",
+      "Inventory: docs/_scratch/p9-01-ui-inventory.md (KEEP LIVE APIs).",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "default": "Idle",
+      "info": "Syncing",
+      "good": "Ready",
+      "warning": "Degraded",
+      "danger": "Failed"
+    },
+    "tones": ["default", "info", "good", "warning", "danger"],
+    "toneMapping": {
+      "default": "neutral",
+      "good": "success"
+    },
+    "variants": ["dot", "badge"],
+    "states": ["static"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": [
+      "--ui-muted",
+      "--ui-info",
+      "--ui-success",
+      "--ui-warning",
+      "--ui-danger",
+      "--ui-surface",
+      "--fs-sm",
+      "--fs-xs",
+      "--rad-xs"
+    ],
+    "geometry": {
+      "dot": "5px circular marker with adjacent text",
+      "badge": "h-5 pill with text; never color-only"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark", "theme-light", "tones-dot", "tones-badge"],
+    "expectedTokenGeometry": [
+      "Each tone pairs a marker/badge chrome with visible text label",
+      "good uses --ui-success; default uses --ui-muted (neutral mapping)",
+      "Never present a tone as color alone without text"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "StatusPill is non-interactive presentation; no activation claim",
+      "focus": "not a focus target by default",
+      "screenReader": "text label always present with tone chrome (never color-only)",
+      "reducedMotion": "no motion-dependent behavior claimed",
+      "validationBusyDisabledStatus": "all live tones render with text for both variants",
+      "zoom": "label text remains present at component level",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "inline status; shared viewport labels only"
+    }
+  }
+}

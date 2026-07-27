@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "targetId": "input",
+  "owner": "src/ui",
+  "catalogState": "IN_PROGRESS",
+  "disposition": "migrate+retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical body: app/client/src/ui/Input.tsx (live _shared API retained).",
+      "Approved gap: live Input has label? and error?; no dedicated help prop — help remains composition.",
+      "Inventory: docs/_scratch/p9-01-ui-inventory.md (KEEP LIVE APIs).",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "field": "Display name",
+      "placeholder": "Enter a display name",
+      "error": "Display name is required",
+      "disabledValue": "Locked value"
+    },
+    "variants": ["plain", "with-label", "with-error", "with-icon"],
+    "states": ["default", "disabled", "error", "focusable"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": [
+      "--ui-fg",
+      "--ui-bg",
+      "--ui-muted",
+      "--ui-separator",
+      "--ui-danger",
+      "--ui-info",
+      "--fs-base"
+    ],
+    "geometry": {
+      "controlHeight": "h-8",
+      "radius": "rounded-md",
+      "density": "compact"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark", "theme-light", "labeled", "error", "disabled"],
+    "expectedTokenGeometry": [
+      "Label uses --ui-muted uppercase tracking",
+      "Error text uses --ui-danger",
+      "Input border uses --ui-separator; error border uses --ui-danger"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "Text input accepts keyboard entry; no invented help control",
+      "focus": "Enabled input is focusable; disabled input is not",
+      "screenReader": "label associates via htmlFor/id when label is provided; error text is visible adjacent copy",
+      "reducedMotion": "no motion-dependent behavior claimed for Input",
+      "validationBusyDisabledStatus": "error string renders; disabled native attribute supported; no help prop",
+      "zoom": "label and error remain present at component level",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "full-width field; shared viewport labels only"
+    }
+  }
+}

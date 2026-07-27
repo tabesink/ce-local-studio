@@ -124,10 +124,10 @@ Catalog states are `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED_CONTRACT`, and `FACTOR
 
 | Target | Owner | D0 state | Required brownfield disposition |
 | --- | --- | --- | --- |
-| Button | `src/ui` | NOT_STARTED | inventory existing implementations; retain/reverify, migrate, or replace in P9-01 |
-| Input | `src/ui` | NOT_STARTED | inventory existing implementations; retain/reverify, migrate, or replace in P9-01 |
-| StatusPill | `src/ui` | NOT_STARTED | inventory existing implementations; retain/reverify, migrate, or replace in P9-01 |
-| SettingsRow | `src/features/settings-panel` | NOT_STARTED | keep as a Settings composition and reverify in P9-01 |
+| Button | `src/ui` | IN_PROGRESS | migrate + retain-and-reverify live API; parity scaffolding landed in P9-01 U5 (`FACTORY_READY` is U6 only) |
+| Input | `src/ui` | IN_PROGRESS | migrate + retain-and-reverify live API; parity scaffolding landed in P9-01 U5 (`FACTORY_READY` is U6 only) |
+| StatusPill | `src/ui` | IN_PROGRESS | migrate + retain-and-reverify live tones; parity scaffolding landed in P9-01 U5 (`FACTORY_READY` is U6 only) |
+| SettingsRow | `src/features/settings-panel` | IN_PROGRESS | retain-and-reverify Settings composition; parity scaffolding landed in P9-01 U5 (`FACTORY_READY` is U6 only) |
 | Settings Domain accordion | `src/features/settings-panel` | BLOCKED_CONTRACT | approve P9-04 interaction contract before manifest, fixture, implementation, or readiness work |
 
 The starter set is not a complete UI allowlist. Uncovered roles continue using the contracted canonical CE control; agents record a parity gap rather than inventing local chrome.
