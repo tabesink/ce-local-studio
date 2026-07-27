@@ -67,7 +67,9 @@ _SAFE_ERROR_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _UUID_RE = re.compile(
     r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 )
-_OPAQUE_REF_RE = re.compile(r"\b(?:conv_|turn_|dom_|src_|op_)[A-Za-z0-9_-]{8,}\b")
+_OPAQUE_REF_RE = re.compile(
+    r"\b(?:conv_|turn_|dom_|src_|op_|doc_|ev_|tpl_)[A-Za-z0-9_-]{8,}\b"
+)
 
 
 @dataclass(frozen=True)
@@ -179,4 +181,7 @@ def safe_increment(name: str, *, amount: int = 1, **labels: Any) -> None:
             return
         _REGISTRY.increment(name, sanitized, amount=amount)
     except Exception:
-        safe_log(logger, "metrics.outage", safe_error_code="metrics_unavailable")
+        try:
+            safe_log(logger, "metrics.outage", safe_error_code="metrics_unavailable")
+        except Exception:
+            pass

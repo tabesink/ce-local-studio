@@ -4,6 +4,8 @@ import json
 from io import StringIO
 import logging
 
+from fastapi.testclient import TestClient
+
 from context_engine.app import create_app
 from context_engine.config import Settings
 from context_engine.services.metrics import (
@@ -110,3 +112,55 @@ def test_no_metrics_scrape_routes_registered(tmp_path) -> None:
     paths = {getattr(route, "path", None) for route in app.routes}
     forbidden = {"/metrics", "/metrics/", "/prometheus", "/prometheus/"}
     assert paths.isdisjoint(forbidden)
+
+
+def test_http_middleware_survives_metrics_registry_outage(tmp_path) -> None:
+    from context_engine.db import Base
+
+    settings = Settings(
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'metrics-boom.db'}",
+        testing=True,
+    )
+    app = create_app(settings)
+    Base.metadata.create_all(app.state.engine)
+
+    class BoomRegistry:
+        def increment(self, *args, **kwargs):  # noqa: ANN002, ANN003
+            raise RuntimeError("PRIVATE-STACK-SENTINEL-metrics-boom")
+
+    import context_engine.services.metrics as metrics_module
+
+    original = metrics_module._REGISTRY
+    metrics_module._REGISTRY = BoomRegistry()  # type: ignore[assignment]
+    try:
+        with TestClient(app) as client:
+            response = client.get("/health/live")
+    finally:
+        metrics_module._REGISTRY = original
+
+    assert response.status_code == 200
+    assert "X-Request-ID" in response.headers
+
+
+def test_minimum_emitters_cover_http_chat_and_worker_series() -> None:
+    safe_increment(
+        "http_request",
+        http_method="GET",
+        http_route="/api/v1/health/live",
+        outcome="succeeded",
+        actor_kind="public",
+        status_class="2xx",
+    )
+    safe_increment(
+        "chat_turn_terminal",
+        chat_route_kind="direct_llm",
+        outcome="succeeded",
+    )
+    safe_increment(
+        "worker_operation",
+        operation_type="source_preparation",
+        outcome="failed",
+        safe_error_code="parser_failure",
+    )
+    names = {sample.name for sample in snapshot_metrics()}
+    assert names == {"http_request", "chat_turn_terminal", "worker_operation"}

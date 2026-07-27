@@ -46,16 +46,20 @@ def _emit_http_metric(
     actor_kind: str,
     safe_error_code: str | None = None,
 ) -> None:
-    labels: dict[str, object] = {
-        "http_method": method,
-        "http_route": route,
-        "outcome": outcome,
-        "actor_kind": actor_kind,
-        "status_class": status_class_for(status_code),
-    }
-    if safe_error_code:
-        labels["safe_error_code"] = safe_error_code
-    safe_increment("http_request", **labels)
+    try:
+        labels: dict[str, object] = {
+            "http_method": method,
+            "http_route": route,
+            "outcome": outcome,
+            "actor_kind": actor_kind,
+            "status_class": status_class_for(status_code),
+        }
+        if safe_error_code:
+            labels["safe_error_code"] = safe_error_code
+        safe_increment("http_request", **labels)
+    except Exception:
+        # Metrics must never prevent returning the HTTP response.
+        pass
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

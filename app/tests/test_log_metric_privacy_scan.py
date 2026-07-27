@@ -7,6 +7,7 @@ import logging
 from datetime import timedelta
 from io import StringIO
 from pathlib import Path
+from typing import Any, Iterable
 from uuid import uuid4
 
 import pytest
@@ -31,7 +32,13 @@ from context_engine.models import (
 )
 from context_engine.services.audit import AuditContext
 from context_engine.services.auth import create_user
-from context_engine.services.chat_turns import _complete_turn, _fail_turn
+from context_engine.services.chat_turns import (
+    ConversationTurnWorker,
+    SynthesisStreamAdapter,
+    _complete_turn,
+    _fail_turn,
+    start_or_replay_turn,
+)
 from context_engine.services.conversations import create_conversation, update_conversation_title
 from context_engine.services.metrics import (
     METRIC_LABEL_KEYS,
@@ -179,84 +186,110 @@ def test_http_request_logs_and_metrics_omit_planted_sentinels(tmp_path: Path) ->
 
 
 def test_mutation_fixtures_do_not_leak_sentinels_into_log_metric_sinks(db: Session, tmp_path: Path) -> None:
-    logger, output = _logger_capture()
     settings = Settings(
         testing=True,
         source_storage_root=str(tmp_path / "source-storage"),
         domain_runtime_root=str(tmp_path / "domain-runtimes"),
         domain_runtime_controller_kind="local",
     )
-    seed_runtime_config(db)
-    admin = create_user(db, "admin-privacy@example.test", "Password123!", role=ROLE_ADMINISTRATOR)
-    member = create_user(db, "member-privacy@example.test", "Password123!")
-    auth_session = _auth_session(db, member)
-    admin_audit = AuditContext(actor_user=admin, request_id="req-privacy-admin")
-    member_audit = AuditContext(actor_user=member, request_id="req-privacy-member")
+    root = logging.getLogger()
+    output = StringIO()
+    handler = logging.StreamHandler(output)
+    handler.setFormatter(JsonLogFormatter())
+    previous_handlers = list(root.handlers)
+    root.handlers = [handler]
+    root.setLevel(logging.INFO)
+    try:
+        seed_runtime_config(db)
+        admin = create_user(db, "admin-privacy@example.test", "Password123!", role=ROLE_ADMINISTRATOR)
+        member = create_user(db, "member-privacy@example.test", "Password123!")
+        auth_session = _auth_session(db, member)
+        admin_audit = AuditContext(actor_user=admin, request_id="req-privacy-admin")
+        member_audit = AuditContext(actor_user=member, request_id="req-privacy-member")
 
-    rotate_provider_credential(
-        db,
-        "openai",
-        "SECRET_CREDENTIAL_SENTINEL",
-        SecretCrypto.from_settings(settings),
-        expected_version=1,
-        audit_context=admin_audit,
-    )
-    conversation = create_conversation(
-        db,
-        settings=settings,
-        owner=member,
-        title="SECRET_TITLE_SENTINEL",
-        auth_session=auth_session,
-        audit_context=member_audit,
-    )
-    update_conversation_title(
-        db,
-        settings=settings,
-        owner=member,
-        conversation_id=conversation.public_ref,
-        title="SECRET_TITLE_SENTINEL renamed",
-        expected_version=conversation.version,
-        auth_session=auth_session,
-        audit_context=member_audit,
-    )
-    domain = Domain(
-        id="domain-privacy-logs",
-        display_name="Privacy Logs",
-        state=DOMAIN_STATE_STOPPED,
-        embedding_profile_id="openai-embedding-default",
-    )
-    db.add(domain)
-    db.commit()
-    upload_source_bytes(
-        db,
-        settings=settings,
-        domain_id=domain.id,
-        filename="SECRET_FILENAME_SENTINEL.pdf",
-        content_type="application/pdf",
-        data=b"%PDF-1.4 SECRET_BODY_SENTINEL privacy-scan",
-        requested_by_user=admin,
-        audit_context=admin_audit,
-    )
+        rotate_provider_credential(
+            db,
+            "openai",
+            "SECRET_CREDENTIAL_SENTINEL",
+            SecretCrypto.from_settings(settings),
+            expected_version=1,
+            audit_context=admin_audit,
+        )
+        conversation = create_conversation(
+            db,
+            settings=settings,
+            owner=member,
+            title="SECRET_TITLE_SENTINEL",
+            auth_session=auth_session,
+            audit_context=member_audit,
+        )
+        update_conversation_title(
+            db,
+            settings=settings,
+            owner=member,
+            conversation_id=conversation.public_ref,
+            title="SECRET_TITLE_SENTINEL renamed",
+            expected_version=conversation.version,
+            auth_session=auth_session,
+            audit_context=member_audit,
+        )
+        domain = Domain(
+            id="domain-privacy-logs",
+            display_name="Privacy Logs",
+            state=DOMAIN_STATE_STOPPED,
+            embedding_profile_id="openai-embedding-default",
+        )
+        db.add(domain)
+        db.commit()
+        upload_source_bytes(
+            db,
+            settings=settings,
+            domain_id=domain.id,
+            filename="SECRET_FILENAME_SENTINEL.pdf",
+            content_type="application/pdf",
+            data=b"%PDF-1.4 SECRET_BODY_SENTINEL privacy-scan",
+            requested_by_user=admin,
+            audit_context=admin_audit,
+        )
+        safe_log(
+            logging.getLogger("context_engine.services.sources"),
+            "source_preparation_worker.failed",
+            request_id="req-after",
+            domain_id=domain.id,
+            source_id="src_privacy_scan",
+            operation_id="op_privacy_scan",
+            safe_error_code="parser_failure",
+            outcome="failed",
+            filename="SECRET_FILENAME_SENTINEL.pdf",
+            title="SECRET_TITLE_SENTINEL",
+            body="SECRET_BODY_SENTINEL",
+            credential="SECRET_CREDENTIAL_SENTINEL",
+            path="https://runtime.example.invalid/path",
+            object_key="s3://bucket/object-key",
+            prompt="SECRET_PROMPT_SENTINEL",
+            excerpt="SECRET_EXCERPT_SENTINEL",
+        )
+        # Identity-bearing / content labels must drop the sample entirely.
+        safe_increment(
+            "worker_operation",
+            operation_type="source_preparation",
+            outcome="failed",
+            safe_error_code="parser_failure",
+            filename="SECRET_FILENAME_SENTINEL.pdf",
+        )
+        safe_increment(
+            "worker_operation",
+            operation_type="source_preparation",
+            outcome="failed",
+            safe_error_code="parser_failure",
+        )
+    finally:
+        root.handlers = previous_handlers
 
-    safe_log(
-        logger,
-        "http_request",
-        request_id="req-after",
-        actor_kind="administrator",
-        http_method="POST",
-        http_route="/api/v1/admin/sources",
-        http_status=201,
-        outcome="succeeded",
-        filename="SECRET_FILENAME_SENTINEL.pdf",
-        title="SECRET_TITLE_SENTINEL",
-        body="SECRET_BODY_SENTINEL",
-        credential="SECRET_CREDENTIAL_SENTINEL",
-        path="https://runtime.example.invalid/path",
-        object_key="s3://bucket/object-key",
-        prompt="SECRET_PROMPT_SENTINEL",
-        excerpt="SECRET_EXCERPT_SENTINEL",
-    )
-    _assert_log_blob_private(output.getvalue())
+    blob = output.getvalue()
+    assert blob.strip(), "expected real logger capture during mutation window"
+    assert any(sample.name == "worker_operation" for sample in snapshot_metrics())
+    _assert_log_blob_private(blob)
     _assert_metrics_private()
 
 
@@ -364,3 +397,86 @@ def test_metrics_reject_identity_values_and_unknown_labels() -> None:
         domain_id="dom_secret",
     )
     assert snapshot_metrics() == []
+
+
+def test_worker_terminal_joins_claim_via_trace_id_without_request_id(
+    db: Session, tmp_path: Path
+) -> None:
+    """Option (b): worker reconstructs TurnStartResult without request_id."""
+    settings = Settings(
+        testing=True,
+        source_storage_root=str(tmp_path / "source-storage"),
+        domain_runtime_root=str(tmp_path / "domain-runtimes"),
+        turn_worker_id="privacy-turn-worker",
+        turn_lease_seconds=120,
+    )
+    seed_runtime_config(db)
+    member = create_user(db, "member-worker-privacy@example.test", "Password123!")
+    auth_session = _auth_session(db, member)
+    rotate_provider_credential(
+        db,
+        "openai",
+        "sk-test-openai-privacy-worker",
+        SecretCrypto.from_settings(settings),
+        expected_version=1,
+        audit_context=AuditContext(actor_user=member, request_id="req-runtime"),
+    )
+    conversation = create_conversation(
+        db,
+        settings=settings,
+        owner=member,
+        title="worker join",
+        auth_session=auth_session,
+        audit_context=AuditContext(actor_user=member, request_id="req-create"),
+    )
+
+    output = StringIO()
+    handler = logging.StreamHandler(output)
+    handler.setFormatter(JsonLogFormatter())
+    chat_logger = logging.getLogger("context_engine.services.chat_turns")
+    previous = list(chat_logger.handlers)
+    chat_logger.handlers = [handler]
+    chat_logger.propagate = False
+    chat_logger.setLevel(logging.INFO)
+
+    class ImmediateSynthesis(SynthesisStreamAdapter):
+        def stream_direct(self, **_kwargs: Any) -> Iterable[str]:
+            yield "Worker terminal answer."
+
+        def stream_grounded(self, **_kwargs: Any) -> Iterable[str]:
+            raise AssertionError("direct turn must not call grounded synthesis")
+
+    try:
+        start = start_or_replay_turn(
+            db,
+            settings=settings,
+            owner=member,
+            auth_session=auth_session,
+            conversation_id=conversation.public_ref,
+            client_request_id=f"client-{uuid4().hex}",
+            message="Hello worker path.",
+            domain_id=None,
+            request_id="req-claim-join",
+        )
+        assert start.request_id == "req-claim-join"
+        claim_trace = start.turn.trace_id
+        assert ConversationTurnWorker(
+            settings,
+            synthesis_adapter=ImmediateSynthesis(),
+        ).run_once(db)
+        db.refresh(start.turn)
+        assert start.turn.status == TURN_STATUS_COMPLETED
+    finally:
+        chat_logger.handlers = previous
+
+    blob = output.getvalue()
+    _assert_log_blob_private(blob)
+    payloads = [json.loads(line) for line in blob.splitlines() if line.strip()]
+    claimed = [p for p in payloads if p.get("event") == "chat.turn_claimed"]
+    persisted = [p for p in payloads if p.get("event") == "chat.turn_persisted"]
+    assert claimed and claimed[0]["request_id"] == "req-claim-join"
+    assert claimed[0]["trace_id"] == claim_trace
+    assert persisted and persisted[0]["trace_id"] == claim_trace
+    assert "request_id" not in persisted[0]
+    assert any(sample.name == "chat_turn_terminal" for sample in snapshot_metrics())
+    _assert_metrics_private()

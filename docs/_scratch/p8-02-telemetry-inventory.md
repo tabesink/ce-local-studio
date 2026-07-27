@@ -93,12 +93,15 @@ URL paths with resource IDs.
 | `chat.turn_claimed` | `chat_turns.py` | request_id, trace_id, … | `retain` | Correlation already good |
 | `chat.turn_persisted` | `_complete_turn` | trace_id, domain_id, conversation_turn_id, client_request_id, outcome — **no request_id** | `correlate-fix` + `emit-metric-peer` | Option (b): add optional `request_id` kwarg when caller has `TurnStartResult.request_id`; join via `trace_id` always; metric `chat_turn_terminal` |
 | `chat.turn_failed` | `_fail_turn` | same gap | `correlate-fix` + `emit-metric-peer` | Same as persisted |
-| `source_preparation_worker.claimed` | `sources.py` | request_id, domain_id, source_id, operation_id, outcome | `retain` + `emit-metric-peer` | Metric `worker_operation` operation_type=`source_preparation` |
-| `source_preparation_worker.failed` | `sources.py` | + safe_error_code | `retain` + `emit-metric-peer` | Same |
+| `source_preparation_worker.claimed` | `sources.py` | request_id, domain_id, source_id, operation_id, outcome | `retain` | Log-only at claim; metric peers live on succeed/fail terminals |
+| `source_preparation_worker.failed` / succeed terminals | `sources.py` | + safe_error_code on fail | `retain` + `emit-metric-peer` | Metric `worker_operation` operation_type=`source_preparation` |
 | `source_preparation_worker.image_cleanup_deferred` | `sources.py` | request_id, domain/source/op ids, outcome | `retain` | No metric (deferred cleanup noise) |
-| `source_delete_worker.claimed` / `.failed` | `sources.py` | request_id, ids, outcome[, safe_error_code] | `retain` + `emit-metric-peer` | operation_type=`source_delete` |
-| `source_index_worker.claimed` | `indexing.py` | domain_id, source_id, index_request_id, outcome — no op request_id | `retain` + `emit-metric-peer` | operation_type=`source_index`; leave request_id gap as deferred follow-up |
-| `domain_delete_worker.claimed` | `domains.py` | request_id, domain_id, operation_id, outcome | `retain` + `emit-metric-peer` | operation_type=`domain_delete` |
+| `source_delete_worker.claimed` | `sources.py` | request_id, ids, outcome | `retain` | Log-only at claim |
+| `source_delete_worker.failed` / succeed terminals | `sources.py` | outcome[, safe_error_code] | `retain` + `emit-metric-peer` | operation_type=`source_delete` |
+| `source_index_worker.claimed` | `indexing.py` | domain_id, source_id, index_request_id, outcome — no op request_id | `retain` | Log-only at claim; leave request_id gap as deferred follow-up |
+| `source_index_worker` succeed/fail terminals | `indexing.py` | outcome[, safe_error_code] | `retain` + `emit-metric-peer` | operation_type=`source_index` |
+| `domain_delete_worker.claimed` | `domains.py` | request_id, domain_id, operation_id, outcome | `retain` | Log-only at claim |
+| `domain_delete_worker` succeed/fail terminals | `domains.py` | outcome[, safe_error_code] | `retain` + `emit-metric-peer` | operation_type=`domain_delete` |
 | `stack_worker.started` / `.iteration_failed` / `.heartbeat_failed` | `worker.py` | outcome[, safe_error_code] | `retain` + `emit-metric-peer` (fail only) | Metric on fail paths; started may stay log-only |
 | `tracing.outage` | `tracing.py` | trace_id, safe_error_code | `retain` | Keep DisabledTracingPort; no exporter |
 
