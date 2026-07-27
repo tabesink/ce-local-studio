@@ -29,11 +29,33 @@ from context_engine.services.audit import AuditError
 from context_engine.services.prompt_templates import seed_prompt_templates
 from context_engine.services.runtime_config import seed_runtime_config, validate_config_encryption_key
 from context_engine.services.structured_logging import configure_json_logging, safe_log
+from context_engine.services.metrics import safe_increment, status_class_for
 from context_engine.services.request_security import RequestSecurityError, build_request_security_policy, enforce_request_security
 
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _emit_http_metric(
+    *,
+    method: str,
+    route: str,
+    status_code: int,
+    outcome: str,
+    actor_kind: str,
+    safe_error_code: str | None = None,
+) -> None:
+    labels: dict[str, object] = {
+        "http_method": method,
+        "http_route": route,
+        "outcome": outcome,
+        "actor_kind": actor_kind,
+        "status_class": status_class_for(status_code),
+    }
+    if safe_error_code:
+        labels["safe_error_code"] = safe_error_code
+    safe_increment("http_request", **labels)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -76,6 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except RequestSecurityError as exc:
             response = error_response(request, exc.status_code, exc.code, exc.message)
             response.headers[CANONICAL_REQUEST_ID_HEADER] = request_id
+            route = _route_template(request)
             safe_log(
                 logger,
                 "http_request",
@@ -83,15 +106,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 actor_kind="public",
                 elapsed_ms=int((time.perf_counter() - started) * 1000),
                 http_method=request.method,
-                http_route=_route_template(request),
+                http_route=route,
                 http_status=exc.status_code,
                 outcome="failed",
+                safe_error_code=exc.code,
+            )
+            _emit_http_metric(
+                method=request.method,
+                route=route,
+                status_code=exc.status_code,
+                outcome="failed",
+                actor_kind="public",
                 safe_error_code=exc.code,
             )
             return response
         try:
             response = await call_next(request)
         except Exception:
+            route = _route_template(request)
             safe_log(
                 logger,
                 "http_request",
@@ -99,23 +131,41 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 actor_kind=getattr(request.state, "actor_kind", "public"),
                 elapsed_ms=int((time.perf_counter() - started) * 1000),
                 http_method=request.method,
-                http_route=_route_template(request),
+                http_route=route,
                 http_status=500,
                 outcome="failed",
                 safe_error_code="internal_error",
             )
+            _emit_http_metric(
+                method=request.method,
+                route=route,
+                status_code=500,
+                outcome="failed",
+                actor_kind=getattr(request.state, "actor_kind", "public"),
+                safe_error_code="internal_error",
+            )
             raise
         response.headers[CANONICAL_REQUEST_ID_HEADER] = request_id
+        route = _route_template(request)
+        outcome = "failed" if response.status_code >= 400 else "succeeded"
+        actor_kind = getattr(request.state, "actor_kind", "public")
         safe_log(
             logger,
             "http_request",
             request_id=request_id,
-            actor_kind=getattr(request.state, "actor_kind", "public"),
+            actor_kind=actor_kind,
             elapsed_ms=int((time.perf_counter() - started) * 1000),
             http_method=request.method,
-            http_route=_route_template(request),
+            http_route=route,
             http_status=response.status_code,
-            outcome="failed" if response.status_code >= 400 else "succeeded",
+            outcome=outcome,
+        )
+        _emit_http_metric(
+            method=request.method,
+            route=route,
+            status_code=response.status_code,
+            outcome=outcome,
+            actor_kind=actor_kind,
         )
         return response
 
