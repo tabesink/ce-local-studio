@@ -22,7 +22,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | P5 | LightRAG indexing eligibility | DONE | P4 | vendored fixture proves idempotent submit, readiness, delete, provenance markers, eligibility |
 | P6 | Scoped Evidence retrieval | DONE | P5 | single-domain authorized retrieval maps only valid local blocks to safe Evidence |
 | P7 | Durable grounded streaming chat | DONE | P6 | conversation ownership, intent gate, bounded RAG, SSE, idempotent replay, redaction pass |
-| P8 | Operational safety and Phase 1 gate | NOT_STARTED | P1-P7 | transactional audit writes, allowlisted logs, request/trace correlation, health, privacy scans, and resilience evidence pass |
+| P8 | Operational safety and Phase 1 gate | IN_PROGRESS | P1-P7 | transactional audit writes, allowlisted logs, request/trace correlation, health, privacy scans, and resilience evidence pass |
 | P9 | Thin Next.js frontend | NOT_STARTED | P1-P8 | login/chat/documents/settings and the reserved graph state use only versioned APIs and pass parity/accessibility checks |
 | P10 | Deployable application stack | NOT_STARTED | P8-P9 | runnable Compose stack, explicit migrations/bootstrap, worker lifecycle, smoke path, and operator runbook pass |
 | P11 | Governed context assembly | NOT_STARTED | P6-P7 | opaque refs for sources/evidence/templates, private bounded assembly, replay fingerprint and invalidation pass |
@@ -152,9 +152,25 @@ system-wide cross-sink privacy with P8, and browser navigation with P9.
 | P7-03 | DONE | P7-02 | bounded plan/retrieve/repair/synthesize orchestration |
 | P7-04 | DONE | P7-03 | sealed versioned SSE live/resume/replay pipeline, terminal persistence, idempotent attach/replay, and grounded-refusal/evidence-only terminal projections |
 | P7-05 | DONE | P7-04 | source/domain delete redaction hooks and public omission tests |
-| P8-01 | NOT_STARTED | P1-06,P7 | transactional audit-write allowlist coverage, denial events and privacy/adversarial audit tests |
+| P8-01 | DONE | P1-06,P7 | transactional audit-write allowlist coverage, denial events and privacy/adversarial audit tests |
 | P8-02 | NOT_STARTED | P8-01 | safe JSON logs, request/trace correlation and bounded-cardinality service metrics |
 | P8-03 | NOT_STARTED | P8-02 | liveness/readiness, privacy scans and resilience/load evidence with no observability read API or UI |
+
+P8-01 closure evidence (2026-07-27):
+`docs/_scratch/p8-01-audit-inventory.md` dispositions every closed audit
+event and production writer (`migrate` / `protected-helper` / exemption
+classes including `open-txn-object-put`, `worker-terminal`,
+`nested-redaction-flush`, `external-call-split`, `orphan-reserved`).
+Migrated prep retry/cancel and index retry/cancel terminals onto
+`commit_protected_mutation` with IntegrityError→409 preserved on prep
+retry. `require_admin` hardens denial-audit failure to
+`503 audit_unavailable` (KTD8); denial rows stay role-safe without
+resource `target_id`. Adversarial privacy scans cover `audit_events`
+only. Results were 15 focused unit tests passing; observability-scope
+absence remains green. `docs/_scratch/p8-01-audit-evidence.md` records
+commands and residuals (P8-02 logs/metrics, P8-03 cross-sink/health,
+Phase 2 audit-read, P12 ingress). DRIFT-20 / DRIFT-29 audit-write halves
+advanced; log/metric/cross-sink residuals stay P8-02/P8-03.
 
 P7-05 closure evidence (2026-07-27):
 `docs/_scratch/p7-05-delete-redaction-inventory.md` records retain/modify/defer
