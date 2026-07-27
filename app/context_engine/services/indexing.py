@@ -36,7 +36,7 @@ from context_engine.models import (
     SourceBlock,
     SourceDocument,
 )
-from context_engine.services.audit import AuditContext, AuditService
+from context_engine.services.audit import AuditContext, commit_protected_mutation
 from context_engine.services.domains import (
     DomainRuntimeController,
     controller_from_settings,
@@ -740,16 +740,23 @@ def retry_source_index(
     if _remote_delete_required(source):
         _delete_remote_if_needed(db, settings, source, old_request_id, client)
 
-    _queue_new_generation(db, source)
+    def mutate() -> SourceDocument:
+        _queue_new_generation(db, source)
+        return source
+
     if audit_context is not None:
-        AuditService(db).record(
-            AUDIT_EVENT_SOURCE_INDEX_RETRY_QUEUED,
+        source = commit_protected_mutation(
+            db,
+            mutate,
+            event_name=AUDIT_EVENT_SOURCE_INDEX_RETRY_QUEUED,
             context=audit_context,
             target_kind="source_document",
             target_id=source.id,
             metadata={"indexState": SOURCE_INDEX_STATE_QUEUED},
         )
-    db.commit()
+    else:
+        mutate()
+        db.commit()
     db.refresh(source)
     return source
 
@@ -797,24 +804,31 @@ def cancel_source_index(
             db.commit()
         raise
 
-    source.index_state = SOURCE_INDEX_STATE_CANCELLED
-    source.index_request_id = None
-    source.index_content_hash = None
-    source.index_remote_document_id = None
-    source.index_accepted_at = None
-    source.index_ready_at = None
-    source.index_updated_at = utc_now()
-    source.updated_at = source.index_updated_at
-    source.version += 1
+    def mutate_cancelled() -> SourceDocument:
+        source.index_state = SOURCE_INDEX_STATE_CANCELLED
+        source.index_request_id = None
+        source.index_content_hash = None
+        source.index_remote_document_id = None
+        source.index_accepted_at = None
+        source.index_ready_at = None
+        source.index_updated_at = utc_now()
+        source.updated_at = source.index_updated_at
+        source.version += 1
+        return source
+
     if audit_context is not None:
-        AuditService(db).record(
-            AUDIT_EVENT_SOURCE_INDEX_CANCELLED,
+        source = commit_protected_mutation(
+            db,
+            mutate_cancelled,
+            event_name=AUDIT_EVENT_SOURCE_INDEX_CANCELLED,
             context=audit_context,
             target_kind="source_document",
             target_id=source.id,
             metadata={"indexState": SOURCE_INDEX_STATE_CANCELLED},
         )
-    db.commit()
+    else:
+        mutate_cancelled()
+        db.commit()
     db.refresh(source)
     return source
 

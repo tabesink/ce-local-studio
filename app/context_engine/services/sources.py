@@ -583,17 +583,29 @@ def retry_source(
         request_id=audit_context.request_id if audit_context is not None else None,
         message="Preparation queued.",
     )
-    db.add(operation)
-    if audit_context is not None:
-        AuditService(db).record(
-            AUDIT_EVENT_SOURCE_PREPARATION_RETRIED,
-            context=audit_context,
-            target_kind="source_preparation_operation",
-            target_id=operation.id,
-            metadata={"operationType": operation.operation_type, "operationStatus": operation.status},
-        )
+
+    def mutate() -> SourcePreparationOperation:
+        db.add(operation)
+        db.flush()
+        return operation
+
     try:
-        db.commit()
+        if audit_context is not None:
+            operation = commit_protected_mutation(
+                db,
+                mutate,
+                event_name=AUDIT_EVENT_SOURCE_PREPARATION_RETRIED,
+                context=audit_context,
+                target_kind="source_preparation_operation",
+                target_id=operation.id,
+                metadata={
+                    "operationType": operation.operation_type,
+                    "operationStatus": operation.status,
+                },
+            )
+        else:
+            mutate()
+            db.commit()
     except IntegrityError as exc:
         db.rollback()
         raise SourceError(409, "operation_conflict", "Source preparation is already in progress.") from exc
@@ -617,28 +629,39 @@ def cancel_source(
     operation = _active_operation(db, source.id)
     if operation is None or operation.operation_type != SOURCE_PREP_OPERATION_PREPARE:
         raise SourceError(409, "source_state_conflict", "Source state does not allow this operation.")
-    now = utc_now()
-    source.preparation_generation += 1
-    source.version += 1
-    source.updated_at = now
-    operation.status = SOURCE_PREP_STATUS_CANCELLED
-    operation.message = "Preparation cancelled."
-    operation.error_code = None
-    operation.error_message = None
-    operation.lease_owner = None
-    operation.lease_expires_at = None
-    operation.finished_at = now
-    operation.version += 1
-    operation.updated_at = now
+
+    def mutate() -> SourcePreparationOperation:
+        now = utc_now()
+        source.preparation_generation += 1
+        source.version += 1
+        source.updated_at = now
+        operation.status = SOURCE_PREP_STATUS_CANCELLED
+        operation.message = "Preparation cancelled."
+        operation.error_code = None
+        operation.error_message = None
+        operation.lease_owner = None
+        operation.lease_expires_at = None
+        operation.finished_at = now
+        operation.version += 1
+        operation.updated_at = now
+        return operation
+
     if audit_context is not None:
-        AuditService(db).record(
-            AUDIT_EVENT_SOURCE_PREPARATION_CANCELLED,
+        operation = commit_protected_mutation(
+            db,
+            mutate,
+            event_name=AUDIT_EVENT_SOURCE_PREPARATION_CANCELLED,
             context=audit_context,
             target_kind="source_preparation_operation",
             target_id=operation.id,
-            metadata={"operationType": operation.operation_type, "operationStatus": operation.status},
+            metadata={
+                "operationType": operation.operation_type,
+                "operationStatus": SOURCE_PREP_STATUS_CANCELLED,
+            },
         )
-    db.commit()
+    else:
+        mutate()
+        db.commit()
     db.refresh(operation)
     return operation
 
