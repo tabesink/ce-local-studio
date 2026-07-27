@@ -156,10 +156,16 @@ conversation_turns
   safe_error_code varchar(64); safe_error_message varchar(500)
   composer_ref_fingerprint varchar(64) NOT NULL
   plan_step_count, retrieval_operation_count, repair_attempt_count integers CHECK >=0
+  lease_owner varchar(64) NULL; lease_expires_at timestamp NULL
+  execution_generation integer NOT NULL DEFAULT 0 CHECK >=0
+  events_retained_after integer NOT NULL DEFAULT 0 CHECK >=0
+  claimable_at timestamp NULL (set only after accepted/route events commit; private worker gate)
   created_at, updated_at, completed_at/redacted timestamps as migrated
   UNIQUE(conversation_id, client_request_id)
   CHECK direct_llm -> domain_id IS NULL; domain_rag -> domain_id IS NOT NULL
-  INDEX(conversation_id, created_at DESC); active/status indexes from migration
+  INDEX(conversation_id, created_at DESC); INDEX(status, claimable_at, lease_expires_at);
+  active/status indexes from migration
+  lease/execution_generation/events_retained_after/claimable_at are private — never public DTO/SSE fields
 
 conversation_turn_events
   id PK varchar(36) globally unique opaque event ID

@@ -494,6 +494,30 @@
         "title": "AllowedAction",
         "type": "object"
       },
+      "CitationDto": {
+        "additionalProperties": false,
+        "properties": {
+          "citationLabel": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Citationlabel",
+            "type": "string"
+          },
+          "evidenceRefId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Evidencerefid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "evidenceRefId",
+          "citationLabel"
+        ],
+        "title": "CitationDto",
+        "type": "object"
+      },
       "ComposerRefDiscoverRequest": {
         "additionalProperties": false,
         "properties": {
@@ -797,6 +821,29 @@
           "disabled"
         ],
         "title": "CurrentUserDto",
+        "type": "object"
+      },
+      "CursorExpiredEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          },
+          "terminalSnapshot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TerminalSnapshotDto"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "CursorExpiredEnvelope",
         "type": "object"
       },
       "DocumentSummaryDto": {
@@ -2053,6 +2100,62 @@
           "operation"
         ],
         "title": "SourceOperationMutationResponse",
+        "type": "object"
+      },
+      "TerminalSnapshotDto": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/CitationDto"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceItemDto"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "completed",
+              "failed",
+              "cancelled",
+              "redacted"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "turnId": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Turnid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "turnId",
+          "status",
+          "evidence",
+          "citations"
+        ],
+        "title": "TerminalSnapshotDto",
         "type": "object"
       },
       "TurnDto": {
@@ -3814,6 +3917,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CursorExpiredEnvelope"
+                }
+              }
+            },
+            "description": "The event cursor is no longer available."
           },
           "422": {
             "content": {

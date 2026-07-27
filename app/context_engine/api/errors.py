@@ -10,12 +10,21 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
 class ApiError(Exception):
-    def __init__(self, status_code: int, code: str, message: str, fields: Mapping[str, str] | None = None, headers: Mapping[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        code: str,
+        message: str,
+        fields: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
+        extra: Mapping[str, Any] | None = None,
+    ) -> None:
         self.status_code = status_code
         self.code = code
         self.message = message
         self.fields = fields
         self.headers = headers
+        self.extra = dict(extra or {})
         super().__init__(message)
 
 
@@ -23,7 +32,13 @@ def request_id_from(request: Request) -> str | None:
     return getattr(request.state, "request_id", None)
 
 
-def error_body(request: Request, code: str, message: str, fields: Mapping[str, str] | None = None) -> dict[str, Any]:
+def error_body(
+    request: Request,
+    code: str,
+    message: str,
+    fields: Mapping[str, str] | None = None,
+    extra: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     body: dict[str, Any] = {
         "error": {
             "code": code,
@@ -32,6 +47,8 @@ def error_body(request: Request, code: str, message: str, fields: Mapping[str, s
             "fields": dict(fields or {}),
         }
     }
+    if extra:
+        body.update(extra)
     return body
 
 
@@ -42,18 +59,27 @@ def error_response(
     message: str,
     fields: Mapping[str, str] | None = None,
     headers: Mapping[str, str] | None = None,
+    extra: Mapping[str, Any] | None = None,
 ) -> JSONResponse:
     response_headers = {"Cache-Control": "private, no-store, no-transform"}
     response_headers.update(headers or {})
     return JSONResponse(
         status_code=status_code,
-        content=error_body(request, code, message, fields),
+        content=error_body(request, code, message, fields, extra),
         headers=response_headers,
     )
 
 
 async def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
-    return error_response(request, exc.status_code, exc.code, exc.message, exc.fields, exc.headers)
+    return error_response(
+        request,
+        exc.status_code,
+        exc.code,
+        exc.message,
+        exc.fields,
+        exc.headers,
+        exc.extra,
+    )
 
 
 async def http_error_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:

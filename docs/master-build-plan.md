@@ -150,11 +150,25 @@ system-wide cross-sink privacy with P8, and browser navigation with P9.
 | P7-01 | DONE | P6 | conversations, turns and opaque public evidence-ref migrations plus owner CRUD |
 | P7-02 | DONE | P7-01 | server intent gate and direct/domain route invariants |
 | P7-03 | DONE | P7-02 | bounded plan/retrieve/repair/synthesize orchestration |
-| P7-04 | NOT_STARTED | P7-03 | sealed versioned SSE live/resume/replay pipeline, terminal persistence, idempotent attach/replay, and grounded-refusal/evidence-only terminal projections |
+| P7-04 | DONE | P7-03 | sealed versioned SSE live/resume/replay pipeline, terminal persistence, idempotent attach/replay, and grounded-refusal/evidence-only terminal projections |
 | P7-05 | NOT_STARTED | P7-04 | source/domain delete redaction hooks and public omission tests |
 | P8-01 | NOT_STARTED | P1-06,P7 | transactional audit-write allowlist coverage, denial events and privacy/adversarial audit tests |
 | P8-02 | NOT_STARTED | P8-01 | safe JSON logs, request/trace correlation and bounded-cardinality service metrics |
 | P8-03 | NOT_STARTED | P8-02 | liveness/readiness, privacy scans and resilience/load evidence with no observability read API or UI |
+
+P7-04 closure evidence (2026-07-27):
+`docs/_scratch/p7-04-sse-pipeline-inventory.md` records retain/modify/defer for
+the request-coupled stream producer, event ledger, cancel path, resume
+projector, and worker registry. Turn leases land in migration `e9f2a1b83c70`
+(supported Alembic head). HTTP only tails the durable ledger;
+`ConversationTurnWorker` owns retrieval/synthesis; cooperative cancel fences
+outbound work; terminal attach/GET emit `replay:true`; unreconstructable
+cursors return `410 cursor_expired` + authorized `terminalSnapshot`.
+`docs/_scratch/p7-04-sse-pipeline-evidence.md` records focused verification,
+opt-in PostgreSQL race tests, producer fixtures, and residuals (P7-05
+redaction; P8 privacy breadth; P9/DRIFT-03/06 reducer consumer; P12 ingress
+drain). DRIFT-23 and DRIFT-25 are closed; DRIFT-24 producer half is closed with
+P9-02 residual for parser/reducer.
 
 P7-03 closure evidence (2026-07-27):
 `docs/_scratch/p7-03-orchestration-inventory.md` records retain/modify/defer for

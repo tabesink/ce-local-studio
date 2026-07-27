@@ -676,12 +676,26 @@ class ConversationTurn(Base):
         ),
         CheckConstraint("repair_attempt_count >= 0", name="ck_conversation_turns_repair_attempt_count_nonnegative"),
         CheckConstraint(
+            "execution_generation >= 0",
+            name="ck_conversation_turns_execution_generation_nonnegative",
+        ),
+        CheckConstraint(
+            "events_retained_after >= 0",
+            name="ck_conversation_turns_events_retained_after_nonnegative",
+        ),
+        CheckConstraint(
             "(route = 'domain_rag' and domain_id is not null) or (route = 'direct_llm' and domain_id is null)",
             name="ck_conversation_turns_route_domain",
         ),
         Index("ix_conversation_turns_conversation_created", "conversation_id", text("created_at DESC")),
         Index("uq_conversation_turns_public_ref", "public_ref", unique=True),
         Index("uq_conversation_turns_client_request", "conversation_id", "client_request_id", unique=True),
+        Index(
+            "ix_conversation_turns_claimable_lease",
+            "status",
+            "claimable_at",
+            "lease_expires_at",
+        ),
         Index(
             "uq_conversation_turns_one_running",
             "conversation_id",
@@ -720,6 +734,11 @@ class ConversationTurn(Base):
     plan_step_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     retrieval_operation_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     repair_attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    lease_owner: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    execution_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    events_retained_after: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    claimable_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)

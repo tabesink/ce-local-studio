@@ -26,6 +26,7 @@ from context_engine.models import (
     PROVIDER_BEDROCK,
     PROVIDER_OPENAI,
     TURN_EVENT_ANSWER_DELTA,
+    TURN_EVENT_CANCELLED,
     TURN_EVENT_COMPLETED,
     TURN_EVENT_EVIDENCE_DELTA,
     TURN_EVENT_FAILED,
@@ -33,6 +34,7 @@ from context_engine.models import (
     TURN_EVENT_RETRIEVAL_STARTED,
     TURN_ROUTE_DIRECT_LLM,
     TURN_ROUTE_DOMAIN_RAG,
+    TURN_STATUS_CANCELLED,
     TURN_STATUS_COMPLETED,
     TURN_STATUS_FAILED,
     TURN_STATUS_RUNNING,
@@ -56,6 +58,8 @@ from context_engine.services.chat_turns import (
     SynthesisStreamAdapter,
     TurnOrchestrator,
     TurnStartResult,
+    _cancel_running_turn,
+    _complete_turn,
 )
 from context_engine.services.evidence import InternalMappedEvidence
 from context_engine.services.runtime_config import TrustedModelRuntimeConfig
@@ -612,5 +616,92 @@ def test_openai_empty_before_answer_is_evidence_only_for_domain(tmp_path: Path) 
         db.refresh(turn)
         assert turn.stop_reason == TURN_STOP_REASON_EVIDENCE_ONLY
         assert turn.assistant_answer is None
+    finally:
+        db.close()
+
+
+def test_c01_ae4_cancel_during_synthesis_stops_without_post_terminal_deltas(
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    db = _open_db(settings)
+    try:
+        turn = _running_turn(
+            db,
+            route=TURN_ROUTE_DIRECT_LLM,
+            message="Cancel mid answer.",
+        )
+        turn.execution_generation = 1
+        db.commit()
+        db.refresh(turn)
+
+        class CancelAfterFirstToken(SynthesisStreamAdapter):
+            def __init__(self) -> None:
+                self.tokens_yielded = 0
+
+            def stream_direct(self, **_kwargs: Any) -> Iterable[str]:
+                self.tokens_yielded += 1
+                yield "Hello "
+                _cancel_running_turn(db, turn)
+                self.tokens_yielded += 1
+                yield "world"
+
+            def stream_grounded(self, **_kwargs: Any) -> Iterable[str]:
+                raise AssertionError("direct turn must not call grounded synthesis")
+
+        synthesis = CancelAfterFirstToken()
+        events = list(
+            TurnOrchestrator(synthesis_adapter=synthesis).stream_turn(
+                db,
+                settings=settings,
+                start=TurnStartResult(
+                    turn=turn,
+                    replay=False,
+                    synthesis=_synthesis(),
+                    prior_user_questions=(),
+                    request_id="req-cancel-ae4",
+                    execution_generation=1,
+                ),
+            )
+        )
+        db.refresh(turn)
+        types = _event_types(db, turn)
+        assert turn.status == TURN_STATUS_CANCELLED
+        assert types.count(TURN_EVENT_ANSWER_DELTA) == 1
+        assert types.count(TURN_EVENT_CANCELLED) == 1
+        assert TURN_EVENT_COMPLETED not in types
+        assert events[-1].event_type == TURN_EVENT_CANCELLED
+        assert synthesis.tokens_yielded == 2
+    finally:
+        db.close()
+
+
+def test_c01_cancel_vs_complete_race_keeps_single_terminal(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db = _open_db(settings)
+    try:
+        turn = _running_turn(
+            db,
+            route=TURN_ROUTE_DIRECT_LLM,
+            message="Race cancel and complete.",
+        )
+        turn.execution_generation = 2
+        db.commit()
+        db.refresh(turn)
+
+        _cancel_running_turn(db, turn)
+        late = _complete_turn(
+            db,
+            turn=turn,
+            stop_reason=TURN_STOP_REASON_DIRECT_LLM,
+            assistant_answer="Should not win.",
+            execution_generation=2,
+        )
+        db.refresh(late)
+        types = _event_types(db, late)
+        assert late.status == TURN_STATUS_CANCELLED
+        assert late.assistant_answer is None
+        assert types.count(TURN_EVENT_CANCELLED) == 1
+        assert TURN_EVENT_COMPLETED not in types
     finally:
         db.close()

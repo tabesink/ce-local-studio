@@ -24,9 +24,10 @@ from context_engine.models import (
     TURN_EVENT_ROUTE_SELECTED,
     TURN_ROUTE_DIRECT_LLM,
     TURN_STATUS_RUNNING,
+    TURN_STOP_REASON_NO_GROUNDED_CONTEXT,
     User,
 )
-from context_engine.services.chat_turns import SynthesisStreamAdapter, _persist_event
+from context_engine.services.chat_turns import SynthesisStreamAdapter, _complete_turn, _persist_event
 
 
 class DeterministicSynthesis(SynthesisStreamAdapter):
@@ -126,6 +127,7 @@ def test_m06_live_and_cursor_replay_use_canonical_sse_envelopes(
                 "answer.delta",
                 "turn.completed",
             ]
+            assert live_events[-1]["payload"]["replay"] is False
             assert all(event["schemaVersion"] == "1.0" for event in live_events)
             turn_id = str(live_events[0]["turnId"])
 
@@ -139,6 +141,9 @@ def test_m06_live_and_cursor_replay_use_canonical_sse_envelopes(
             assert [event["eventId"] for event in replay_events] == [
                 event["eventId"] for event in live_events[2:]
             ]
+            assert replay_events[-1]["type"] == "turn.completed"
+            assert replay_events[-1]["payload"]["replay"] is True
+            assert replay_events[-1]["payload"]["stopReason"] == "direct_llm"
     finally:
         identity_db.close()
         app.state.engine.dispose()
@@ -209,8 +214,219 @@ def test_c01_cancel_http_state_and_replay_terminal_are_consistent(
             assert events[0]["payload"] == {
                 "code": "turn_cancelled",
                 "message": "The answer was cancelled.",
-                "replay": False,
+                "replay": True,
             }
+
+            again = client.post(
+                f"{CANONICAL_API_PREFIX}/conversations/{conversation_id}/turns/{turn_id}:cancel"
+            )
+            assert again.status_code == 202
+            assert again.json()["turn"]["status"] == "cancelled"
+            replay_again = client.get(
+                f"{CANONICAL_API_PREFIX}/conversations/{conversation_id}/turns/{turn_id}/events",
+                params={"after": 0},
+            )
+            again_events = _parse_frames(replay_again.text)
+            assert [event["type"] for event in again_events].count("turn.cancelled") == 1
+    finally:
+        seed.close()
+        identity_db.close()
+        app.state.engine.dispose()
+        _remove_test_database(app.state.test_database_path)
+
+
+def test_ae5_terminal_get_marks_replay_true_without_provider_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, identity_db, conversation_id = _http_context(monkeypatch)
+    seed = app.state.session_factory()
+    calls = {"direct": 0}
+
+    class CountingSynthesis(SynthesisStreamAdapter):
+        def stream_direct(self, **_kwargs: object) -> tuple[str, ...]:
+            calls["direct"] += 1
+            return ("Should not run.",)
+
+    app.state.synthesis_stream_adapter = CountingSynthesis()
+    try:
+        now = utc_now()
+        conversation = seed.scalar(
+            select(Conversation).where(Conversation.public_ref == conversation_id)
+        )
+        assert conversation is not None
+        turn = ConversationTurn(
+            conversation_id=conversation.id,
+            client_request_id="http-terminal-replay-001",
+            route=TURN_ROUTE_DIRECT_LLM,
+            status=TURN_STATUS_RUNNING,
+            user_message="Already finished.",
+            started_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        seed.add(turn)
+        seed.commit()
+        seed.refresh(turn)
+        _persist_event(
+            seed,
+            turn=turn,
+            event_type=TURN_EVENT_ACCEPTED,
+            payload={
+                "conversationId": conversation.id,
+                "clientRequestId": turn.client_request_id,
+                "replay": False,
+            },
+            commit=False,
+        )
+        _persist_event(
+            seed,
+            turn=turn,
+            event_type=TURN_EVENT_ROUTE_SELECTED,
+            payload={"route": TURN_ROUTE_DIRECT_LLM},
+            commit=False,
+        )
+        seed.commit()
+        turn = _complete_turn(
+            seed,
+            turn=turn,
+            stop_reason=TURN_STOP_REASON_NO_GROUNDED_CONTEXT,
+            assistant_answer=None,
+            plan_step_count=1,
+            retrieval_operation_count=1,
+            repair_attempt_count=0,
+        )
+        turn_id = turn.public_ref
+
+        with TestClient(app) as client:
+            replay = client.get(
+                f"{CANONICAL_API_PREFIX}/conversations/{conversation_id}/turns/{turn_id}/events",
+                params={"after": 0},
+            )
+            assert replay.status_code == 200
+            events = _parse_frames(replay.text)
+            assert [event["type"] for event in events][-1] == "turn.completed"
+            assert events[-1]["payload"]["replay"] is True
+            assert events[-1]["payload"]["stopReason"] == "no_grounded_context"
+            assert calls["direct"] == 0
+    finally:
+        seed.close()
+        identity_db.close()
+        app.state.engine.dispose()
+        _remove_test_database(app.state.test_database_path)
+
+
+def test_ae6_unreconstructable_after_returns_cursor_expired_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app, identity_db, conversation_id = _http_context(monkeypatch)
+    seed = app.state.session_factory()
+    try:
+        now = utc_now()
+        conversation = seed.scalar(
+            select(Conversation).where(Conversation.public_ref == conversation_id)
+        )
+        assert conversation is not None
+        turn = ConversationTurn(
+            conversation_id=conversation.id,
+            client_request_id="http-cursor-expired-001",
+            route=TURN_ROUTE_DIRECT_LLM,
+            status=TURN_STATUS_RUNNING,
+            user_message="Cursor expired proof.",
+            started_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        seed.add(turn)
+        seed.commit()
+        seed.refresh(turn)
+        _persist_event(
+            seed,
+            turn=turn,
+            event_type=TURN_EVENT_ACCEPTED,
+            payload={
+                "conversationId": conversation.id,
+                "clientRequestId": turn.client_request_id,
+                "replay": False,
+            },
+            commit=False,
+        )
+        _persist_event(
+            seed,
+            turn=turn,
+            event_type=TURN_EVENT_ROUTE_SELECTED,
+            payload={"route": TURN_ROUTE_DIRECT_LLM},
+            commit=False,
+        )
+        seed.commit()
+        turn = _complete_turn(
+            seed,
+            turn=turn,
+            stop_reason=TURN_STOP_REASON_NO_GROUNDED_CONTEXT,
+            assistant_answer=None,
+            plan_step_count=1,
+            retrieval_operation_count=1,
+            repair_attempt_count=0,
+        )
+        turn.events_retained_after = 2
+        seed.commit()
+        seed.refresh(turn)
+        turn_id = turn.public_ref
+
+        with TestClient(app) as client:
+            expired = client.get(
+                f"{CANONICAL_API_PREFIX}/conversations/{conversation_id}/turns/{turn_id}/events",
+                params={"after": 0},
+            )
+            assert expired.status_code == 410
+            body = expired.json()
+            assert body["error"]["code"] == "cursor_expired"
+            assert body["error"]["message"] == "The event cursor is no longer available."
+            assert body["terminalSnapshot"] == {
+                "turnId": turn_id,
+                "status": "completed",
+                "answer": None,
+                "evidence": [],
+                "citations": [],
+            }
+            assert expired.headers["cache-control"] == "private, no-store, no-transform"
+    finally:
+        seed.close()
+        identity_db.close()
+        app.state.engine.dispose()
+        _remove_test_database(app.state.test_database_path)
+
+
+def test_c01_cancel_cross_owner_is_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    app, identity_db, conversation_id = _http_context(monkeypatch)
+    seed = app.state.session_factory()
+    try:
+        other = User(username="other-member@example.test", password_hash="synthetic-password-hash")
+        foreign = Conversation(owner=other, title="Foreign conversation")
+        now = utc_now()
+        foreign_turn = ConversationTurn(
+            conversation=foreign,
+            client_request_id="foreign-cancel-001",
+            route=TURN_ROUTE_DIRECT_LLM,
+            status=TURN_STATUS_RUNNING,
+            user_message="Do not cancel me from another owner.",
+            started_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        seed.add_all([other, foreign, foreign_turn])
+        seed.commit()
+        seed.refresh(foreign_turn)
+        foreign_turn_id = foreign_turn.public_ref
+        foreign_conversation_id = foreign.public_ref
+
+        with TestClient(app) as client:
+            denied = client.post(
+                f"{CANONICAL_API_PREFIX}/conversations/{foreign_conversation_id}/turns/{foreign_turn_id}:cancel"
+            )
+            assert denied.status_code == 404
+
+        seed.refresh(foreign_turn)
+        assert foreign_turn.status == TURN_STATUS_RUNNING
     finally:
         seed.close()
         identity_db.close()
