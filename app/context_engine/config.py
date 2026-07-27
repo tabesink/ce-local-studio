@@ -89,6 +89,8 @@ class Settings:
     retrieval_max_aggregate_bytes: int = field(
         default_factory=lambda: _env_int("CE_RETRIEVAL_MAX_AGGREGATE_BYTES", 1024 * 1024)
     )
+    synthesis_timeout_seconds: int = field(default_factory=lambda: _env_int("CE_SYNTHESIS_TIMEOUT_SECONDS", 60))
+    synthesis_max_output_tokens: int = field(default_factory=lambda: _env_int("CE_SYNTHESIS_MAX_OUTPUT_TOKENS", 4096))
     lightrag_client_kind: str = field(default_factory=lambda: _env("CE_LIGHTRAG_CLIENT_KIND", "native") or "native")
     worker_idle_seconds: int = field(default_factory=lambda: _env_int("CE_WORKER_IDLE_SECONDS", 2))
 
@@ -143,6 +145,10 @@ class Settings:
             raise ValueError("retrieval_max_candidate_bytes must be positive.")
         if self.retrieval_max_aggregate_bytes < self.retrieval_max_candidate_bytes:
             raise ValueError("retrieval_max_aggregate_bytes must cover at least one candidate.")
+        if self.synthesis_timeout_seconds <= 0:
+            raise ValueError("synthesis_timeout_seconds must be positive.")
+        if self.synthesis_max_output_tokens <= 0:
+            raise ValueError("synthesis_max_output_tokens must be positive.")
 
     @classmethod
     def from_env(cls) -> Settings:

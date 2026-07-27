@@ -12,6 +12,10 @@ from typing import Any
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, load_only, selectinload
 
+from context_engine.adapters.synthesis import (
+    RegistrySynthesisStreamAdapter,
+    SynthesisAdapterError,
+)
 from context_engine.config import Settings
 from context_engine.db import utc_now
 from context_engine.models import (
@@ -149,7 +153,12 @@ class PublicEvidenceRef:
 
 
 class SynthesisProviderError(Exception):
-    pass
+    """Orchestrator-facing synthesis failure; never carries prompts or credentials."""
+
+    def __init__(self, message: str = SAFE_PROVIDER_FAILURE_MESSAGE, *, code: str = "provider_failure") -> None:
+        self.code = code
+        self.message = message
+        super().__init__(message)
 
 
 class OrchestrationPolicyError(Exception):
@@ -157,6 +166,12 @@ class OrchestrationPolicyError(Exception):
 
 
 class SynthesisStreamAdapter:
+    """Orchestrator-facing synthesis port.
+
+    Production default is the typed registry facade. Tests may subclass this
+    type and inject via ``app.state.synthesis_stream_adapter``.
+    """
+
     def stream_direct(
         self,
         *,
@@ -165,7 +180,7 @@ class SynthesisStreamAdapter:
         prior_user_questions: tuple[str, ...],
         assembly_context: PromptAssemblyContext | None = None,
     ) -> Iterable[str]:
-        return ("I can help with that.",)
+        raise SynthesisProviderError()
 
     def stream_grounded(
         self,
@@ -176,7 +191,14 @@ class SynthesisStreamAdapter:
         prior_user_questions: tuple[str, ...],
         assembly_context: PromptAssemblyContext | None = None,
     ) -> Iterable[str]:
-        return ("The answer is supported by the current evidence.",)
+        raise SynthesisProviderError()
+
+
+def default_synthesis_stream_adapter(settings: Settings) -> RegistrySynthesisStreamAdapter:
+    return RegistrySynthesisStreamAdapter(
+        timeout_seconds=float(settings.synthesis_timeout_seconds),
+        max_output_tokens=int(settings.synthesis_max_output_tokens),
+    )
 
 
 class P6RetrievalPort:
@@ -1340,11 +1362,14 @@ class TurnOrchestrator:
     def __init__(
         self,
         *,
-        synthesis_adapter: SynthesisStreamAdapter | None = None,
+        synthesis_adapter: SynthesisStreamAdapter | RegistrySynthesisStreamAdapter | None = None,
         retrieval_port: P6RetrievalPort | None = None,
     ) -> None:
-        self._synthesis_adapter = synthesis_adapter or SynthesisStreamAdapter()
+        self._synthesis_adapter = synthesis_adapter
         self._retrieval_port = retrieval_port or P6RetrievalPort()
+
+    def _synthesis(self, settings: Settings) -> SynthesisStreamAdapter | RegistrySynthesisStreamAdapter:
+        return self._synthesis_adapter or default_synthesis_stream_adapter(settings)
 
     def stream_turn(
         self,
@@ -1376,13 +1401,13 @@ class TurnOrchestrator:
             }
             if start.assembly_context is not None:
                 kwargs["assembly_context"] = start.assembly_context
-            for token in self._synthesis_adapter.stream_direct(**kwargs):
+            for token in self._synthesis(settings).stream_direct(**kwargs):
                 if token:
                     tokens.append(token)
                     yield _persist_event(
                         db, turn=turn, event_type=TURN_EVENT_ANSWER_DELTA, payload={"text": token}
                     )
-        except SynthesisProviderError:
+        except (SynthesisAdapterError, SynthesisProviderError):
             turn = _fail_turn(
                 db,
                 turn=turn,
@@ -1491,13 +1516,14 @@ class TurnOrchestrator:
             }
             if start.assembly_context is not None:
                 kwargs["assembly_context"] = start.assembly_context
-            for token in self._synthesis_adapter.stream_grounded(**kwargs):
+            for token in self._synthesis(settings).stream_grounded(**kwargs):
                 if token:
                     tokens.append(token)
                     yield _persist_event(
                         db, turn=turn, event_type=TURN_EVENT_ANSWER_DELTA, payload={"text": token}
                     )
-        except SynthesisProviderError:
+        except (SynthesisAdapterError, SynthesisProviderError):
+            # U3 tightens this to evidence_only only when no answer.delta was persisted.
             turn = _complete_turn(
                 db,
                 turn=turn,
