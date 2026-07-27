@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "targetId": "button",
   "owner": "src/ui",
-  "catalogState": "IN_PROGRESS",
+  "catalogState": "FACTORY_READY",
   "disposition": "migrate+retain-and-reverify",
   "sourceEvidence": {
     "notes": [

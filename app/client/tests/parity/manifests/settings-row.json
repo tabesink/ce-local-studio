@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "targetId": "settings-row",
   "owner": "src/features/settings-panel",
-  "catalogState": "IN_PROGRESS",
+  "catalogState": "FACTORY_READY",
   "disposition": "retain-and-reverify",
   "sourceEvidence": {
     "notes": [
