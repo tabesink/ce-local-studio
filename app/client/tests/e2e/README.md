@@ -12,9 +12,9 @@ Settings domains production-boundary acceptance (F3 / R12 / AE1) is **P12-07** (
    docker compose --env-file .env.stack.local -f compose.stack.yml up --build -d
    ```
 
-   Recreate `.env.stack.local` from `app/.env.stack.example` for the ingress-wired HTTP profile: set `CE_STACK_PUBLIC_ORIGIN=http://127.0.0.1:<STACK_FRONTEND_PORT>` (use `127.0.0.1`, not `localhost`). Compose maps that value to both FastAPI `CE_PUBLIC_ORIGIN` and BFF `CONTEXT_ENGINE_PUBLIC_ORIGIN`. Frontend health on `/login` is not BFF trust-path proof (P10-02 smoke).
+   Recreate `.env.stack.local` from `app/.env.stack.example` for the ingress-wired HTTP profile: set `CE_STACK_PUBLIC_ORIGIN=http://127.0.0.1:<STACK_FRONTEND_PORT>` (use `127.0.0.1`, not `localhost`). Compose maps that value to both FastAPI `CE_PUBLIC_ORIGIN` and BFF `CONTEXT_ENGINE_PUBLIC_ORIGIN`. Frontend health on `/login` is not BFF trust-path proof — use `python app/scripts/stack_smoke_core.py --env-file app/.env.stack.local` for the P10-02 core path.
 
-2. Ensure `.env.stack.local` has `CE_ADMIN_USERNAME` / `CE_ADMIN_PASSWORD` (same values the stack seeds).
+2. Ensure `.env.stack.local` has `CE_ADMIN_USERNAME` / `CE_ADMIN_PASSWORD` (Compose `bootstrap` one-shot only; not api/worker env).
 3. Optional: `PLAYWRIGHT_BASE_URL` (default `http://127.0.0.1:3000`; must match `CE_STACK_PUBLIC_ORIGIN`).
 4. Optional member overrides: `CE_E2E_MEMBER_USERNAME` / `CE_E2E_MEMBER_PASSWORD` (defaults used by seed via `docker compose exec api`).
 5. One-time browser install: `npx playwright install chromium` from `app/client`.

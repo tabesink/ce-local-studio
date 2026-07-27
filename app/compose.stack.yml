@@ -47,6 +47,25 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # Insert-only admin seed (P1-02 / DRIFT-21). Never run from API lifespan.
+  # CE_ADMIN_* live only on this one-shot service (not api/worker).
+  bootstrap:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    networks: [ce_stack]
+    command: ["python", "-m", "context_engine.bootstrap_admin"]
+    environment:
+      CONTEXT_ENGINE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?set POSTGRES_USER locally}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD locally}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB locally}
+      CE_ADMIN_USERNAME: ${CE_ADMIN_USERNAME:?set CE_ADMIN_USERNAME locally}
+      CE_ADMIN_PASSWORD: ${CE_ADMIN_PASSWORD:?set CE_ADMIN_PASSWORD locally}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
   api:
     build:
       context: .
@@ -55,8 +74,6 @@ services:
     command: ["python", "-m", "uvicorn", "context_engine.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       CONTEXT_ENGINE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?set POSTGRES_USER locally}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD locally}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB locally}
-      CE_ADMIN_USERNAME: ${CE_ADMIN_USERNAME:?set CE_ADMIN_USERNAME locally}
-      CE_ADMIN_PASSWORD: ${CE_ADMIN_PASSWORD:?set CE_ADMIN_PASSWORD locally}
       CE_SESSION_COOKIE_SECURE: ${CE_SESSION_COOKIE_SECURE:-false}
       CONTEXT_ENGINE_TESTING: ${CONTEXT_ENGINE_TESTING:-true}
       CE_PUBLIC_ORIGIN: ${CE_STACK_PUBLIC_ORIGIN:-}
@@ -83,6 +100,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      bootstrap:
+        condition: service_completed_successfully
 
   worker:
     build:
@@ -92,8 +111,6 @@ services:
     command: ["python", "-m", "context_engine.worker"]
     environment:
       CONTEXT_ENGINE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?set POSTGRES_USER locally}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD locally}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB locally}
-      CE_ADMIN_USERNAME: ${CE_ADMIN_USERNAME:?set CE_ADMIN_USERNAME locally}
-      CE_ADMIN_PASSWORD: ${CE_ADMIN_PASSWORD:?set CE_ADMIN_PASSWORD locally}
       CE_SESSION_COOKIE_SECURE: ${CE_SESSION_COOKIE_SECURE:-false}
       CONTEXT_ENGINE_TESTING: ${CONTEXT_ENGINE_TESTING:-true}
       CE_PUBLIC_ORIGIN: ${CE_STACK_PUBLIC_ORIGIN:-}

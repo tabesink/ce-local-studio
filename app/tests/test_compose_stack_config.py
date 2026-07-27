@@ -65,6 +65,27 @@ def test_compose_keeps_one_shot_migrate_before_api_worker() -> None:
     assert 'restart: "no"' in text
 
 
+def test_compose_bootstrap_before_api_with_admin_secrets_only_on_bootstrap() -> None:
+    text = COMPOSE.read_text(encoding="utf-8")
+    assert "bootstrap:" in text
+    assert 'command: ["python", "-m", "context_engine.bootstrap_admin"]' in text
+
+    bootstrap_block = text.split("bootstrap:", 1)[1].split("\n  api:", 1)[0]
+    assert "CE_ADMIN_USERNAME:" in bootstrap_block
+    assert "CE_ADMIN_PASSWORD:" in bootstrap_block
+    assert 'restart: "no"' in bootstrap_block
+    assert "migrate:" in bootstrap_block or "condition: service_completed_successfully" in bootstrap_block
+
+    api_block = text.split("\n  api:", 1)[1].split("\n  worker:", 1)[0]
+    worker_block = text.split("\n  worker:", 1)[1].split("\n  frontend:", 1)[0]
+    assert "CE_ADMIN_USERNAME" not in api_block
+    assert "CE_ADMIN_PASSWORD" not in api_block
+    assert "CE_ADMIN_USERNAME" not in worker_block
+    assert "CE_ADMIN_PASSWORD" not in worker_block
+    assert "bootstrap:" in api_block
+    assert "service_completed_successfully" in api_block
+
+
 def test_env_example_primary_is_ingress_wired_http_not_bypass() -> None:
     text = ENV_EXAMPLE.read_text(encoding="utf-8")
     assert "CE_STACK_PUBLIC_ORIGIN=" in text

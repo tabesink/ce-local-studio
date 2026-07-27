@@ -24,7 +24,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | P7 | Durable grounded streaming chat | DONE | P6 | conversation ownership, intent gate, bounded RAG, SSE, idempotent replay, redaction pass |
 | P8 | Operational safety and Phase 1 gate | DONE | P1-P7 | transactional audit writes, allowlisted logs, request/trace correlation, health, privacy scans, and resilience evidence pass |
 | P9 | Thin Next.js frontend | DONE | P1-P8 | login/chat/documents/settings and the reserved graph state use only versioned APIs and pass parity/accessibility checks — P9-01..P9-05 DONE; P12 owns deployed-ingress / visual-matrix residuals |
-| P10 | Deployable application stack | NOT_STARTED | P8-P9 | runnable Compose stack, explicit migrations/bootstrap, worker lifecycle, smoke path, and operator runbook pass |
+| P10 | Deployable application stack | IN_PROGRESS | P8-P9 | runnable Compose stack, explicit migrations/bootstrap, worker lifecycle, smoke path, and operator runbook pass |
 | P11 | Governed context assembly | NOT_STARTED | P6-P7 | opaque refs for sources/evidence/templates, private bounded assembly, replay fingerprint and invalidation pass |
 | P12 | Production release and recovery | NOT_STARTED | P0-P11 | immutable artifacts, deployed-path streaming, migration/rollback, security/load/backup/restore and runbooks pass |
 
@@ -315,6 +315,18 @@ example profile (`CONTEXT_ENGINE_TESTING=true` + full CE_* — not P12
 deployment evidence). Residuals remain P10-02 smoke/bootstrap/storage
 readiness, P10-03 drain runbook, and P12 TLS/direct-API denial.
 
+P10-02 closure evidence (2026-07-27):
+`docs/_scratch/p10-02-stack-smoke-inventory.md` and
+`docs/_scratch/p10-02-stack-smoke-evidence.md` record Compose
+`bootstrap` before API healthy, bootstrap-only `CE_ADMIN_*`, filesystem
+object-store composition in `/health/ready`, and scripted BFF
+CSRF→login→SSE core-path smoke plus AE6 trust negatives under
+`CONTEXT_ENGINE_TESTING=true` (allowed `synthesis_profile_not_ready`
+terminal without live LLM — not completed-synthesis or worker-leased
+proof). Residuals remain P10-03 worker-path smoke/drain and worker
+readiness, P12 TLS/direct-API denial, browser CSRF product fix, and
+production/S3 store readiness.
+
 ### P9-P11 - User interface, deployable runtime, and governed context workflows
 
 | Task | Status | Depends on | Deliverable |
@@ -325,7 +337,7 @@ readiness, P10-03 drain runbook, and P12 TLS/direct-API denial.
 | P9-04 | DONE | P2-P3,P8,P9-01 | approve the Settings Domain accordion interaction amendment across behavior/component/state/accessibility contracts, then implement `/settings?section=domains`; no deferred operator or publication UI — evidence `docs/_scratch/p9-04-settings-domains-evidence.md`; production-boundary Playwright F3 remains P12-07 |
 | P9-05 | DONE | P9-01 | import-direction, thin-route, server/browser boundary and contract/barrel CI validators — evidence `docs/_scratch/p9-05-ci-validators-evidence.md`; FE-01 mega-kit demolition, Compose public-origin topology, and two-user/BFCache E2E remain FE-01/P10/P12 |
 | P10-01 | DONE | P8,P9 | Compose services and ingress-wired HTTP server configuration for PostgreSQL, migration, API, worker and frontend — evidence `docs/_scratch/p10-01-compose-config-evidence.md`; BFF/API/SSE smoke and storage readiness remain P10-02; drain runbook P10-03; TLS/direct-API denial P12 |
-| P10-02 | NOT_STARTED | P10-01 | explicit migration/bootstrap plus BFF/API/SSE core-path smoke stack |
+| P10-02 | DONE | P10-01 | explicit migration/bootstrap plus BFF/API/SSE core-path smoke stack — evidence `docs/_scratch/p10-02-stack-smoke-evidence.md`; worker drain/runbook P10-03; TLS/direct-API denial P12; browser CSRF residual named |
 | P10-03 | NOT_STARTED | P10-02 | startup/shutdown, worker claim recovery and deployment operator runbook |
 | P11-01 | NOT_STARTED | P6 | prompt_templates/composer_ref_tokens/accepted-ref schema and seeds for source/evidence/template refs |
 | P11-02 | NOT_STARTED | P11-01 | discovery, opaque-token validation, domain compatibility and expiry |
