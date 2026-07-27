@@ -511,6 +511,50 @@ def test_m03_ae7_unsupported_provider_kind_fails_closed_without_stand_in(tmp_pat
         db.close()
 
 
+def test_m03_ae7_domain_unsupported_provider_completes_evidence_only(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db = _open_db(settings)
+    try:
+        _seed_source(db)
+        turn = _running_turn(
+            db,
+            route=TURN_ROUTE_DOMAIN_RAG,
+            message="What is the retention policy?",
+            domain_id="domain-orch",
+        )
+        facade = RegistrySynthesisStreamAdapter(
+            timeout_seconds=5,
+            max_output_tokens=256,
+            registry=default_synthesis_registry(),
+        )
+        events = list(
+            TurnOrchestrator(
+                synthesis_adapter=facade,
+                retrieval_port=CountingRetrievalPort([_mapped_evidence()]),
+            ).stream_turn(
+                db,
+                settings=settings,
+                start=_start(turn, synthesis=_synthesis(provider_kind=PROVIDER_BEDROCK)),
+            )
+        )
+        db.refresh(turn)
+        types = [event.event_type for event in events]
+        assert TURN_EVENT_EVIDENCE_DELTA in types
+        assert TURN_EVENT_ANSWER_DELTA not in types
+        assert turn.status == TURN_STATUS_COMPLETED
+        assert turn.stop_reason == TURN_STOP_REASON_EVIDENCE_ONLY
+        assert turn.assistant_answer is None
+        text = str([e.payload for e in events])
+        assert "I can help with that." not in text
+        assert "supported by the current evidence" not in text
+        evidence = db.scalar(
+            select(ConversationTurnEvidenceRef).where(ConversationTurnEvidenceRef.turn_id == turn.id)
+        )
+        assert evidence is not None
+    finally:
+        db.close()
+
+
 def test_m03_ae8_single_shot_never_second_retrieval_or_repair(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     db = _open_db(settings)

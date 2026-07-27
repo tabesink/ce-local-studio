@@ -14,15 +14,6 @@ from typing import Literal, Protocol
 from context_engine.models import PROVIDER_BEDROCK, PROVIDER_OLLAMA, PROVIDER_OPENAI
 
 SAFE_SYNTHESIS_FAILURE_MESSAGE = "The answer could not be completed."
-_FORBIDDEN_TOKEN_MARKERS = (
-    "sk-",
-    "https://",
-    "http://",
-    "api_key",
-    "credential",
-    "job_id",
-    "provider_payload",
-)
 
 
 class SynthesisAdapterError(Exception):
@@ -70,16 +61,6 @@ class SynthesisAdapter(Protocol):
 
 
 OpenAITransport = Callable[[SynthesisRequest], Iterable[str]]
-
-
-def _reject_leaky_token(token: str) -> str:
-    lowered = token.lower()
-    if any(marker in lowered for marker in _FORBIDDEN_TOKEN_MARKERS):
-        raise SynthesisAdapterError(
-            "synthesis_malformed_response",
-            "Synthesis response could not be normalized.",
-        )
-    return token
 
 
 def _build_messages(request: SynthesisRequest) -> list[dict[str, str]]:
@@ -181,21 +162,25 @@ class OpenAISynthesisAdapter:
                 if not token:
                     continue
                 yielded = True
-                yield _reject_leaky_token(token)
-        except SynthesisAdapterError:
-            raise
-        except TimeoutError as exc:
+                # Answer text is free-form; do not substring-ban URLs/words that
+                # appear in legitimate grounded answers. Privacy is enforced by
+                # yielding only transport text tokens and by safe error messages.
+                yield token
+        except SynthesisAdapterError as exc:
+            # Drop __cause__ so provider payloads cannot ride exception chains.
+            raise SynthesisAdapterError(exc.code, exc.message, exc.status_code) from None
+        except TimeoutError:
             raise SynthesisAdapterError(
                 "synthesis_timeout",
                 SAFE_SYNTHESIS_FAILURE_MESSAGE,
                 504,
-            ) from exc
-        except Exception as exc:  # noqa: BLE001
+            ) from None
+        except Exception:
             raise SynthesisAdapterError(
                 "synthesis_unavailable",
                 SAFE_SYNTHESIS_FAILURE_MESSAGE,
                 502,
-            ) from exc
+            ) from None
         if not yielded:
             raise SynthesisAdapterError(
                 "synthesis_empty_output",

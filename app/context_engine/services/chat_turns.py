@@ -1407,7 +1407,7 @@ class TurnOrchestrator:
                     yield _persist_event(
                         db, turn=turn, event_type=TURN_EVENT_ANSWER_DELTA, payload={"text": token}
                     )
-        except (SynthesisAdapterError, SynthesisProviderError):
+        except (SynthesisAdapterError, SynthesisProviderError, Exception):
             turn = _fail_turn(
                 db,
                 turn=turn,
@@ -1527,7 +1527,7 @@ class TurnOrchestrator:
                         db, turn=turn, event_type=TURN_EVENT_ANSWER_DELTA, payload={"text": token}
                     )
                     answer_delta_persisted = True
-        except (SynthesisAdapterError, SynthesisProviderError):
+        except (SynthesisAdapterError, SynthesisProviderError, Exception):
             if answer_delta_persisted:
                 turn = _fail_turn(
                     db,

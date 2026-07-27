@@ -117,14 +117,15 @@ def test_unsupported_provider_kinds_fail_closed_never_stand_in_success() -> None
         assert "supported by the current evidence" not in raised.value.message
 
 
-def test_privacy_sentinels_in_transport_payload_cannot_leak_into_tokens_or_errors() -> None:
+def test_privacy_sentinels_in_transport_errors_cannot_leak_into_error_surfaces() -> None:
     sentinel_url = "https://api.openai.invalid/v1/chat/completions"
     sentinel_job = "job_priv_9f3a"
     sentinel_key = "sk-live-PRIVACY-SENTINEL"
 
     def leaky(_request: SynthesisRequest):
-        # Transport must only yield answer text; adapter must not stringify payloads.
-        yield "Safe token."
+        # Transport may yield ordinary answer text (including URLs in docs).
+        # Provider exception text must not escape into typed error messages.
+        yield "See https://example.com/policy for the credential rotation steps."
         raise RuntimeError(
             f"upstream failed url={sentinel_url} job_id={sentinel_job} api_key={sentinel_key}"
         )
@@ -136,6 +137,7 @@ def test_privacy_sentinels_in_transport_payload_cannot_leak_into_tokens_or_error
     assert sentinel_url not in surfaces
     assert sentinel_job not in surfaces
     assert sentinel_key not in surfaces
+    assert raised.value.__cause__ is None
 
 
 def test_settings_require_positive_synthesis_timeout_and_max_output() -> None:
