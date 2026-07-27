@@ -43,14 +43,16 @@ cd app
 .\.venv\Scripts\python.exe -m pytest tests\test_chat_orchestration.py tests\test_synthesis_adapters.py tests\test_chat_sse_http_contract.py tests\test_chat_turn_route_http_contract.py -q
 ```
 
-Result: PASS, 29 tests (9 orchestration + 9 synthesis adapter + 2 SSE + 9
-turn-route HTTP).
+Result: PASS, 30 tests (10 orchestration + 9 synthesis adapter + 2 SSE + 9
+turn-route HTTP) after review follow-up.
 
 Coverage includes M-03 AE1 grounded one-shot budget, AE2 empty-corpus
 `no_grounded_context`, AE3 evidence_only before answer, AE4 post-answer
 `turn.failed`, AE5/M-07 direct `0/0/0`, AE6 privacy sentinels, AE7 unsupported
-provider fail-closed, AE8 single retrieval / `repairAttemptCount:0`, plus
-adapter timeout/auth/malformed/empty/privacy fixtures and SSE compatibility.
+provider fail-closed (direct + domain evidence_only), AE8 single retrieval /
+`repairAttemptCount:0`, plus adapter timeout/auth/malformed/empty/privacy
+fixtures and SSE compatibility. Answer-token substring denylisting was removed
+in review follow-up so legitimate grounded URLs/words are not rejected.
 
 ### Static quality
 
