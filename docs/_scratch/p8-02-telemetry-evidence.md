@@ -13,13 +13,17 @@ Inventory: `docs/_scratch/p8-02-telemetry-inventory.md`
 ## What landed
 
 - Process-local metrics helper `app/context_engine/services/metrics.py` with closed
-  metric names/labels, identity key/value rejection, best-effort emit, and
-  `metrics.outage` safe_log on failure.
-- HTTP middleware increments `http_request` beside allowlisted JSON logs.
+  metric names/labels, identity key/value rejection, nested best-effort emit, and
+  `metrics.outage` safe_log on failure (outage logging cannot break callers).
+- HTTP middleware increments `http_request` beside allowlisted JSON logs and
+  swallows emit failures so responses always return.
 - Chat terminals optionally log `request_id` when available (option b — no schema
-  migration); join claim↔terminal via `trace_id`; emit `chat_turn_terminal`.
-- Worker claim/fail peers emit `worker_operation` with bounded `operation_type`.
-- Adversarial privacy scans cover formatted JSON logs + metric dumps.
+  migration); worker path omits `request_id` and joins claim↔terminal via
+  `trace_id`; emit `chat_turn_terminal`.
+- Worker succeed/fail terminals emit `worker_operation` with bounded
+  `operation_type` (claim logs stay log-only).
+- Adversarial privacy scans cover formatted JSON logs + metric dumps, including
+  mutation windows on real logger sinks and worker-path correlation.
 - No scrape/read observability routes; Phase 1 absence retained.
 
 ## Commands
@@ -32,7 +36,7 @@ python -m pytest tests/test_service_metrics.py \
   tests/test_phase_one_observability_scope.py -q
 ```
 
-Result: 15 passed.
+Result: 18 passed (post-review hardening).
 
 ## Residuals
 
