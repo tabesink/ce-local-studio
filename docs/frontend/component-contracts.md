@@ -58,7 +58,23 @@ Product-specific compositions belong to their features:
 
 - chat: ConversationRail, Transcript, Composer, EvidenceInspector
 - documents: DocumentLibrary, DocumentViewer, SourceOperationPanel
-- settings: SettingsNav, SettingsGroup, SettingsRow
+- settings: SettingsNav, SettingsGroup, SettingsRow, Settings Domain accordion (Settings-owned; not a shared Accordion primitive)
+
+### Settings Domain accordion
+
+Settings-owned Controllers-style expandable list for administrator Knowledge Domains. Cite Local Studio Controllers/environment-controls and Knowledge Graphs packs as grammar evidence only; do not export `@/ui` Accordion or StorageBar.
+
+| Element | Contract |
+| --- | --- |
+| Ownership | `src/features/settings-panel` only until a second consumer and contract change justify a shared primitive |
+| Disclosure | One open row at a time; collapsed by default; expand state is local UI only |
+| Collapsed header | Display name, mono id, domain `state` StatusPill, Start/Stop XOR via contracted `ToggleSwitch` (busy/disabled while in flight) |
+| Expand body | Locked safe facts from closed `AdminDomainDto` only: nested `embeddingProfile.name` / `vectorDimensions`, `state`, `queryEligible`, `runtimeReady`, `controlGeneration`, `version` as safe labels. Administrator Settings only — never member/chat surfaces |
+| Explicit non-requirement | No `storageSummary`, ProgressBar-on-expand, paths, ports, runtime URLs, or browser-computed quotas |
+| Deploy | Create then start as one gesture; if create succeeds and start fails, keep the domain listed (`start_failed_keep`) and allow Start retry after refresh |
+| Delete | Expand-only quiet danger control + `UiModal`; Cancel receives initial focus; `If-Match` from `version`; display-name typing only when closed DTO/precondition metadata supplies nonzero affected-count; otherwise confirm-only with downstream-effects copy; keep dialog open on conflict/stale with request ID |
+| Post-mutation | After `202 {operation}`, disable conflicting controls until list refresh reconciles `state` / `allowedActions`; `allowedActions` remains advisory |
+| Forbidden | Shared Accordion kit export; Phase 2 ops/logs/usage chrome; Phase 3 publication UI |
 
 ## Prop and event rules
 

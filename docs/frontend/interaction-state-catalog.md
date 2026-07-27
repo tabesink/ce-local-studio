@@ -105,6 +105,30 @@ Selecting a turn with no evidence shows No evidence was used for this answer. A 
 
 Allowed actions come from typed service rules or an allowed-actions projection, not string comparisons spread across components.
 
+## Settings → Knowledge Domains accordion
+
+Administrator-only Settings section (`/settings?section=domains`). One-open disclosure; no storageSummary UI.
+
+| UI state | Behavior |
+| --- | --- |
+| loading | Domains list skeleton/notice; no invent empty success |
+| empty | `No Knowledge Domains are available.`; Deploy affordance remains when product allows |
+| ready / collapsed | Header shows name, mono id, state StatusPill, Start/Stop XOR |
+| ready / expanded | Locked facts from closed `AdminDomainDto`; quiet Delete |
+| stale / refresh failure | Retain prior list when present; non-blocking notice + request ID; Reload |
+| fatal failure | Safe Domains load error + request ID; no infra dump |
+| deploy validation | Local id/name/profile rules before submit; preserve draft |
+| deploy create-fail | Keep deploy draft; danger notice; no phantom domain row |
+| deploy start-failed-keep | Create succeeded, start failed: domain remains listed (typically stopped); clear deploy draft; danger notice; Start retry after refresh (A-03 UI half) |
+| start/stop busy | Disable conflicting lifecycle controls until refresh reconciles |
+| delete confirm | Modal open; Cancel-first focus; If-Match delete |
+| delete stale / conflict | Keep modal useful; show safe conflict/stale copy + request ID; Reload/reconfirm (A-05 / A-10 UI half) |
+| deleting | Domain shows deleting tone; controls disabled; refresh until gone or recoverable op state |
+| role revocation / unauthorized section | Drop admin sections; `replace` to General with notice; clear in-memory domains; never flash Domains chrome for members |
+| one-open transition | Opening B collapses A; if selected domain disappears after refresh, collapse |
+
+Traceability: A-03, A-05, A-10 UI halves; C-05 section fallback.
+
 ## Authentication and permission states
 
 - Resolving session: shell-private skeleton; no personalized data.

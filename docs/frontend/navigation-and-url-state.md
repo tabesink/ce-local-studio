@@ -44,10 +44,11 @@ Example: `/documents?document=doc_opaque&evidence=ev_opaque&page=18` may open pa
 | Intent | History operation |
 | --- | --- |
 | Select primary route, conversation, or document | `push` |
+| Select an allowlisted Settings admin section (`provider`, `domains`, `users`) | `push` |
 | Select turn/evidence/node, filter, or page during viewer scroll | debounced `replace` |
 | Open evidence from chat in Library | `push` to `/documents`; retain chat entry behind it |
 | Close an inline panel | `replace` removing its dependent parameters |
-| Auth redirect or canonical cleanup | `replace` |
+| Invalid/unauthorized Settings `section` → General, or other auth/canonical cleanup | `replace` |
 
 Browser Back restores the prior safe selection, then revalidates it. “Return to answer” uses Back when the preceding entry is same-origin `/chat`; otherwise it builds `/chat?conversation=<ref>&turn=<ref>&evidence=<ref>` from authorized safe refs. Never accept a free-form return URL.
 

@@ -51,12 +51,15 @@ describe("frontend factory authority", () => {
     assert.match(components, /create a second component tree under src\/components/);
   });
 
-  it("keeps the starter factory bounded and the Domain accordion contract-blocked", () => {
+  it("keeps the starter factory bounded and the Domain accordion amendment in progress", () => {
     const agents = readRepo("docs/frontend/AGENTS.md");
     const plan = readRepo("docs/plans/2026-07-22-003-feat-ce-frontend-factory-plan.md");
+    const parity = readRepo("docs/frontend/ui-parity-spec.md");
     assert.match(agents, /Button, Input, StatusPill, SettingsRow/);
-    assert.match(agents, /accordion remains `BLOCKED_CONTRACT`/);
+    assert.match(agents, /catalog state is `IN_PROGRESS` until parity evidence earns `FACTORY_READY`/);
     assert.match(agents, /starter coverage, not a complete allowlist/);
+    assert.match(parity, /Settings Domain accordion[\s\S]*IN_PROGRESS/);
+    assert.doesNotMatch(parity, /Settings Domain accordion[\s\S]*BLOCKED_CONTRACT/);
     assert.match(plan, /phase_compatibility: phase-1-child/);
     assert.match(plan, /no application factory is considered shipped during D0/);
     assert.match(plan, /live `\/settings\?section=domains` proof must use contracted DTO\/BFF states/);
