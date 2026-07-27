@@ -77,10 +77,15 @@ unapproved ErrorCodes appear in the focused denial paths.
 ## Residuals
 
 - P7-03: bounded plan/retrieve/repair/synthesize; empty-corpus grounded refusal.
-- P7-04: sealed SSE live/resume/replay, attach/replay races, terminal persistence.
+- P7-04: sealed SSE live/resume/replay, attach/replay races, terminal persistence;
+  extend `_chat_turn_api_error` when new pre-stream codes are introduced.
 - P7-05: source/domain delete redaction.
 - P8: system-wide privacy/audit breadth across all sinks.
 - P9: browser draft-preserve and domain-prompt UX after `domain_required`.
 - P11: composer-ref consume/fingerprint correctness beyond turn-start fencing.
+- Review residuals (non-blocking): HTTP proof for `operation_conflict` and
+  runtime-unavailable projector branches; M-02 barrier/latch race beyond static
+  stopped-domain denial; transport-level malformed `domainId` (service-side
+  pattern proof already exists).
 
 This slice does not claim the closed Phase 1 chat capability manifest complete.

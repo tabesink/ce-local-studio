@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 import context_engine.services.chat_turns as chat_turns_module
+import context_engine.services.evidence as evidence_module
 from context_engine.api.contract_app import (
     CANONICAL_API_PREFIX,
     CANONICAL_REQUEST_ID_HEADER,
@@ -204,7 +205,7 @@ def test_m07_ae2_domain_seeking_without_domain_returns_domain_required_and_no_tu
 def test_m07_ae1_general_message_creates_direct_llm_turn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    app, settings, owner_token, _, conversation_ref, owner_id, owner_session_id = _http_context(
+    app, settings, _owner_token, _, conversation_ref, owner_id, owner_session_id = _http_context(
         monkeypatch
     )
     try:
@@ -234,10 +235,20 @@ def test_m07_ae1_general_message_creates_direct_llm_turn(
 def test_m07_ae3_eligible_domain_creates_domain_rag_turn(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    app, settings, owner_token, _, conversation_ref, owner_id, owner_session_id = _http_context(
+    app, settings, _owner_token, _, conversation_ref, owner_id, owner_session_id = _http_context(
         monkeypatch
     )
-    monkeypatch.setattr(chat_turns_module, "_validate_domain_for_new_turn", lambda *_a, **_k: None)
+
+    class _HealthyController:
+        def health(self, _domain: Domain) -> object:
+            return type("Health", (), {"healthy": True})()
+
+    # Exercise real resolve_available_domain; only stub runtime health.
+    monkeypatch.setattr(
+        evidence_module,
+        "controller_from_settings",
+        lambda _settings: _HealthyController(),
+    )
     try:
         with app.state.session_factory() as db:
             _seed_domain(db, domain_id="ops-manual", state=DOMAIN_STATE_RUNNING)
