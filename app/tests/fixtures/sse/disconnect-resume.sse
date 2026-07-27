@@ -1,0 +1,19 @@
+id: evt_disc_1
+event: turn.accepted
+data: {"schemaVersion":"1.0","eventId":"evt_disc_1","turnId":"turn_disc1","sequence":1,"type":"turn.accepted","occurredAt":"2026-07-27T12:40:00Z","payload":{"conversationId":"conversation_1","clientRequestId":"request_disc_1","replay":false}}
+
+id: evt_disc_2
+event: route.selected
+data: {"schemaVersion":"1.0","eventId":"evt_disc_2","turnId":"turn_disc1","sequence":2,"type":"route.selected","occurredAt":"2026-07-27T12:40:01Z","payload":{"route":"direct_llm"}}
+
+id: evt_disc_3
+event: answer.delta
+data: {"schemaVersion":"1.0","eventId":"evt_disc_3","turnId":"turn_disc1","sequence":3,"type":"answer.delta","occurredAt":"2026-07-27T12:40:02Z","payload":{"text":"Before disconnect."}}
+
+id: evt_disc_4
+event: answer.delta
+data: {"schemaVersion":"1.0","eventId":"evt_disc_4","turnId":"turn_disc1","sequence":4,"type":"answer.delta","occurredAt":"2026-07-27T12:40:03Z","payload":{"text":" After resume."}}
+
+id: evt_disc_5
+event: turn.completed
+data: {"schemaVersion":"1.0","eventId":"evt_disc_5","turnId":"turn_disc1","sequence":5,"type":"turn.completed","occurredAt":"2026-07-27T12:40:04Z","payload":{"route":"direct_llm","status":"completed","stopReason":"direct_llm","citations":[],"acceptedRefs":[],"budget":{"planStepCount":0,"retrievalOperationCount":0,"repairAttemptCount":0},"replay":true}}

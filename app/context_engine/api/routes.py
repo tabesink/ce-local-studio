@@ -48,6 +48,7 @@ from context_engine.api.dependencies import (
 from context_engine.api.errors import ApiError, request_id_from
 from context_engine.api.public_schemas import (
     CsrfResponse,
+    CursorExpiredEnvelope,
     ErrorEnvelope,
     LiveHealthResponse,
     ReadyHealthResponse,
@@ -650,12 +651,16 @@ def _chat_turn_api_error(exc: ChatTurnError) -> ApiError:
         ),
         "unauthenticated": (401, "unauthenticated", "Authentication required."),
         "turn_not_cancellable": (409, "turn_not_cancellable", "Turn is not cancellable."),
+        "cursor_expired": (410, "cursor_expired", "The event cursor is no longer available."),
     }
     status_code, code, message = failures.get(
         exc.code,
         (503, "dependency_unavailable", "Chat is temporarily unavailable."),
     )
-    return ApiError(status_code, code, message)
+    extra = None
+    if code == "cursor_expired" and exc.terminal_snapshot is not None:
+        extra = {"terminalSnapshot": exc.terminal_snapshot}
+    return ApiError(status_code, code, message, extra=extra)
 
 
 def _audit_context(request: Request, user: User) -> AuditContext:
@@ -924,7 +929,15 @@ def post_conversation_turn_stream(
     return _streaming_sse_response(first_event, events)
 
 
-@api_router.get("/conversations/{conversationId}/turns/{turnId}/events")
+@api_router.get(
+    "/conversations/{conversationId}/turns/{turnId}/events",
+    responses={
+        410: {
+            "model": CursorExpiredEnvelope,
+            "description": "The event cursor is no longer available.",
+        },
+    },
+)
 def get_conversation_turn_events(
     request: Request,
     conversation_id: Annotated[str, Path(alias="conversationId", pattern=CONVERSATION_PUBLIC_REF_PATTERN)],

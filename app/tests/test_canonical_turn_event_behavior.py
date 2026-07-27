@@ -321,3 +321,51 @@ def test_m02_p6_shared_retrieval_keeps_turn_evidence_durable_and_errors_safe(
         assert private_failure not in failure.value.message
     finally:
         db.close()
+
+
+def test_c01_double_cancel_is_idempotent_single_terminal(tmp_path: Path) -> None:
+    db, turn = _database(tmp_path)
+    try:
+        _prefix(db, turn)
+        turn.lease_owner = "turn-worker-a"
+        turn.claimable_at = utc_now()
+        db.commit()
+
+        _cancel_running_turn(db, turn)
+        _cancel_running_turn(db, turn)
+        db.refresh(turn)
+
+        events = list(_stored_events(db, turn))
+        assert turn.status == TURN_STATUS_CANCELLED
+        assert turn.lease_owner is None
+        assert turn.claimable_at is None
+        assert [event.event_type for event in events] == [
+            TURN_EVENT_ACCEPTED,
+            TURN_EVENT_ROUTE_SELECTED,
+            TURN_EVENT_CANCELLED,
+        ]
+        assert sum(1 for event in events if event.event_type == TURN_EVENT_CANCELLED) == 1
+    finally:
+        db.close()
+
+
+def test_c01_post_terminal_answer_delta_is_rejected(tmp_path: Path) -> None:
+    db, turn = _database(tmp_path)
+    try:
+        _prefix(db, turn)
+        _cancel_running_turn(db, turn)
+        with pytest.raises(RuntimeError, match="Cannot append an event to a terminal turn"):
+            _persist_event(
+                db,
+                turn=turn,
+                event_type=TURN_EVENT_ANSWER_DELTA,
+                payload={"text": "late delta"},
+            )
+        db.rollback()
+        db.refresh(turn)
+        assert [event.event_type for event in _stored_events(db, turn)].count(
+            TURN_EVENT_ANSWER_DELTA
+        ) == 0
+        assert turn.status == TURN_STATUS_CANCELLED
+    finally:
+        db.close()

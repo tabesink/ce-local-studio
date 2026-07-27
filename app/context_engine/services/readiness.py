@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from context_engine.models import ROLE_ADMINISTRATOR, User
 
 
-SUPPORTED_ALEMBIC_HEAD = "c7d91e5a2f04"
+SUPPORTED_ALEMBIC_HEAD = "e9f2a1b83c70"
 
 
 class ReadinessError(Exception):

@@ -4,6 +4,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from context_engine.api.catalog_schemas import EvidenceItemDto, OpaqueRef, TurnStatus
+from context_engine.api.sse_schemas import CitationDto
+
 APPROVED_HTTP_ERROR_CODES = (
     "account_unavailable",
     "audit_unavailable",
@@ -54,6 +57,23 @@ class ErrorEnvelope(BaseModel):
     error: ErrorDetail
 
     model_config = ConfigDict(extra="forbid")
+
+
+class TerminalSnapshotDto(BaseModel):
+    turn_id: OpaqueRef = Field(alias="turnId")
+    status: TurnStatus
+    answer: str | None = None
+    evidence: list[EvidenceItemDto]
+    citations: list[CitationDto]
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class CursorExpiredEnvelope(BaseModel):
+    error: ErrorDetail
+    terminal_snapshot: TerminalSnapshotDto | None = Field(default=None, alias="terminalSnapshot")
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
 class CsrfResponse(BaseModel):

@@ -1,0 +1,19 @@
+id: evt_ngc_1
+event: turn.accepted
+data: {"schemaVersion":"1.0","eventId":"evt_ngc_1","turnId":"turn_ngc01","sequence":1,"type":"turn.accepted","occurredAt":"2026-07-27T12:00:00Z","payload":{"conversationId":"conversation_1","clientRequestId":"request_ngc_1","replay":false}}
+
+id: evt_ngc_2
+event: route.selected
+data: {"schemaVersion":"1.0","eventId":"evt_ngc_2","turnId":"turn_ngc01","sequence":2,"type":"route.selected","occurredAt":"2026-07-27T12:00:01Z","payload":{"route":"domain_rag","domain":{"id":"domain_ops","displayName":"Operations"}}}
+
+id: evt_ngc_3
+event: retrieval.started
+data: {"schemaVersion":"1.0","eventId":"evt_ngc_3","turnId":"turn_ngc01","sequence":3,"type":"retrieval.started","occurredAt":"2026-07-27T12:00:02Z","payload":{"attempt":1,"maxAttempts":1}}
+
+id: evt_ngc_4
+event: retrieval.completed
+data: {"schemaVersion":"1.0","eventId":"evt_ngc_4","turnId":"turn_ngc01","sequence":4,"type":"retrieval.completed","occurredAt":"2026-07-27T12:00:03Z","payload":{"result":"no_grounded_context","evidenceCount":0}}
+
+id: evt_ngc_5
+event: turn.completed
+data: {"schemaVersion":"1.0","eventId":"evt_ngc_5","turnId":"turn_ngc01","sequence":5,"type":"turn.completed","occurredAt":"2026-07-27T12:00:04Z","payload":{"route":"domain_rag","status":"completed","stopReason":"no_grounded_context","citations":[],"acceptedRefs":[],"budget":{"planStepCount":1,"retrievalOperationCount":1,"repairAttemptCount":0},"replay":true}}

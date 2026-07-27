@@ -1,0 +1,23 @@
+id: evt_eo_1
+event: turn.accepted
+data: {"schemaVersion":"1.0","eventId":"evt_eo_1","turnId":"turn_evid1","sequence":1,"type":"turn.accepted","occurredAt":"2026-07-27T12:20:00Z","payload":{"conversationId":"conversation_1","clientRequestId":"request_eo_1","replay":false}}
+
+id: evt_eo_2
+event: route.selected
+data: {"schemaVersion":"1.0","eventId":"evt_eo_2","turnId":"turn_evid1","sequence":2,"type":"route.selected","occurredAt":"2026-07-27T12:20:01Z","payload":{"route":"domain_rag","domain":{"id":"domain_ops","displayName":"Operations"}}}
+
+id: evt_eo_3
+event: retrieval.started
+data: {"schemaVersion":"1.0","eventId":"evt_eo_3","turnId":"turn_evid1","sequence":3,"type":"retrieval.started","occurredAt":"2026-07-27T12:20:02Z","payload":{"attempt":1,"maxAttempts":1}}
+
+id: evt_eo_4
+event: evidence.delta
+data: {"schemaVersion":"1.0","eventId":"evt_eo_4","turnId":"turn_evid1","sequence":4,"type":"evidence.delta","occurredAt":"2026-07-27T12:20:03Z","payload":{"items":[{"id":"evidence_eo_1","citationLabel":"[1]","sourceLabel":"policy.pdf","excerpt":"Authorized retention excerpt.","kind":"text","documentRef":"document_eo_1","documentLabel":"policy.pdf","anchor":{"pageNumber":1,"region":null,"sectionLabel":null,"fallback":"page"}}]}}
+
+id: evt_eo_5
+event: retrieval.completed
+data: {"schemaVersion":"1.0","eventId":"evt_eo_5","turnId":"turn_evid1","sequence":5,"type":"retrieval.completed","occurredAt":"2026-07-27T12:20:04Z","payload":{"result":"evidence_found","evidenceCount":1}}
+
+id: evt_eo_6
+event: turn.completed
+data: {"schemaVersion":"1.0","eventId":"evt_eo_6","turnId":"turn_evid1","sequence":6,"type":"turn.completed","occurredAt":"2026-07-27T12:20:05Z","payload":{"route":"domain_rag","status":"completed","stopReason":"evidence_only","citations":[{"evidenceRefId":"evidence_eo_1","citationLabel":"[1]"}],"acceptedRefs":[],"budget":{"planStepCount":1,"retrievalOperationCount":1,"repairAttemptCount":0},"replay":true}}

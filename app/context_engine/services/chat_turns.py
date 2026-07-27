@@ -114,11 +114,29 @@ OPERATION_TO_INTENT = {
 
 
 class ChatTurnError(Exception):
-    def __init__(self, status_code: int, code: str, message: str) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        code: str,
+        message: str,
+        *,
+        terminal_snapshot: dict[str, Any] | None = None,
+    ) -> None:
         self.status_code = status_code
         self.code = code
         self.message = message
+        self.terminal_snapshot = terminal_snapshot
         super().__init__(message)
+
+
+SAFE_CURSOR_EXPIRED_MESSAGE = "The event cursor is no longer available."
+_TERMINAL_STREAM_EVENT_TYPES = frozenset(
+    {
+        TURN_EVENT_COMPLETED,
+        TURN_EVENT_FAILED,
+        TURN_EVENT_CANCELLED,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -1003,6 +1021,84 @@ def _event_from_row(row: ConversationTurnEvent, turn: ConversationTurn) -> TurnS
     )
 
 
+def _terminal_event_payload_for_emit(turn: ConversationTurn, event_type: str) -> dict[str, Any] | None:
+    if event_type == TURN_EVENT_COMPLETED:
+        return _completed_payload(turn, replay=True)
+    if event_type == TURN_EVENT_FAILED:
+        return {
+            "code": turn.safe_error_code or "provider_failure",
+            "message": turn.safe_error_message or SAFE_PROVIDER_FAILURE_MESSAGE,
+            "retryable": False,
+            "replay": True,
+        }
+    if event_type == TURN_EVENT_CANCELLED:
+        return {
+            "code": "turn_cancelled",
+            "message": SAFE_TURN_CANCELLED_MESSAGE,
+            "replay": True,
+        }
+    return None
+
+
+def _with_emit_replay(event: TurnStreamEvent, turn: ConversationTurn, *, terminal_replay: bool) -> TurnStreamEvent:
+    if not terminal_replay or event.event_type not in _TERMINAL_STREAM_EVENT_TYPES:
+        return event
+    payload = _terminal_event_payload_for_emit(turn, event.event_type)
+    if payload is None:
+        return event
+    return TurnStreamEvent(
+        event_id=event.event_id,
+        turn_id=event.turn_id,
+        sequence=event.sequence,
+        event_type=event.event_type,
+        occurred_at=event.occurred_at,
+        payload=payload,
+    )
+
+
+def _terminal_snapshot(db: Session, settings: Settings, turn: ConversationTurn) -> dict[str, Any]:
+    if turn.status == TURN_STATUS_REDACTED:
+        return {
+            "turnId": turn.public_ref,
+            "status": TURN_STATUS_REDACTED,
+            "answer": None,
+            "evidence": [],
+            "citations": [],
+        }
+    dto = safe_turn_dto(db, settings, turn)
+    evidence = list(dto.get("evidence") or [])
+    return {
+        "turnId": turn.public_ref,
+        "status": turn.status,
+        "answer": dto.get("assistantAnswer"),
+        "evidence": evidence,
+        "citations": [
+            {
+                "evidenceRefId": item["id"],
+                "citationLabel": item["citationLabel"],
+            }
+            for item in evidence
+            if item.get("id") and item.get("citationLabel")
+        ],
+    }
+
+
+def _assert_event_cursor_available(
+    db: Session,
+    settings: Settings,
+    turn: ConversationTurn,
+    after: int,
+) -> None:
+    retained_after = int(turn.events_retained_after or 0)
+    if after < retained_after:
+        raise ChatTurnError(
+            410,
+            "cursor_expired",
+            SAFE_CURSOR_EXPIRED_MESSAGE,
+            terminal_snapshot=_terminal_snapshot(db, settings, turn),
+        )
+
+
 def _persist_event(
     db: Session,
     *,
@@ -1013,13 +1109,15 @@ def _persist_event(
     execution_generation: int | None = None,
 ) -> TurnStreamEvent:
     db.refresh(turn)
-    if turn.status != TURN_STATUS_RUNNING and event_type not in {
-        TURN_EVENT_COMPLETED,
-        TURN_EVENT_FAILED,
-        TURN_EVENT_CANCELLED,
-        TURN_EVENT_REDACTED,
-    }:
-        raise RuntimeError("Cannot append an event to a terminal turn.")
+    if turn.status != TURN_STATUS_RUNNING:
+        allowed_terminal = {
+            TURN_STATUS_COMPLETED: {TURN_EVENT_COMPLETED, TURN_EVENT_REDACTED},
+            TURN_STATUS_FAILED: {TURN_EVENT_FAILED, TURN_EVENT_REDACTED},
+            TURN_STATUS_CANCELLED: {TURN_EVENT_CANCELLED, TURN_EVENT_REDACTED},
+            TURN_STATUS_REDACTED: {TURN_EVENT_REDACTED},
+        }.get(turn.status, set())
+        if event_type not in allowed_terminal:
+            raise RuntimeError("Cannot append an event to a terminal turn.")
     if execution_generation is not None and turn.execution_generation != execution_generation:
         raise RuntimeError("Turn execution lease was lost.")
     sequence = (
@@ -1049,7 +1147,13 @@ def _persist_event(
     return event
 
 
-def _stored_events(db: Session, turn: ConversationTurn, *, after: int = 0) -> Iterator[TurnStreamEvent]:
+def _stored_events(
+    db: Session,
+    turn: ConversationTurn,
+    *,
+    after: int = 0,
+    terminal_replay: bool = False,
+) -> Iterator[TurnStreamEvent]:
     rows = db.scalars(
         select(ConversationTurnEvent)
         .where(
@@ -1059,7 +1163,7 @@ def _stored_events(db: Session, turn: ConversationTurn, *, after: int = 0) -> It
         .order_by(ConversationTurnEvent.sequence)
     )
     for row in rows:
-        yield _event_from_row(row, turn)
+        yield _with_emit_replay(_event_from_row(row, turn), turn, terminal_replay=terminal_replay)
 
 
 def _latest_event(db: Session, turn: ConversationTurn) -> TurnStreamEvent:
@@ -1165,6 +1269,28 @@ def _refresh_turn(db: Session, turn: ConversationTurn) -> ConversationTurn:
     return turn
 
 
+def _execution_fence_open(
+    db: Session,
+    turn: ConversationTurn,
+    execution_generation: int | None,
+) -> bool:
+    """True while this leased executor may still append non-terminal work."""
+    db.refresh(turn)
+    if turn.status != TURN_STATUS_RUNNING:
+        return False
+    if execution_generation is not None and turn.execution_generation != execution_generation:
+        return False
+    return True
+
+
+def _clear_turn_lease_values() -> dict[str, Any]:
+    return {
+        "lease_owner": None,
+        "lease_expires_at": None,
+        "claimable_at": None,
+    }
+
+
 def _persist_evidence_refs(
     db: Session,
     *,
@@ -1252,6 +1378,7 @@ def _complete_turn(
         "safe_error_message": None,
         "completed_at": now,
         "updated_at": now,
+        **_clear_turn_lease_values(),
     }
     if plan_step_count is not None:
         values["plan_step_count"] = plan_step_count
@@ -1304,6 +1431,7 @@ def _fail_turn(
         "safe_error_message": message,
         "completed_at": now,
         "updated_at": now,
+        **_clear_turn_lease_values(),
     }
     if not _finalize_turn_if_running(db, turn, values, execution_generation):
         return turn
@@ -1375,6 +1503,7 @@ def _cancel_running_turn(db: Session, turn: ConversationTurn) -> None:
             "safe_error_message": SAFE_TURN_CANCELLED_MESSAGE,
             "completed_at": now,
             "updated_at": now,
+            **_clear_turn_lease_values(),
         },
     ):
         return
@@ -1388,6 +1517,7 @@ def _cancel_running_turn(db: Session, turn: ConversationTurn) -> None:
         commit=False,
     )
     db.commit()
+
 
 def intent_for_operation(operation: str) -> str:
     try:
@@ -1426,7 +1556,7 @@ class TurnOrchestrator:
         start: TurnStartResult,
     ) -> Iterator[TurnStreamEvent]:
         if start.replay:
-            yield from _stored_events(db, start.turn)
+            yield from _stored_events(db, start.turn, terminal_replay=True)
             return
         yield from _stored_events(db, start.turn)
         if start.synthesis is None:
@@ -1450,6 +1580,9 @@ class TurnOrchestrator:
             if start.assembly_context is not None:
                 kwargs["assembly_context"] = start.assembly_context
             for token in self._synthesis(settings).stream_direct(**kwargs):
+                if not _execution_fence_open(db, turn, generation):
+                    yield _latest_event(db, turn)
+                    return
                 if token:
                     tokens.append(token)
                     yield _persist_event(
@@ -1459,6 +1592,12 @@ class TurnOrchestrator:
                         payload={"text": token},
                         execution_generation=generation,
                     )
+        except RuntimeError:
+            # Cancel or lease fence closed the turn mid-stream.
+            db.rollback()
+            db.refresh(turn)
+            yield _latest_event(db, turn)
+            return
         except (SynthesisAdapterError, SynthesisProviderError, Exception):
             turn = _fail_turn(
                 db,
@@ -1469,6 +1608,9 @@ class TurnOrchestrator:
                 execution_generation=generation,
             )
             _record_turn_trace(settings, turn, request_id=start.request_id)
+            yield _latest_event(db, turn)
+            return
+        if not _execution_fence_open(db, turn, generation):
             yield _latest_event(db, turn)
             return
         answer = "".join(tokens).strip()
@@ -1508,6 +1650,9 @@ class TurnOrchestrator:
         generation = start.execution_generation
         operation = operation_for_message(turn.user_message)
         intent = intent_for_operation(operation)
+        if not _execution_fence_open(db, turn, generation):
+            yield _latest_event(db, turn)
+            return
         yield _persist_event(
             db,
             turn=turn,
@@ -1535,6 +1680,9 @@ class TurnOrchestrator:
             _record_turn_trace(settings, turn, request_id=start.request_id)
             yield _latest_event(db, turn)
             return
+        if not _execution_fence_open(db, turn, generation):
+            yield _latest_event(db, turn)
+            return
         if not evidence:
             yield _persist_event(
                 db,
@@ -1557,6 +1705,9 @@ class TurnOrchestrator:
             yield _latest_event(db, turn)
             return
         turn = _persist_evidence_refs(db, turn=turn, evidence=evidence, execution_generation=generation)
+        if not _execution_fence_open(db, turn, generation):
+            yield _latest_event(db, turn)
+            return
         yield _public_evidence_event(db, turn, execution_generation=generation)
         yield _persist_event(
             db,
@@ -1582,6 +1733,9 @@ class TurnOrchestrator:
             # delta commits independently so we never hold a product write txn
             # across unbounded synthesis streaming (KTD7).
             for token in self._synthesis(settings).stream_grounded(**kwargs):
+                if not _execution_fence_open(db, turn, generation):
+                    yield _latest_event(db, turn)
+                    return
                 if token:
                     tokens.append(token)
                     yield _persist_event(
@@ -1592,6 +1746,11 @@ class TurnOrchestrator:
                         execution_generation=generation,
                     )
                     answer_delta_persisted = True
+        except RuntimeError:
+            db.rollback()
+            db.refresh(turn)
+            yield _latest_event(db, turn)
+            return
         except (SynthesisAdapterError, SynthesisProviderError, Exception):
             if answer_delta_persisted:
                 turn = _fail_turn(
@@ -1620,6 +1779,9 @@ class TurnOrchestrator:
                 mapped_evidence_count=len(evidence),
                 citation_count=len(_public_evidence_refs(turn)),
             )
+            yield _latest_event(db, turn)
+            return
+        if not _execution_fence_open(db, turn, generation):
             yield _latest_event(db, turn)
             return
         answer = "".join(tokens).strip()
@@ -1818,6 +1980,7 @@ def _tail_turn_events(
     *,
     after: int = 0,
     settings: Settings,
+    terminal_replay: bool = False,
 ) -> Iterator[TurnStreamEvent]:
     cursor = after
     # Tests already run the worker to completion before tailing; keep the idle
@@ -1830,7 +1993,14 @@ def _tail_turn_events(
         current = db.get(ConversationTurn, turn.id)
         if current is None:
             return
-        rows = list(_stored_events(db, current, after=cursor))
+        rows = list(
+            _stored_events(
+                db,
+                current,
+                after=cursor,
+                terminal_replay=terminal_replay,
+            )
+        )
         for event in rows:
             cursor = event.sequence
             yield event
@@ -1876,7 +2046,14 @@ def stream_turn_events(
             synthesis_adapter=synthesis_adapter,
             retrieval_port=retrieval_port,
         )
-    yield from _tail_turn_events(db, start.turn, settings=settings)
+    # Live/new turns keep stored replay flags. Identical attach to an already
+    # terminal turn reconstructs terminal payloads with replay:true (KTD5).
+    yield from _tail_turn_events(
+        db,
+        start.turn,
+        settings=settings,
+        terminal_replay=start.replay,
+    )
 
 
 def stream_turn_events_by_turn(
@@ -1892,8 +2069,16 @@ def stream_turn_events_by_turn(
         raise _validation_error()
     turn = get_owned_turn(db, owner=owner, conversation_id=conversation_id, turn_id=turn_id)
     if settings is None:
-        return _stored_events(db, turn, after=after)
-    return _tail_turn_events(db, turn, after=after, settings=settings)
+        raise ChatTurnError(500, "internal_error", "Internal server error.")
+    _assert_event_cursor_available(db, settings, turn, after)
+    terminal_replay = turn.status != TURN_STATUS_RUNNING
+    return _tail_turn_events(
+        db,
+        turn,
+        after=after,
+        settings=settings,
+        terminal_replay=terminal_replay,
+    )
 
 
 

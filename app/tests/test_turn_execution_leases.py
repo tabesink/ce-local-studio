@@ -4,10 +4,26 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from alembic.script import ScriptDirectory
+
 from context_engine.config import Settings
 from context_engine.db import utc_now
 from context_engine.models import ConversationTurn
 from context_engine.services.chat_turns import safe_turn_summary
+
+APP_ROOT = Path(__file__).resolve().parents[1]
+TURN_LEASE_REVISION = "e9f2a1b83c70"
+PRIOR_REVISION = "c7d91e5a2f04"
+
+
+def test_turn_lease_migration_revises_conversation_ownership_head() -> None:
+    from alembic.config import Config
+
+    scripts = ScriptDirectory.from_config(Config(str(APP_ROOT / "alembic.ini")))
+    revision = scripts.get_revision(TURN_LEASE_REVISION)
+    assert revision is not None
+    assert revision.down_revision == PRIOR_REVISION
+    assert TURN_LEASE_REVISION in scripts.get_heads()
 
 
 def test_conversation_turn_exposes_private_lease_fields() -> None:

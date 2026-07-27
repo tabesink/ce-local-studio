@@ -721,6 +721,13 @@ export interface components {
              */
             reasonCode: string | null;
         };
+        /** CitationDto */
+        CitationDto: {
+            /** Citationlabel */
+            citationLabel: string;
+            /** Evidencerefid */
+            evidenceRefId: string;
+        };
         /** ComposerRefDiscoverRequest */
         ComposerRefDiscoverRequest: {
             /** Conversationid */
@@ -809,6 +816,11 @@ export interface components {
              * @enum {string}
              */
             role: "member" | "administrator";
+        };
+        /** CursorExpiredEnvelope */
+        CursorExpiredEnvelope: {
+            error: components["schemas"]["ErrorDetail"];
+            terminalSnapshot?: components["schemas"]["TerminalSnapshotDto"] | null;
         };
         /** DocumentSummaryDto */
         DocumentSummaryDto: {
@@ -1200,6 +1212,22 @@ export interface components {
         /** SourceOperationMutationResponse */
         SourceOperationMutationResponse: {
             operation: components["schemas"]["OperationDto"];
+        };
+        /** TerminalSnapshotDto */
+        TerminalSnapshotDto: {
+            /** Answer */
+            answer?: string | null;
+            /** Citations */
+            citations: components["schemas"]["CitationDto"][];
+            /** Evidence */
+            evidence: components["schemas"]["EvidenceItemDto"][];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "running" | "completed" | "failed" | "cancelled" | "redacted";
+            /** Turnid */
+            turnId: string;
         };
         /** TurnDto */
         TurnDto: {
@@ -2378,6 +2406,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description The event cursor is no longer available. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorExpiredEnvelope"];
                 };
             };
             /** @description Validation Error */
