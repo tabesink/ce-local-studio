@@ -1506,6 +1506,7 @@ class TurnOrchestrator:
         )
         public_evidence = _public_evidence_refs_for_adapter(turn)
         tokens: list[str] = []
+        answer_delta_persisted = False
         assert start.synthesis is not None
         try:
             kwargs: dict[str, Any] = {
@@ -1516,23 +1517,35 @@ class TurnOrchestrator:
             }
             if start.assembly_context is not None:
                 kwargs["assembly_context"] = start.assembly_context
+            # Provider I/O runs after Evidence persistence commits; each answer
+            # delta commits independently so we never hold a product write txn
+            # across unbounded synthesis streaming (KTD7).
             for token in self._synthesis(settings).stream_grounded(**kwargs):
                 if token:
                     tokens.append(token)
                     yield _persist_event(
                         db, turn=turn, event_type=TURN_EVENT_ANSWER_DELTA, payload={"text": token}
                     )
+                    answer_delta_persisted = True
         except (SynthesisAdapterError, SynthesisProviderError):
-            # U3 tightens this to evidence_only only when no answer.delta was persisted.
-            turn = _complete_turn(
-                db,
-                turn=turn,
-                stop_reason=TURN_STOP_REASON_EVIDENCE_ONLY,
-                assistant_answer=None,
-                plan_step_count=1,
-                retrieval_operation_count=1,
-                repair_attempt_count=0,
-            )
+            if answer_delta_persisted:
+                turn = _fail_turn(
+                    db,
+                    turn=turn,
+                    code="provider_failure",
+                    message=SAFE_PROVIDER_FAILURE_MESSAGE,
+                    stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
+                )
+            else:
+                turn = _complete_turn(
+                    db,
+                    turn=turn,
+                    stop_reason=TURN_STOP_REASON_EVIDENCE_ONLY,
+                    assistant_answer=None,
+                    plan_step_count=1,
+                    retrieval_operation_count=1,
+                    repair_attempt_count=0,
+                )
             _record_turn_trace(
                 settings,
                 turn,
@@ -1544,15 +1557,24 @@ class TurnOrchestrator:
             return
         answer = "".join(tokens).strip()
         if not answer:
-            turn = _complete_turn(
-                db,
-                turn=turn,
-                stop_reason=TURN_STOP_REASON_EVIDENCE_ONLY,
-                assistant_answer=None,
-                plan_step_count=1,
-                retrieval_operation_count=1,
-                repair_attempt_count=0,
-            )
+            if answer_delta_persisted:
+                turn = _fail_turn(
+                    db,
+                    turn=turn,
+                    code="provider_failure",
+                    message=SAFE_PROVIDER_FAILURE_MESSAGE,
+                    stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
+                )
+            else:
+                turn = _complete_turn(
+                    db,
+                    turn=turn,
+                    stop_reason=TURN_STOP_REASON_EVIDENCE_ONLY,
+                    assistant_answer=None,
+                    plan_step_count=1,
+                    retrieval_operation_count=1,
+                    repair_attempt_count=0,
+                )
             _record_turn_trace(
                 settings,
                 turn,

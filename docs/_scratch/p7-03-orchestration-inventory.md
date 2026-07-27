@@ -122,13 +122,16 @@ fail-closed registry are proven with no-network fixtures.
 
 ## SSE compatibility baseline (2026-07-27)
 
-Command:
+Pre-change baseline:
 
 ```text
 cd app && .venv/Scripts/python.exe -m pytest tests/test_chat_sse_http_contract.py -q --tb=no
 ```
 
 Result: `2 passed`
+
+Post-U3/U4 compatibility re-check (same command): `2 passed` alongside
+`tests/test_chat_orchestration.py` + `tests/test_synthesis_adapters.py`.
 
 | Test | Role for P7-03 |
 | --- | --- |
