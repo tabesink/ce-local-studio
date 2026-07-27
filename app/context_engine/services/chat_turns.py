@@ -2183,13 +2183,7 @@ def _redact_turns(
     return changed
 
 
-def redact_turns_for_source(
-    db: Session,
-    source_document_id: str,
-    audit_context: AuditContext | None = None,
-    *,
-    commit: bool = True,
-) -> int:
+def _turns_linked_to_source(db: Session, source_document_id: str) -> dict[str, ConversationTurn]:
     turns_by_id = {
         turn.id: turn
         for turn in db.scalars(
@@ -2206,12 +2200,13 @@ def redact_turns_for_source(
         .order_by(ConversationTurn.created_at, ConversationTurn.id)
     ).unique():
         turns_by_id[turn.id] = turn
-    return _redact_turns(db, list(turns_by_id.values()), audit_context, commit=commit)
+    return turns_by_id
 
 
-def redact_turns_for_domain(db: Session, domain_id: str, audit_context: AuditContext | None = None) -> int:
-    turns = list(
-        db.scalars(
+def _dependent_turns_for_domain(db: Session, domain_id: str) -> list[ConversationTurn]:
+    turns_by_id = {
+        turn.id: turn
+        for turn in db.scalars(
             select(ConversationTurn)
             .where(
                 ConversationTurn.domain_id == domain_id,
@@ -2219,5 +2214,40 @@ def redact_turns_for_domain(db: Session, domain_id: str, audit_context: AuditCon
             )
             .order_by(ConversationTurn.created_at, ConversationTurn.id)
         )
+    }
+    source_ids = list(
+        db.scalars(select(SourceDocument.id).where(SourceDocument.domain_id == domain_id))
     )
-    return _redact_turns(db, turns, audit_context)
+    for source_id in source_ids:
+        turns_by_id.update(_turns_linked_to_source(db, source_id))
+    return list(turns_by_id.values())
+
+
+def redact_turns_for_source(
+    db: Session,
+    source_document_id: str,
+    audit_context: AuditContext | None = None,
+    *,
+    commit: bool = True,
+) -> int:
+    return _redact_turns(
+        db,
+        list(_turns_linked_to_source(db, source_document_id).values()),
+        audit_context,
+        commit=commit,
+    )
+
+
+def redact_turns_for_domain(
+    db: Session,
+    domain_id: str,
+    audit_context: AuditContext | None = None,
+    *,
+    commit: bool = True,
+) -> int:
+    return _redact_turns(
+        db,
+        _dependent_turns_for_domain(db, domain_id),
+        audit_context,
+        commit=commit,
+    )
