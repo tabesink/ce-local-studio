@@ -20,7 +20,7 @@ import {
   TRow,
 } from "@/_shared/ui";
 import { isApiError } from "@/lib/api/errors";
-import { useAuthStore } from "@/state/auth-store";
+import { useAuthStore } from "@/features/auth/auth-store";
 import { PageState } from "@/components/ui/PageState";
 import { listMemberDomains, type MemberDomain } from "@/features/domains/api";
 import {

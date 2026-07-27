@@ -21,7 +21,7 @@ import {
   type SettingsSectionDef,
 } from "@/components/ui";
 import { isApiError } from "@/lib/api/errors";
-import { useAuthStore } from "@/state/auth-store";
+import { useAuthStore } from "@/features/auth/auth-store";
 import { DomainAccordionRow } from "@/features/settings-panel/DomainAccordionRow";
 import { SettingsRow } from "@/features/settings-panel/SettingsRow";
 import { PreferencesPanel } from "@/features/user-preferences/PreferencesPanel";
@@ -650,10 +650,10 @@ function UsersSection({ users }: { users: CurrentUser[] }) {
         users.map((row) => (
           <SettingsRow
             key={row.id}
-            label={row.username}
+            label={row.displayName}
             value={<span className="text-[length:var(--fs-sm)] text-[var(--dim)]">{row.role}</span>}
             status={
-              row.isDisabled ? <StatusPill tone="danger">Disabled</StatusPill> : <StatusPill tone="good">Active</StatusPill>
+              row.disabled ? <StatusPill tone="danger">Disabled</StatusPill> : <StatusPill tone="good">Active</StatusPill>
             }
           />
         ))

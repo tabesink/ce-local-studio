@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AppearanceProvider } from "@/features/user-preferences/AppearanceProvider";
 import { setUnauthorizedHandler } from "@/lib/api/client";
-import { useAuthStore } from "@/state/auth-store";
+import { useAuthStore } from "@/features/auth/auth-store";
 
 export function Providers({ children }: { children: ReactNode }) {
   const bootstrap = useAuthStore((state) => state.bootstrap);

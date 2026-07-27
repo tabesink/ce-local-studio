@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { usePathname } from "next/navigation";
 import { readUiPreference, writeUiPreference } from "@/lib/storage";
-import { useAuthStore } from "@/state/auth-store";
+import { useAuthStore } from "@/features/auth/auth-store";
 import {
   NAV_ITEMS,
   SIDEBAR_DEFAULT_WIDTH,

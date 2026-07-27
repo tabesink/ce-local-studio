@@ -1,21 +1,9 @@
 import type { components } from "@/lib/api/generated/openapi";
 
-export type UserRole = "administrator" | "member";
+export type CurrentUser = components["schemas"]["CurrentUserDto"];
+export type LoginRequest = components["schemas"]["LoginRequest"];
 
-export type CurrentUser = {
-  id: string;
-  username: string;
-  role: UserRole;
-  isDisabled: boolean;
-};
-
-export type SessionInfo = {
-  expiresAt: string;
-};
-
+/** Auth session envelope — body is `{ user }` only (no public session projection). */
 export type SessionUserResponse = {
   user: CurrentUser;
-  session: SessionInfo;
 };
-
-export type LoginRequest = components["schemas"]["LoginRequest"];

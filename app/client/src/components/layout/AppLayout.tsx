@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { PageState } from "@/components/ui/PageState";
-import { useAuthStore } from "@/state/auth-store";
+import { useAuthStore } from "@/features/auth/auth-store";
 
 const PUBLIC_ROUTES = new Set(["/login"]);
 

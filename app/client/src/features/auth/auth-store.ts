@@ -2,13 +2,12 @@
 
 import { useSyncExternalStore } from "react";
 import { authApi } from "@/lib/api/auth";
-import type { CurrentUser, SessionInfo } from "@/types/auth";
+import type { CurrentUser } from "@/types/auth";
 
 type AuthStatus = "idle" | "loading" | "authenticated" | "unauthenticated";
 
 type AuthState = {
   user: CurrentUser | null;
-  session: SessionInfo | null;
   status: AuthStatus;
   bootstrap: () => Promise<void>;
   login: (username: string, password: string) => Promise<void>;
@@ -21,7 +20,6 @@ const listeners = new Set<() => void>();
 
 let state: AuthState = {
   user: null,
-  session: null,
   status: "idle",
   bootstrap,
   login,
@@ -53,9 +51,9 @@ async function bootstrap() {
   setState({ status: "loading" });
   try {
     const response = await authApi.me();
-    setState({ user: response.user, session: response.session, status: "authenticated" });
+    setState({ user: response.user, status: "authenticated" });
   } catch {
-    setState({ user: null, session: null, status: "unauthenticated" });
+    setState({ user: null, status: "unauthenticated" });
   }
 }
 
@@ -63,9 +61,9 @@ async function login(username: string, password: string) {
   setState({ status: "loading" });
   try {
     const response = await authApi.login({ username, password });
-    setState({ user: response.user, session: response.session, status: "authenticated" });
+    setState({ user: response.user, status: "authenticated" });
   } catch (error) {
-    setState({ user: null, session: null, status: "unauthenticated" });
+    setState({ user: null, status: "unauthenticated" });
     throw error;
   }
 }
@@ -83,12 +81,12 @@ async function logout() {
 
 async function refresh() {
   const response = await authApi.me();
-  setState({ user: response.user, session: response.session, status: "authenticated" });
+  setState({ user: response.user, status: "authenticated" });
 }
 
 function markUnauthenticated() {
-  if (state.status === "unauthenticated" && state.user === null && state.session === null) return;
-  setState({ user: null, session: null, status: "unauthenticated" });
+  if (state.status === "unauthenticated" && state.user === null) return;
+  setState({ user: null, status: "unauthenticated" });
 }
 
 export function useAuthStore<T = AuthState>(selector: (state: AuthState) => T = (value) => value as T): T {

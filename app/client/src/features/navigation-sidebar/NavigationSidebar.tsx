@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { cx, IconButton, SearchInput } from "@/_shared/ui";
 import { AppLogo } from "@/components/ui/AppLogo";
-import { useAuthStore } from "@/state/auth-store";
+import { useAuthStore } from "@/features/auth/auth-store";
 import { listConversations, type ConversationSummary } from "@/features/chat-shell/api";
 import { SETTINGS_NAV_ITEM } from "@/features/navigation-sidebar/constants";
 import { useNavigationSidebar, isRouteActive } from "@/features/navigation-sidebar/use-navigation-sidebar";
