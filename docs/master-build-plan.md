@@ -23,7 +23,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | P6 | Scoped Evidence retrieval | DONE | P5 | single-domain authorized retrieval maps only valid local blocks to safe Evidence |
 | P7 | Durable grounded streaming chat | DONE | P6 | conversation ownership, intent gate, bounded RAG, SSE, idempotent replay, redaction pass |
 | P8 | Operational safety and Phase 1 gate | DONE | P1-P7 | transactional audit writes, allowlisted logs, request/trace correlation, health, privacy scans, and resilience evidence pass |
-| P9 | Thin Next.js frontend | IN_PROGRESS | P1-P8 | login/chat/documents/settings and the reserved graph state use only versioned APIs and pass parity/accessibility checks — P9-01..P9-03 DONE; P9-04 BLOCKED; P9-05 open |
+| P9 | Thin Next.js frontend | DONE | P1-P8 | login/chat/documents/settings and the reserved graph state use only versioned APIs and pass parity/accessibility checks — P9-01..P9-05 DONE; P12 owns deployed-ingress / visual-matrix residuals |
 | P10 | Deployable application stack | NOT_STARTED | P8-P9 | runnable Compose stack, explicit migrations/bootstrap, worker lifecycle, smoke path, and operator runbook pass |
 | P11 | Governed context assembly | NOT_STARTED | P6-P7 | opaque refs for sources/evidence/templates, private bounded assembly, replay fingerprint and invalidation pass |
 | P12 | Production release and recovery | NOT_STARTED | P0-P11 | immutable artifacts, deployed-path streaming, migration/rollback, security/load/backup/restore and runbooks pass |
@@ -292,7 +292,19 @@ accordion interaction amendment, closed `AdminDomainDto` client alignment,
 `domains-accordion` FACTORY_READY parity trio, and shell-safe not-found /
 DRIFT-04 closure. Results were clean typecheck, 32 focused node tests, and
 12 Vitest parity tests. Residuals remain P12-07 production-boundary Playwright
-F3 / visual matrix and P9-05 CI validators. Phase P9 stays open until P9-05 lands.
+F3 / visual matrix and P9-05 CI validators. Phase P9
+stays open until P9-05 lands.
+
+P9-05 closure evidence (2026-07-27):
+`docs/_scratch/p9-05-ci-validators-inventory.md` and
+`docs/_scratch/p9-05-ci-validators-evidence.md` record import-direction,
+thin-route, server/browser, and generated-contract structure gates; BFF
+`X-CE-*` trust alignment with exclusive request allowlist, opaque client
+bucket, multi-`Set-Cookie`, and forced private no-store; login thin migrate
+plus auth-store/`CurrentUserDto` cleanup. Results were 28 focused
+structure/BFF/design-kit tests and clean typecheck. Residuals remain FE-01
+mega-kit demolition, P10 Compose/`PUBLIC_ORIGIN`, and P12 two-user/BFCache /
+deployed-ingress proofs. Phase P9 closes with P9-05.
 
 ### P9-P11 - User interface, deployable runtime, and governed context workflows
 
@@ -302,7 +314,7 @@ F3 / visual matrix and P9-05 CI validators. Phase P9 stays open until P9-05 land
 | P9-02 | DONE | P7 | generated HTTP/SSE client plus `/chat` conversation discovery, transcript/composer, turn-scoped Evidence/Refs/Source workbench, and canonical live/resume/replay reducer states — evidence `docs/_scratch/p9-02-chat-workbench-evidence.md`; P11 discover/`token` residual, P9-03 Library preview, and P12 ingress remain |
 | P9-03 | DONE | P4-P6 | documents/outline/preview and graph route through approved contracts — evidence `docs/_scratch/p9-03-documents-library-evidence.md`; non-PDF/PPT viewers and P12 ingress remain |
 | P9-04 | DONE | P2-P3,P8,P9-01 | approve the Settings Domain accordion interaction amendment across behavior/component/state/accessibility contracts, then implement `/settings?section=domains`; no deferred operator or publication UI — evidence `docs/_scratch/p9-04-settings-domains-evidence.md`; production-boundary Playwright F3 remains P12-07 |
-| P9-05 | NOT_STARTED | P9-01 | import-direction, thin-route, server/browser boundary and contract/barrel CI validators |
+| P9-05 | DONE | P9-01 | import-direction, thin-route, server/browser boundary and contract/barrel CI validators — evidence `docs/_scratch/p9-05-ci-validators-evidence.md`; FE-01 mega-kit demolition, Compose public-origin topology, and two-user/BFCache E2E remain FE-01/P10/P12 |
 | P10-01 | NOT_STARTED | P8,P9 | Compose services and production-like server configuration for PostgreSQL, migration, API, worker and frontend |
 | P10-02 | NOT_STARTED | P10-01 | explicit migration/bootstrap plus BFF/API/SSE core-path smoke stack |
 | P10-03 | NOT_STARTED | P10-02 | startup/shutdown, worker claim recovery and deployment operator runbook |

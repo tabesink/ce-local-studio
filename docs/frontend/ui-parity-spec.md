@@ -142,6 +142,7 @@ Each later target manifest is versioned and contains:
 The exact output paths (aligned with master-build-plan P9-01) are:
 
 - `app/client/tests/structure/ui-ownership.test.ts` for canonical ownership / no-competing-kit enforcement;
+- `app/client/tests/structure/{import-direction,thin-routes,server-browser-boundary,generated-contract-homes}.test.ts` for P9-05 layering / thin-route / server-env / generated DTO hygiene;
 - `app/client/tests/parity/manifests/<target-id>.json` for versioned scenarios;
 - `app/client/tests/parity/fixtures/<target-id>.html` for synthetic, script-free, network-free, non-routable static guidance;
 - `app/client/tests/parity/react/<target-id>.test.tsx` for React behavior and accessibility;
