@@ -99,7 +99,7 @@ Administrator additions:
 - Users
 - Operations defaults, where contracted
 
-Section selection uses /settings?section=domains. Invalid or newly unauthorized sections fall back to General with a nonintrusive notice. Credentials are write-only; configured status is safe metadata.
+Section selection uses `/settings?section=<allowlisted>`. Live Phase 1 allowlisted ids are `general`, `provider`, `domains`, and `users` (Knowledge Domains for administrators). Invalid or newly unauthorized sections fall back to General with a nonintrusive notice. Derive the effective section from role before first paint so members never flash Domains chrome. Parser, Account, and Operations defaults remain contracted later additions — do not scaffold them in P9-04. Credentials are write-only; configured status is safe metadata. Settings Domain accordion interaction is owned by `docs/frontend/component-contracts.md` and `docs/frontend/interaction-state-catalog.md`; production-boundary Playwright acceptance remains P12-07.
 
 ## Navigation and draft preservation
 

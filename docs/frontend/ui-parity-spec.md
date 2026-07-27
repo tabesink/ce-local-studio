@@ -120,7 +120,7 @@ See responsive-and-desktop-matrix.md for the exact viewport matrix.
 
 This section is the sole D0 owner of the parity-manifest schema, catalog states, and readiness rules. D0 documents the factory; it does not create application fixtures or award React/runtime completion.
 
-Catalog states are `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED_CONTRACT`, and `FACTORY_READY`. For starter targets (Button, Input, StatusPill, SettingsRow), `FACTORY_READY` is earned after all applicable shared, HTML-static, React (Vitest/Testing Library), and accessibility assertions pass. Playwright route-level visual matrix and production-boundary Settings domains acceptance remain P12-07 (domains implementation P9-04) and are not required to mark those four targets factory-ready.
+Catalog states are `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED_CONTRACT`, and `FACTORY_READY`. For starter targets (Button, Input, StatusPill, SettingsRow), `FACTORY_READY` is earned after all applicable shared, HTML-static, React (Vitest/Testing Library), and accessibility assertions pass. Playwright route-level visual matrix and production-boundary Settings domains acceptance remain P12-07 and are not required to mark starter targets factory-ready.
 
 | Target | Owner | D0 state | Required brownfield disposition |
 | --- | --- | --- | --- |
@@ -128,7 +128,7 @@ Catalog states are `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED_CONTRACT`, and `FACTOR
 | Input | `src/ui` | FACTORY_READY | migrate + retain-and-reverify live API; P9-01 shared/HTML/React (Vitest/RTL) + R10 subset proven |
 | StatusPill | `src/ui` | FACTORY_READY | migrate + retain-and-reverify live tones (`default`↔neutral, `good`↔success); P9-01 parity proven |
 | SettingsRow | `src/features/settings-panel` | FACTORY_READY | Settings-owned composition; P9-01 shared/HTML/React (Vitest/RTL) + R10 subset proven |
-| Settings Domain accordion | `src/features/settings-panel` | BLOCKED_CONTRACT | approve P9-04 interaction contract before manifest, fixture, implementation, or readiness work |
+| Settings Domain accordion | `src/features/settings-panel` | FACTORY_READY | Settings-owned `DomainAccordionRow`; P9-04 shared/HTML/React (Vitest/RTL) + R10 subset proven — no ProgressBar-on-expand / storageSummary; production-boundary Playwright F3 remains P12-07 |
 
 The starter set is not a complete UI allowlist. Uncovered roles continue using the contracted canonical CE control; agents record a parity gap rather than inventing local chrome.
 

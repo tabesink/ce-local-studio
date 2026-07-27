@@ -1,12 +1,16 @@
 /**
- * Safe return-to-chat query params.
+ * Inbound Library deep-link parse + return-to-chat helpers (P9-03).
  *
- * Phase 1 deliberately ignores raw domain/source/page Library deep-links until
- * governed opaque evidence-location and document-content routes are available.
+ * Outbound chat → Library hrefs stay in `features/chat-shell/documentsDeepLink.ts`.
+ * Return-to-chat uses `/chat?conversation=&turn=&evidence=` per navigation contract.
  */
+
 export type LibraryDeepLink = {
-  conversationId: string | null;
-  turnId: string | null;
+  document: string | null;
+  evidence: string | null;
+  page: number | null;
+  conversation: string | null;
+  turn: string | null;
 };
 
 function nonEmpty(value: string | null): string | null {
@@ -15,23 +19,46 @@ function nonEmpty(value: string | null): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function parsePositivePage(value: string | null): number | null {
+  const raw = nonEmpty(value);
+  if (!raw) return null;
+  if (!/^\d+$/.test(raw)) return null;
+  const page = Number.parseInt(raw, 10);
+  return page > 0 ? page : null;
+}
+
+/**
+ * Parses inbound Library query params.
+ * Accepts legacy `conversationId`/`turnId` inbound for compatibility; canonical
+ * return builders emit `conversation`/`turn`/`evidence`.
+ */
 export function parseLibraryDeepLink(
   searchParams: URLSearchParams | { get(name: string): string | null },
 ): LibraryDeepLink {
   return {
-    conversationId: nonEmpty(searchParams.get("conversationId")),
-    turnId: nonEmpty(searchParams.get("turnId")),
+    document: nonEmpty(searchParams.get("document")),
+    evidence: nonEmpty(searchParams.get("evidence")),
+    page: parsePositivePage(searchParams.get("page")),
+    conversation:
+      nonEmpty(searchParams.get("conversation")) ?? nonEmpty(searchParams.get("conversationId")),
+    turn: nonEmpty(searchParams.get("turn")) ?? nonEmpty(searchParams.get("turnId")),
   };
 }
 
 export function hasChatReturn(link: LibraryDeepLink): boolean {
-  return Boolean(link.conversationId && link.turnId);
+  return Boolean(link.conversation && link.turn);
 }
 
-export function buildChatReturnHref(conversationId: string, turnId: string): string {
+export function buildChatReturnHref(
+  conversation: string,
+  turn: string,
+  evidence?: string | null,
+): string {
   const params = new URLSearchParams({
-    conversationId,
-    turnId,
+    conversation,
+    turn,
   });
-  return "/chat?" + params.toString();
+  const evidenceRef = nonEmpty(evidence ?? null);
+  if (evidenceRef) params.set("evidence", evidenceRef);
+  return `/chat?${params.toString()}`;
 }

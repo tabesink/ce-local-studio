@@ -23,7 +23,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | P6 | Scoped Evidence retrieval | DONE | P5 | single-domain authorized retrieval maps only valid local blocks to safe Evidence |
 | P7 | Durable grounded streaming chat | DONE | P6 | conversation ownership, intent gate, bounded RAG, SSE, idempotent replay, redaction pass |
 | P8 | Operational safety and Phase 1 gate | DONE | P1-P7 | transactional audit writes, allowlisted logs, request/trace correlation, health, privacy scans, and resilience evidence pass |
-| P9 | Thin Next.js frontend | NOT_STARTED | P1-P8 | login/chat/documents/settings and the reserved graph state use only versioned APIs and pass parity/accessibility checks |
+| P9 | Thin Next.js frontend | IN_PROGRESS | P1-P8 | login/chat/documents/settings and the reserved graph state use only versioned APIs and pass parity/accessibility checks — P9-01..P9-03 DONE; P9-04 BLOCKED; P9-05 open |
 | P10 | Deployable application stack | NOT_STARTED | P8-P9 | runnable Compose stack, explicit migrations/bootstrap, worker lifecycle, smoke path, and operator runbook pass |
 | P11 | Governed context assembly | NOT_STARTED | P6-P7 | opaque refs for sources/evidence/templates, private bounded assembly, replay fingerprint and invalidation pass |
 | P12 | Production release and recovery | NOT_STARTED | P0-P11 | immutable artifacts, deployed-path streaming, migration/rollback, security/load/backup/restore and runbooks pass |
@@ -272,14 +272,36 @@ and 7 Vitest inspector/deep-link tests. Residuals remain P11 discover/`token`,
 P9-03 preview, P9-05 CI validators, and P12 ingress/visual matrix. Phase P9
 stays open until P9-03–P9-05 land.
 
+P9-03 closure evidence (2026-07-27):
+`docs/_scratch/p9-03-documents-library-inventory.md` and
+`docs/_scratch/p9-03-documents-library-evidence.md` record member
+`GET /documents*` + evidence location registration, PDF-original preview with
+`200/206/416` and BFF `If-Range`, dual-role Library/admin outline UI, chat
+Open in Library enablement, and graph no-request unavailable. Results were 41
+focused backend contract/unit/HTTP tests, 5 BFF proxy tests, 16 frontend
+node/Vitest tests, and clean typecheck. Residuals remain non-PDF/PPT viewers
+(`docs/future/document-preview-formats.md`), P9-05 CI validators, and P12
+ingress/visual matrix. DRIFT-04 navigation/not-found residuals closed in P9-04.
+Phase P9 stays open until P9-05 lands.
+
+P9-04 closure evidence (2026-07-27):
+`docs/_scratch/p9-04-settings-domains-inventory.md` and
+`docs/_scratch/p9-04-settings-domains-evidence.md` record the Settings Domain
+accordion interaction amendment, closed `AdminDomainDto` client alignment,
+`/settings?section=domains` URL sync + locked-fact accordion (no storageSummary),
+`domains-accordion` FACTORY_READY parity trio, and shell-safe not-found /
+DRIFT-04 closure. Results were clean typecheck, 32 focused node tests, and
+12 Vitest parity tests. Residuals remain P12-07 production-boundary Playwright
+F3 / visual matrix and P9-05 CI validators. Phase P9 stays open until P9-05 lands.
+
 ### P9-P11 - User interface, deployable runtime, and governed context workflows
 
 | Task | Status | Depends on | Deliverable |
 | --- | --- | --- | --- |
 | P9-01 | DONE | P1,P8 | inventory every `components/**` and `_shared/ui/**` file/call site in `docs/_scratch/p9-01-ui-inventory.md`; disposition Button/Input/StatusPill to canonical `src/ui`, SettingsRow to Settings, and shell composition to `src/features/shell`; define `app/client/tests/structure/ui-ownership.test.ts`, `app/client/tests/parity/manifests/<target>.json`, `app/client/tests/parity/fixtures/<target>.html`, `app/client/tests/parity/react/<target>.test.tsx`, and `app/client/tests/e2e/`; migrate without a competing physical kit — evidence `docs/_scratch/p9-01-ui-ownership-evidence.md`; accordion + live Settings domains remain P9-04/P12-07 |
 | P9-02 | DONE | P7 | generated HTTP/SSE client plus `/chat` conversation discovery, transcript/composer, turn-scoped Evidence/Refs/Source workbench, and canonical live/resume/replay reducer states — evidence `docs/_scratch/p9-02-chat-workbench-evidence.md`; P11 discover/`token` residual, P9-03 Library preview, and P12 ingress remain |
-| P9-03 | NOT_STARTED | P4-P6 | documents/outline/preview and graph route through approved contracts |
-| P9-04 | BLOCKED | P2-P3,P8,P9-01 | approve the Settings Domain accordion interaction amendment across behavior/component/state/accessibility contracts, then implement `/settings?section=domains`; no deferred operator or publication UI |
+| P9-03 | DONE | P4-P6 | documents/outline/preview and graph route through approved contracts — evidence `docs/_scratch/p9-03-documents-library-evidence.md`; non-PDF/PPT viewers and P12 ingress remain |
+| P9-04 | DONE | P2-P3,P8,P9-01 | approve the Settings Domain accordion interaction amendment across behavior/component/state/accessibility contracts, then implement `/settings?section=domains`; no deferred operator or publication UI — evidence `docs/_scratch/p9-04-settings-domains-evidence.md`; production-boundary Playwright F3 remains P12-07 |
 | P9-05 | NOT_STARTED | P9-01 | import-direction, thin-route, server/browser boundary and contract/barrel CI validators |
 | P10-01 | NOT_STARTED | P8,P9 | Compose services and production-like server configuration for PostgreSQL, migration, API, worker and frontend |
 | P10-02 | NOT_STARTED | P10-01 | explicit migration/bootstrap plus BFF/API/SSE core-path smoke stack |

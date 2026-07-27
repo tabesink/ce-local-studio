@@ -846,6 +846,19 @@
         "title": "CursorExpiredEnvelope",
         "type": "object"
       },
+      "DocumentDetailResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/DocumentSummaryDto"
+          }
+        },
+        "required": [
+          "document"
+        ],
+        "title": "DocumentDetailResponse",
+        "type": "object"
+      },
       "DocumentSummaryDto": {
         "additionalProperties": false,
         "properties": {
@@ -906,6 +919,35 @@
           "updatedAt"
         ],
         "title": "DocumentSummaryDto",
+        "type": "object"
+      },
+      "DocumentsListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentSummaryDto"
+            },
+            "title": "Documents",
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "documents",
+          "nextCursor"
+        ],
+        "title": "DocumentsListResponse",
         "type": "object"
       },
       "DomainCreateRequest": {
@@ -1221,6 +1263,107 @@
           "anchor"
         ],
         "title": "EvidenceItemDto",
+        "type": "object"
+      },
+      "EvidenceLocationDocumentDto": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "pageCount": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pagecount"
+          },
+          "previewKind": {
+            "enum": [
+              "pdf",
+              "unavailable"
+            ],
+            "title": "Previewkind",
+            "type": "string"
+          },
+          "ref": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "label",
+          "previewKind",
+          "pageCount"
+        ],
+        "title": "EvidenceLocationDocumentDto",
+        "type": "object"
+      },
+      "EvidenceLocationEvidenceDto": {
+        "additionalProperties": false,
+        "properties": {
+          "citationLabel": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Citationlabel",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "text",
+              "table",
+              "figure"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "citationLabel",
+          "kind"
+        ],
+        "title": "EvidenceLocationEvidenceDto",
+        "type": "object"
+      },
+      "EvidenceLocationResponseDto": {
+        "additionalProperties": false,
+        "properties": {
+          "anchor": {
+            "$ref": "#/components/schemas/EvidenceAnchorDto"
+          },
+          "document": {
+            "$ref": "#/components/schemas/EvidenceLocationDocumentDto"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/EvidenceLocationEvidenceDto"
+          }
+        },
+        "required": [
+          "evidence",
+          "document",
+          "anchor"
+        ],
+        "title": "EvidenceLocationResponseDto",
         "type": "object"
       },
       "EvidenceRegionDto": {
@@ -4040,6 +4183,371 @@
         "summary": "Post Conversation Turn Stream"
       }
     },
+    "/api/v1/documents": {
+      "get": {
+        "operationId": "list_member_documents_api_v1_documents_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "domainId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z0-9][a-z0-9_-]{1,62}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Domainid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Query"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentsListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Cursor expired."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Dependency unavailable."
+          }
+        },
+        "summary": "List Member Documents"
+      }
+    },
+    "/api/v1/documents/{documentRef}": {
+      "get": {
+        "operationId": "get_member_document_api_v1_documents__documentRef__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "documentRef",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Documentref",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Document not found."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Dependency unavailable."
+          }
+        },
+        "summary": "Get Member Document"
+      }
+    },
+    "/api/v1/documents/{documentRef}/content": {
+      "get": {
+        "operationId": "get_member_document_content_api_v1_documents__documentRef__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "documentRef",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Documentref",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Range",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Range"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Range",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Range"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Full governed PDF preview.",
+            "headers": {
+              "Accept-Ranges": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "206": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Partial governed PDF preview.",
+            "headers": {
+              "Accept-Ranges": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Range": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Document not found."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Governed preview unavailable."
+          },
+          "416": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Range not satisfiable.",
+            "headers": {
+              "Content-Range": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Document content unavailable."
+          }
+        },
+        "summary": "Get Member Document Content"
+      }
+    },
     "/api/v1/domains": {
       "get": {
         "operationId": "list_available_domains_api_v1_domains_get",
@@ -4136,6 +4644,87 @@
           }
         },
         "summary": "Retrieve Domain Evidence"
+      }
+    },
+    "/api/v1/evidence/{evidenceRef}/location": {
+      "get": {
+        "operationId": "get_member_evidence_location_api_v1_evidence__evidenceRef__location_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "evidenceRef",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 8,
+              "title": "Evidenceref",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceLocationResponseDto"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Evidence not found."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Governed preview unavailable."
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Evidence unavailable."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Dependency unavailable."
+          }
+        },
+        "summary": "Get Member Evidence Location"
       }
     },
     "/health/live": {

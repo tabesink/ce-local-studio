@@ -1,85 +1,75 @@
-/* Knowledge Domain wrappers shared by active Phase 1 capabilities. */
+/* Knowledge Domain wrappers over generated OpenAPI closed DTOs (P9-04 U2). */
 
 import { ceFetch } from "@/lib/api/client";
 import type { components } from "@/lib/api/generated/openapi";
 
 type DomainCreateRequest = components["schemas"]["DomainCreateRequest"];
 
-export type MemberDomain = {
-  id: string;
-  displayName: string;
-  available: boolean;
-};
+export type AdminDomain = components["schemas"]["AdminDomainDto"];
+export type MemberDomain = components["schemas"]["DomainSummaryDto"];
+export type DomainOperation = components["schemas"]["OperationDto"];
+export type AllowedAction = components["schemas"]["AllowedAction"];
 
-export type AdminDomain = {
-  id: string;
-  displayName: string;
-  state: string;
-  embeddingProfileId: string;
-  available: boolean;
-  /** Present on current admin DTO; older proxies may omit it. */
-  storageSummary?: DomainStorageSummary;
-  createdAt: string;
-  updatedAt: string;
-};
+export function ifMatchHeader(version: number | string | null | undefined): Record<string, string> | undefined {
+  if (version == null || version === "") return undefined;
+  return { "If-Match": `"${version}"` };
+}
 
-export type DomainStorageComponent = {
-  kind: "source_storage" | "graph_index" | "database_metadata";
-  label: string;
-  bytes: number;
-  percent: number;
-};
-
-export type DomainStorageSummary = {
-  limitBytes: number;
-  totalBytes: number;
-  totalPercent: number;
-  warning: "ok" | "near_limit" | "exceeded";
-  components: DomainStorageComponent[];
-  calculatedAt: string;
-};
-
-export type DomainOperation = {
-  id: string;
-  operationType: string;
-  status: string;
-  message: string | null;
-  errorCode: string | null;
-  errorMessage: string | null;
-  startedAt: string | null;
-  finishedAt: string | null;
-  createdAt: string;
-};
+export function isDomainActionEnabled(
+  domain: { allowedActions: AllowedAction[] },
+  action: string,
+): boolean {
+  return domain.allowedActions.some((entry) => entry.action === action && entry.enabled);
+}
 
 export async function listMemberDomains(): Promise<MemberDomain[]> {
-  const body = await ceFetch<{ domains: MemberDomain[] }>("/domains");
+  const body = await ceFetch<components["schemas"]["MemberDomainListResponse"]>("/domains");
   return body.domains;
 }
 
 export async function listAdminDomains(): Promise<AdminDomain[]> {
-  const body = await ceFetch<{ domains: AdminDomain[] }>("/admin/domains");
+  const body = await ceFetch<components["schemas"]["AdminDomainListResponse"]>("/admin/domains");
   return body.domains;
 }
 
 export async function createDomain(input: DomainCreateRequest): Promise<AdminDomain> {
-  const body = await ceFetch<{ domain: AdminDomain }>("/admin/domains", {
+  const body = await ceFetch<components["schemas"]["AdminDomainMutationResponse"]>("/admin/domains", {
     method: "POST",
     body: JSON.stringify(input),
   });
   return body.domain;
 }
 
-export async function startDomain(domainId: string): Promise<AdminDomain> {
-  const body = await ceFetch<{ domain: AdminDomain }>(`/admin/domains/${domainId}/start`, { method: "POST" });
-  return body.domain;
+export async function startDomain(domainId: string): Promise<DomainOperation> {
+  const body = await ceFetch<components["schemas"]["DomainOperationMutationResponse"]>(
+    `/admin/domains/${encodeURIComponent(domainId)}/start`,
+    { method: "POST" },
+  );
+  return body.operation;
 }
 
-export async function stopDomain(domainId: string): Promise<AdminDomain> {
-  const body = await ceFetch<{ domain: AdminDomain }>(`/admin/domains/${domainId}/stop`, { method: "POST" });
-  return body.domain;
+export async function stopDomain(domainId: string): Promise<DomainOperation> {
+  const body = await ceFetch<components["schemas"]["DomainOperationMutationResponse"]>(
+    `/admin/domains/${encodeURIComponent(domainId)}/stop`,
+    { method: "POST" },
+  );
+  return body.operation;
 }
 
-export async function deleteDomain(domainId: string): Promise<DomainOperation> {
-  const body = await ceFetch<{ operation: DomainOperation }>(`/admin/domains/${domainId}`, { method: "DELETE" });
+export async function deleteDomain(
+  domainId: string,
+  version: number | string | null | undefined,
+): Promise<DomainOperation> {
+  const headers = ifMatchHeader(version);
+  if (!headers) {
+    throw new Error("Domain version is required for delete (If-Match).");
+  }
+  const body = await ceFetch<components["schemas"]["DomainOperationMutationResponse"]>(
+    `/admin/domains/${encodeURIComponent(domainId)}`,
+    {
+      method: "DELETE",
+      headers,
+    },
+  );
   return body.operation;
 }

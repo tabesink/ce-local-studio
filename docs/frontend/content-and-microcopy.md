@@ -46,6 +46,7 @@ Avoid `Done` when the state is `accepted`, `queued`, or remote cleanup remains.
 | --- | --- | --- |
 | Conversations | `Start a conversation to ask a question.` | `Conversation is no longer available.` |
 | Domains | `No Knowledge Domains are available.` | `Domain list could not be loaded.` |
+| Domains Settings (admin) | same empty as Domains; Deploy remains available when product allows | same load failure; never “Knowledge Graphs” |
 | Evidence | `No evidence was returned for this turn.` | `Evidence no longer available.` |
 | Library | `No Source Documents in this Knowledge Domain.` | `Document is no longer available.` |
 
@@ -68,6 +69,7 @@ Request ID: <safe request ID>
 | `idempotency_conflict` | `This submission changed after it was first sent. Review the draft and submit again.` |
 | `stale_revision` | `This item changed elsewhere. Review the current version before saving.` |
 | `operation_conflict` | `Another operation already changed this item. The latest state is shown.` |
+| Domains deploy start-failed-keep | `The Knowledge Domain was created, but start did not finish. Try Start again.` |
 | `cursor_expired` | `Live history expired. Loading the saved answer.` |
 | rate limit | `Too many requests. Try again <server-provided time>.` |
 | unauthorized target | `This item is unavailable or you do not have access.` |

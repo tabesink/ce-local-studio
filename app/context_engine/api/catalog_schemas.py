@@ -186,6 +186,25 @@ class EvidenceItemDto(PublicDto):
     anchor: EvidenceAnchorDto
 
 
+class EvidenceLocationEvidenceDto(PublicDto):
+    id: OpaqueRef
+    citation_label: str = Field(alias="citationLabel", min_length=1, max_length=32)
+    kind: EvidenceKind
+
+
+class EvidenceLocationDocumentDto(PublicDto):
+    ref: OpaqueRef
+    label: SafeLabel
+    preview_kind: Literal["pdf", "unavailable"] = Field(alias="previewKind")
+    page_count: int | None = Field(alias="pageCount", gt=0)
+
+
+class EvidenceLocationResponseDto(PublicDto):
+    evidence: EvidenceLocationEvidenceDto
+    document: EvidenceLocationDocumentDto
+    anchor: EvidenceAnchorDto
+
+
 class RetrievalEvidenceRequestDto(PublicDto):
     question: str = Field(min_length=1, max_length=2000)
 
@@ -297,6 +316,9 @@ AUTHORITATIVE_PUBLIC_DTOS = (
     EmbeddingProfileSummaryDto,
     EvidenceAnchorDto,
     EvidenceItemDto,
+    EvidenceLocationDocumentDto,
+    EvidenceLocationEvidenceDto,
+    EvidenceLocationResponseDto,
     EvidenceRegionDto,
     ModelProfileDto,
     OperationDto,

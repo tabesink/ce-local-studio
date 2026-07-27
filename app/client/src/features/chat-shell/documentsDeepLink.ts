@@ -3,17 +3,21 @@
  *
  * Builds opaque `/documents?document=&evidence=&page=` hrefs from approved
  * EvidenceItem public fields only. Does not overload return-to-chat
- * `features/documents/libraryDeepLink.ts`. Documents preview/reauth stays P9-03.
+ * `features/documents/libraryDeepLink.ts`.
  */
 
 export type DocumentsDeepLinkFields = {
   documentRef?: string | null;
   evidenceRef?: string | null;
   page?: number | null;
+  /** Opaque conversation ref for return-to-chat when history Back is unavailable. */
+  conversation?: string | null;
+  /** Opaque turn ref for return-to-chat when history Back is unavailable. */
+  turn?: string | null;
 };
 
-/** Library preview surface is deliberately unavailable until P9-03. */
-export const LIBRARY_SURFACE_AVAILABLE = false;
+/** Library preview surface enabled after P9-03 member content/location path. */
+export const LIBRARY_SURFACE_AVAILABLE = true;
 
 function nonEmpty(value: string | null | undefined): string | null {
   if (value == null) return null;
@@ -37,6 +41,13 @@ export function buildDocumentsDeepLinkHref(fields: DocumentsDeepLinkFields): str
 
   if (typeof fields.page === "number" && Number.isFinite(fields.page) && fields.page > 0) {
     params.set("page", String(Math.trunc(fields.page)));
+  }
+
+  const conversation = nonEmpty(fields.conversation);
+  const turn = nonEmpty(fields.turn);
+  if (conversation && turn) {
+    params.set("conversation", conversation);
+    params.set("turn", turn);
   }
 
   return `/documents?${params.toString()}`;

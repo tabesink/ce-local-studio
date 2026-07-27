@@ -506,6 +506,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Member Documents */
+        get: operations["list_member_documents_api_v1_documents_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{documentRef}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Member Document */
+        get: operations["get_member_document_api_v1_documents__documentRef__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{documentRef}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Member Document Content */
+        get: operations["get_member_document_content_api_v1_documents__documentRef__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/domains": {
         parameters: {
             query?: never;
@@ -534,6 +585,23 @@ export interface paths {
         put?: never;
         /** Retrieve Domain Evidence */
         post: operations["retrieve_domain_evidence_api_v1_domains__domainId__evidence_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evidence/{evidenceRef}/location": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Member Evidence Location */
+        get: operations["get_member_evidence_location_api_v1_evidence__evidenceRef__location_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -822,6 +890,10 @@ export interface components {
             error: components["schemas"]["ErrorDetail"];
             terminalSnapshot?: components["schemas"]["TerminalSnapshotDto"] | null;
         };
+        /** DocumentDetailResponse */
+        DocumentDetailResponse: {
+            document: components["schemas"]["DocumentSummaryDto"];
+        };
         /** DocumentSummaryDto */
         DocumentSummaryDto: {
             /**
@@ -843,6 +915,13 @@ export interface components {
             ref: string;
             /** Updatedat */
             updatedAt: string;
+        };
+        /** DocumentsListResponse */
+        DocumentsListResponse: {
+            /** Documents */
+            documents: components["schemas"]["DocumentSummaryDto"][];
+            /** Nextcursor */
+            nextCursor: string | null;
         };
         /** DomainCreateRequest */
         DomainCreateRequest: {
@@ -937,6 +1016,38 @@ export interface components {
             kind: "text" | "table" | "figure";
             /** Sourcelabel */
             sourceLabel: string;
+        };
+        /** EvidenceLocationDocumentDto */
+        EvidenceLocationDocumentDto: {
+            /** Label */
+            label: string;
+            /** Pagecount */
+            pageCount: number | null;
+            /**
+             * Previewkind
+             * @enum {string}
+             */
+            previewKind: "pdf" | "unavailable";
+            /** Ref */
+            ref: string;
+        };
+        /** EvidenceLocationEvidenceDto */
+        EvidenceLocationEvidenceDto: {
+            /** Citationlabel */
+            citationLabel: string;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "text" | "table" | "figure";
+        };
+        /** EvidenceLocationResponseDto */
+        EvidenceLocationResponseDto: {
+            anchor: components["schemas"]["EvidenceAnchorDto"];
+            document: components["schemas"]["EvidenceLocationDocumentDto"];
+            evidence: components["schemas"]["EvidenceLocationEvidenceDto"];
         };
         /** EvidenceRegionDto */
         EvidenceRegionDto: {
@@ -2495,6 +2606,198 @@ export interface operations {
             };
         };
     };
+    list_member_documents_api_v1_documents_get: {
+        parameters: {
+            query?: {
+                domainId?: string | null;
+                query?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentsListResponse"];
+                };
+            };
+            /** @description Cursor expired. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Dependency unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_member_document_api_v1_documents__documentRef__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                documentRef: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentDetailResponse"];
+                };
+            };
+            /** @description Document not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Dependency unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_member_document_content_api_v1_documents__documentRef__content_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Range?: string | null;
+                "If-Range"?: string | null;
+            };
+            path: {
+                documentRef: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Full governed PDF preview. */
+            200: {
+                headers: {
+                    "Accept-Ranges"?: string;
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    ETag?: string;
+                    "X-Content-Type-Options"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Partial governed PDF preview. */
+            206: {
+                headers: {
+                    "Accept-Ranges"?: string;
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    "Content-Range"?: string;
+                    ETag?: string;
+                    "X-Content-Type-Options"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Document not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Governed preview unavailable. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Range not satisfiable. */
+            416: {
+                headers: {
+                    "Content-Range"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Document content unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     list_available_domains_api_v1_domains_get: {
         parameters: {
             query?: never;
@@ -2567,6 +2870,73 @@ export interface operations {
                 };
             };
             /** @description Retrieval is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_member_evidence_location_api_v1_evidence__evidenceRef__location_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                evidenceRef: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceLocationResponseDto"];
+                };
+            };
+            /** @description Evidence not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Governed preview unavailable. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Evidence unavailable. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Dependency unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;

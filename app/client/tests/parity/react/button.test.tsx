@@ -19,23 +19,14 @@ function ThemeWrap({
 }
 
 describe("Button parity (R10)", () => {
-  it("asserts starter manifests exist and accordion parity files do not", () => {
-    for (const name of ["button", "input", "status-pill", "settings-row"]) {
+  it("asserts starter and Domain accordion parity trios exist", () => {
+    for (const name of ["button", "input", "status-pill", "settings-row", "domains-accordion"]) {
       expect(existsSync(path.join(PARITY_ROOT, "manifests", `${name}.json`))).toBe(true);
       expect(existsSync(path.join(PARITY_ROOT, "fixtures", `${name}.html`))).toBe(true);
       expect(existsSync(path.join(PARITY_ROOT, "react", `${name}.test.tsx`))).toBe(true);
     }
-    for (const forbidden of [
-      "domains-accordion",
-      "domain-accordion",
-      "accordion",
-      "domains_accordion",
-    ]) {
-      expect(existsSync(path.join(PARITY_ROOT, "manifests", `${forbidden}.json`))).toBe(false);
-      expect(existsSync(path.join(PARITY_ROOT, "fixtures", `${forbidden}.html`))).toBe(false);
-      expect(existsSync(path.join(PARITY_ROOT, "react", `${forbidden}.test.tsx`))).toBe(false);
-    }
   });
+
 
   it("renders each variant with its synthetic label", () => {
     const variants: Array<{ variant: ButtonVariant; label: string }> = [

@@ -57,6 +57,62 @@ describe("same-origin Context Engine BFF", () => {
     assert.equal(await response.text(), "stream");
   });
 
+  it("forwards Range and If-Range for governed document content", async () => {
+    let capturedInit;
+    const request = new Request("https://context.example.test/api/v1/documents/doc1/content", {
+      method: "GET",
+      headers: {
+        range: "bytes=0-1023",
+        "if-range": '"preview-etag-1"',
+        cookie: "ce_session=opaque",
+        authorization: "Bearer forbidden",
+      },
+    });
+    const response = await proxyContextEngineRequest(request, ["documents", "doc1", "content"], config, async (_url, init) => {
+      capturedInit = init;
+      return new Response("pdf-slice", {
+        status: 206,
+        headers: {
+          "accept-ranges": "bytes",
+          "content-range": "bytes 0-1023/4096",
+          "content-type": "application/pdf",
+          etag: '"preview-etag-1"',
+          "content-disposition": 'inline; filename="manual.pdf"',
+        },
+      });
+    });
+
+    const headers = new Headers(capturedInit.headers);
+    assert.equal(headers.get("range"), "bytes=0-1023");
+    assert.equal(headers.get("if-range"), '"preview-etag-1"');
+    assert.equal(headers.has("authorization"), false);
+    assert.equal(response.status, 206);
+    assert.equal(response.headers.get("content-range"), "bytes 0-1023/4096");
+    assert.equal(response.headers.get("etag"), '"preview-etag-1"');
+    assert.equal(response.headers.get("accept-ranges"), "bytes");
+    assert.equal(response.headers.get("cache-control"), "private, no-store, no-transform");
+    assert.equal(await response.text(), "pdf-slice");
+  });
+
+  it("forwards X-Content-Type-Options nosniff on document content", async () => {
+    const request = new Request("https://context.example.test/api/v1/documents/doc1/content", {
+      method: "GET",
+      headers: { cookie: "ce_session=opaque" },
+    });
+    const response = await proxyContextEngineRequest(request, ["documents", "doc1", "content"], config, async () =>
+      new Response("%PDF", {
+        status: 200,
+        headers: {
+          "content-type": "application/pdf",
+          "x-content-type-options": "nosniff",
+          etag: '"preview-etag-1"',
+        },
+      }),
+    );
+    assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(response.headers.get("cache-control"), "private, no-store, no-transform");
+  });
+
   it("streams the upstream body and exposes only safe no-store response headers", async () => {
     const encoder = new TextEncoder();
     const body = new ReadableStream({

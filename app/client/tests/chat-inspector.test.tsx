@@ -1,11 +1,17 @@
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EvidencePanel } from "@/features/chat-shell/EvidencePanel";
 import type { EvidenceRow } from "@/features/chat-shell/types";
 import type { AcceptedRef } from "@/features/chat-shell/api";
 import { buildDocumentsDeepLinkHref } from "@/features/chat-shell/documentsDeepLink";
+
+const push = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+}));
 
 const evidence: EvidenceRow[] = [
   {
@@ -39,8 +45,12 @@ function ThemeWrap({ children }: { children: ReactNode }) {
   return <div data-theme="zai-dark">{children}</div>;
 }
 
-describe("chat inspector workbench (P9-02 U5)", () => {
-  it("exposes Evidence | Refs | Source tabs with empty and populated states", async () => {
+describe("chat inspector workbench (P9-03 Library enable)", () => {
+  beforeEach(() => {
+    push.mockReset();
+  });
+
+  it("exposes Evidence | Refs | Source tabs and enables Open in Library", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
     const onClose = vi.fn();
@@ -72,10 +82,9 @@ describe("chat inspector workbench (P9-02 U5)", () => {
     expect(screen.getByText("Handbook")).toBeInTheDocument();
 
     await user.click(screen.getByTestId("inspector-tab-source"));
-    expect(screen.getByTestId("open-in-library")).toBeDisabled();
-    expect(screen.getByTestId("document-navigation-unavailable")).toHaveTextContent(
-      /Library preview surface is ready|unavailable/i,
-    );
+    const openInLibrary = screen.getByTestId("open-in-library");
+    expect(openInLibrary).toBeEnabled();
+    expect(screen.queryByTestId("document-navigation-unavailable")).not.toBeInTheDocument();
 
     const href = buildDocumentsDeepLinkHref({
       documentRef: evidence[0].documentRef,
@@ -83,6 +92,36 @@ describe("chat inspector workbench (P9-02 U5)", () => {
       page: evidence[0].anchor.pageNumber,
     });
     expect(href).toBe("/documents?document=doc_safe_7&evidence=ev_safe_12&page=18");
+
+    await user.click(openInLibrary);
+    expect(push).toHaveBeenCalledWith(href);
+  });
+
+  it("keeps Open in Library disabled when opaque refs are missing", async () => {
+    const user = userEvent.setup();
+    const incomplete: EvidenceRow[] = [
+      {
+        ...evidence[0],
+        id: "ev_incomplete",
+        documentRef: "",
+      },
+    ];
+    render(
+      <ThemeWrap>
+        <EvidencePanel
+          open
+          rows={incomplete}
+          acceptedRefs={[]}
+          selectedEvidenceId="ev_incomplete"
+          onSelectEvidence={() => undefined}
+          onClose={() => undefined}
+        />
+      </ThemeWrap>,
+    );
+
+    await user.click(screen.getByTestId("inspector-tab-source"));
+    expect(screen.getByTestId("open-in-library")).toBeDisabled();
+    expect(screen.getByTestId("document-navigation-unavailable")).toHaveTextContent(/missing/i);
   });
 
   it("shows contextual empty states when a turn has no evidence or refs", async () => {

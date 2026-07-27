@@ -13,6 +13,7 @@ const REQUEST_HEADERS = [
   "cookie",
   "if-match",
   "if-none-match",
+  "if-range",
   "range",
   "x-csrf-token",
   "x-request-id",
@@ -27,6 +28,7 @@ const RESPONSE_HEADERS = [
   "retry-after",
   "set-cookie",
   "x-accel-buffering",
+  "x-content-type-options",
   "x-request-id",
 ] as const;
 

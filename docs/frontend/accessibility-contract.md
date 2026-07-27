@@ -23,6 +23,7 @@ Context Engine targets WCAG 2.2 AA for authenticated and anonymous surfaces. Acc
 | evidence panel | `aside` labelled Evidence; rows are buttons/list; arrows optional, Tab always works |
 | PDF viewer | labelled region/title; page control, zoom, and close are keyboard accessible |
 | dialogs | initial focus, trap, Escape unless destructive commit is running, opener focus restore |
+| Settings Domain accordion | named expand/collapse control with `aria-expanded` / `aria-controls`; keyboard operable without pointer; one-open (opening another row collapses the prior); lifecycle `ToggleSwitch` / busy controls expose `aria-busy` and retain accessible names; delete modal follows dialogs row (Cancel-first, opener restore); reduced motion skips chevron animation |
 | tables | real table headers; row actions are controls, not click-only rows |
 | graph route | until an approved graph DTO exists, expose a named unavailable region and no inert canvas; once enabled, canvas data requires an equivalent searchable node list/detail |
 | toasts | no focus steal; persistent actionable errors also appear in route/form content |

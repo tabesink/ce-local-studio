@@ -224,59 +224,72 @@ describe("Domain settings helpers (F-009 deploy)", () => {
     const { FORBIDDEN_DOMAIN_UI_FIELD_TOKENS } = await loadHelpers();
 
     const panel = read("src/features/settings-panel/SettingsPanel.tsx");
+    const accordionRow = read("src/features/settings-panel/DomainAccordionRow.tsx");
     const sharedUi = read("src/_shared/ui/index.tsx");
     const domainsApi = read("src/features/domains/api.ts");
 
     assert.match(panel, /from "@\/components\/ui"/);
     assert.match(panel, /UiModal/);
-    assert.match(panel, /IconButton/);
+    assert.match(panel, /DomainAccordionRow/);
+    assert.match(accordionRow, /IconButton/);
+    assert.match(accordionRow, /ChevronDown/);
+    assert.match(accordionRow, /aria-expanded/);
     assert.match(panel, /Input/);
     assert.match(panel, /Select/);
-    assert.match(panel, /ProgressBar/);
-    assert.match(panel, /Knowledge Graphs/);
-    assert.match(panel, /New Knowledge Graph/);
+    assert.doesNotMatch(panel, /ProgressBar/);
+    assert.doesNotMatch(accordionRow, /ProgressBar/);
+    assert.match(panel, /Knowledge Domains/);
+    assert.match(panel, /New Knowledge Domain/);
     assert.doesNotMatch(panel, /LightRAG Containers/);
     assert.match(panel, /deployDomain/);
     assert.match(panel, /Deploy/);
-    assert.match(panel, /ChevronDown/);
-    assert.match(panel, /aria-expanded/);
     assert.match(panel, /ToggleSwitch/);
     assert.match(panel, /checked=\{lifecycle === "stop"\}/);
-    assert.match(panel, /embeddingProfileLabel/);
+    assert.match(panel, /embeddingProfile\.name/);
+    assert.match(panel, /vectorDimensions/);
+    assert.match(panel, /queryEligible/);
+    assert.match(panel, /runtimeReady/);
+    assert.match(panel, /controlGeneration/);
+    assert.match(panel, /SettingsFactRows/);
+    assert.match(panel, /useSearchParams/);
+    assert.match(panel, /section=domains|params\.set\("section"/);
     assert.match(panel, /nextExpandedDomainId/);
-    assert.match(panel, /storageLimitLabel/);
-    assert.match(panel, /storageWarningLabel/);
-    assert.match(panel, /storageSummary/);
-    assert.match(panel, /· locked/);
+    assert.doesNotMatch(panel, /storageLimitLabel/);
+    assert.doesNotMatch(panel, /storageWarningLabel/);
+    assert.doesNotMatch(panel, /storageSummary/);
+    assert.match(panel, /· locked|locked/);
     assert.match(panel, /Embedding model/);
     assert.doesNotMatch(panel, /window\.confirm/);
+    assert.doesNotMatch(panel, /Knowledge Graphs/);
 
     assert.match(panel, /flex flex-wrap items-center gap-2 px-3\.5 py-2\.5/);
     assert.doesNotMatch(panel, /flex flex-col gap-2 px-3\.5 py-3/);
-    assert.match(panel, /data-testid="domain-storage-summary"/);
-    assert.match(panel, /data-testid="domain-storage-total-bar"/);
-    assert.match(panel, /role="meter"/);
-    assert.match(panel, /aria-valuetext/);
+    assert.doesNotMatch(panel, /data-testid="domain-storage-summary"/);
+    assert.doesNotMatch(panel, /data-testid="domain-storage-total-bar"/);
+    assert.doesNotMatch(panel, /role="meter"/);
+    assert.doesNotMatch(panel, /aria-valuetext/);
     assert.doesNotMatch(panel, /<select/);
     assert.match(sharedUi, /tone === "warning"[\s\S]*bg-\(--ui-warning\)/);
     assert.match(sharedUi, /tone === "danger"[\s\S]*bg-\(--ui-danger\)/);
 
     // Create/deploy lives in its own SettingsGroup card below the accordion list.
-    const listGroupEnd = panel.indexOf('title="New Knowledge Graph"');
-    assert.ok(listGroupEnd > 0, "New Knowledge Graph card must exist");
-    const accordionCard = panel.slice(panel.indexOf('title="Knowledge Graphs"'), listGroupEnd);
+    const listGroupEnd = panel.indexOf('title="New Knowledge Domain"');
+    assert.ok(listGroupEnd > 0, "New Knowledge Domain card must exist");
+    const accordionCard = panel.slice(panel.indexOf('title="Knowledge Domains"'), listGroupEnd);
     assert.doesNotMatch(accordionCard, /Deploying|onDeploy|draftName/);
     assert.doesNotMatch(accordionCard, />Name<\/span>|>Id<\/span>/);
-    assert.doesNotMatch(accordionCard, /storageSummary\.components/);
+    assert.doesNotMatch(accordionCard, /storageSummary/);
     assert.match(panel.slice(listGroupEnd), /draftName|onDeploy|Deploy/);
 
-    const collapsedHeader = panel.slice(
-      panel.indexOf('className="flex items-center gap-3 px-3.5 py-2.5'),
-      panel.indexOf("{expanded ? ("),
+    const collapsedHeader = accordionRow.slice(
+      accordionRow.indexOf('className="flex items-center gap-3 px-3.5 py-2.5'),
+      accordionRow.indexOf("{expanded ? ("),
     );
+    assert.ok(collapsedHeader.length > 0, "DomainAccordionRow collapsed header chrome must exist");
     assert.doesNotMatch(collapsedHeader, /storageSummary|domain-storage-summary|Storage/);
     assert.doesNotMatch(collapsedHeader, />\s*Delete\s*</);
-    assert.match(panel.slice(panel.indexOf("{expanded ? ("), listGroupEnd), />\s*Delete\s*</);
+    assert.doesNotMatch(accordionRow, />\s*Delete\s*</);
+    assert.match(accordionCard, />\s*Delete\s*</);
 
     // DomainsSection should not render both Start and Stop on the same row template
     assert.match(panel, /primaryLifecycleAction/);
@@ -290,9 +303,9 @@ describe("Domain settings helpers (F-009 deploy)", () => {
       );
     }
 
-    // Safe admin DTO fields remain the client seam — no infra keys on AdminDomain type
+    // Safe admin DTO fields remain the client seam — no infra keys / storageSummary on AdminDomain
     assert.match(domainsApi, /export type AdminDomain/);
-    assert.match(domainsApi, /storageSummary/);
+    assert.doesNotMatch(domainsApi, /storageSummary/);
     for (const token of ["hostPort", "host_port", "containerId", "runtimeUrl", "baseUrl"]) {
       assert.equal(domainsApi.includes(token), false, `AdminDomain API must not expose ${token}`);
     }

@@ -311,12 +311,16 @@ export function useChatShell() {
   }, [clearPrivateView]);
 
   const loadConversation = useCallback(
-    async (conversationId: string, options?: { turnId?: string | null }) => {
+    async (
+      conversationId: string,
+      options?: { turnId?: string | null; evidenceId?: string | null },
+    ) => {
       setLoading(true);
       setError(null);
       setStreamingTurnId(null);
       setReplayingTurnId(null);
       const restoreTurnId = options?.turnId?.trim() || null;
+      const restoreEvidenceId = options?.evidenceId?.trim() || null;
       const fenceGen = bumpInspectorFence(conversationId, restoreTurnId);
       try {
         const detail = await getConversation(conversationId);
@@ -324,14 +328,20 @@ export function useChatShell() {
         viewConversationIdRef.current = detail.conversation.id;
         setConversation(detail.conversation);
         setTurns(detail.turns);
-        setSelectedEvidenceId(null);
         const restoreTurn = restoreTurnId ? detail.turns.find((row) => row.id === restoreTurnId) : null;
         if (restoreTurn) {
           setSelectedTurnId(restoreTurn.id);
           bumpInspectorFence(conversationId, restoreTurn.id);
           setPanelOpen(restoreTurn.evidence.length > 0);
+          const matchedEvidence =
+            restoreEvidenceId &&
+            restoreTurn.evidence.some((row) => row.id === restoreEvidenceId)
+              ? restoreEvidenceId
+              : null;
+          setSelectedEvidenceId(matchedEvidence);
         } else {
           setSelectedTurnId(null);
+          setSelectedEvidenceId(null);
           bumpInspectorFence(conversationId, null);
           const lastTurn = detail.turns[detail.turns.length - 1];
           setPanelOpen((lastTurn?.evidence.length ?? 0) > 0);

@@ -38,14 +38,20 @@ function ChatShellInner() {
     if (node) node.scrollTop = node.scrollHeight;
   }, [chat.messages.length, chat.streaming]);
 
-  /* Back to chat / citation return: restore conversation + jump-from turn once. */
+  /* Back to chat / citation return: restore conversation + jump-from turn once.
+     Canonical query keys are conversation/turn/evidence; accept legacy conversationId/turnId. */
   useEffect(() => {
     if (returnRestoredRef.current) return;
-    const conversationId = searchParams.get("conversationId")?.trim() || null;
-    const turnId = searchParams.get("turnId")?.trim() || null;
+    const conversationId =
+      searchParams.get("conversation")?.trim() ||
+      searchParams.get("conversationId")?.trim() ||
+      null;
+    const turnId =
+      searchParams.get("turn")?.trim() || searchParams.get("turnId")?.trim() || null;
+    const evidenceId = searchParams.get("evidence")?.trim() || null;
     if (!conversationId || !turnId) return;
     returnRestoredRef.current = true;
-    void chat.loadConversation(conversationId, { turnId });
+    void chat.loadConversation(conversationId, { turnId, evidenceId });
   }, [chat.loadConversation, searchParams]);
 
   return (
@@ -241,6 +247,8 @@ function ChatShellInner() {
         selectedEvidenceId={chat.selectedEvidenceId}
         onSelectEvidence={chat.selectEvidence}
         onClose={() => chat.setPanelOpen(false)}
+        conversationId={chat.conversation?.id ?? null}
+        turnId={chat.selectedTurnId}
       />
     </div>
   );
@@ -298,7 +306,7 @@ function DomainPicker({ chat }: { chat: ChatState }) {
       >
         <option value="">Direct chat</option>
         {chat.domains.map((domain) => (
-          <option key={domain.id} value={domain.id} disabled={!domain.available}>
+          <option key={domain.id} value={domain.id} disabled={!domain.queryEligible}>
             {domain.displayName}
           </option>
         ))}

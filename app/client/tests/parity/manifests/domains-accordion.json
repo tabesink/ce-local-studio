@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "targetId": "domains-accordion",
+  "owner": "src/features/settings-panel",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical composition: app/client/src/features/settings-panel/DomainAccordionRow.tsx used by SettingsPanel DomainsSection.",
+      "Settings-owned Controllers-style disclosure; not a product-neutral src/ui Accordion primitive.",
+      "Locked-fact expand body only — no storageSummary / ProgressBar-on-expand.",
+      "Inventory: docs/_scratch/p9-04-settings-domains-inventory.md.",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads.",
+      "Production-boundary Playwright F3 remains P12-07."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "displayName": "Synthetic Alpha Domain",
+      "domainId": "synth-alpha",
+      "state": "Running",
+      "expand": "Expand Synthetic Alpha Domain",
+      "collapse": "Collapse Synthetic Alpha Domain",
+      "embedding": "embed-synth · 768d · locked",
+      "queryEligible": "Query eligible",
+      "runtimeReady": "Runtime ready"
+    },
+    "variants": ["collapsed", "expanded-locked-facts"],
+    "states": ["one-open", "lifecycle-toggle-slot"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": [
+      "--ui-fg",
+      "--ui-muted",
+      "--ui-hover",
+      "--ui-bg",
+      "--fs-base",
+      "--fs-xs"
+    ],
+    "geometry": {
+      "layout": "single-row header with leading chevron, name/id stack, status, lifecycle slot; expand region below",
+      "density": "compact row padding px-3.5 py-2.5; expand body px-3.5 py-3"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark-collapsed", "theme-dark-expanded", "theme-light-collapsed"],
+    "expectedTokenGeometry": [
+      "Display name uses --ui-fg at --fs-base",
+      "Domain id uses mono --ui-muted at --fs-xs",
+      "Expand body uses --ui-bg tint without ProgressBar chrome",
+      "Collapsed and expanded variants share header density"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "expand/collapse IconButton is keyboard-focusable and activatable",
+      "focus": "chevron control receives focus; expand region is a labeled region when open",
+      "screenReader": "aria-expanded and aria-controls wire the disclosure; state StatusPill text is present",
+      "reducedMotion": "chevron rotation uses motion-reduce:transition-none; no motion-dependent correctness",
+      "validationBusyDisabledStatus": "lifecycle slot can host ToggleSwitch; status hosts StatusPill",
+      "zoom": "display name remains present at component level",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "header flex wraps via parent Settings density; claimed via shared viewport labels"
+    }
+  }
+}

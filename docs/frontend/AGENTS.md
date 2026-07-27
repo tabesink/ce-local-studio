@@ -21,6 +21,6 @@ This file is subordinate to root `AGENTS.md`. It guides work under `app/client`;
 
 ## Frontend factory boundary
 
-The D0 starter catalog covers Button, Input, StatusPill, SettingsRow, and a Settings-owned Domain accordion entry. The accordion remains `BLOCKED_CONTRACT` until its interaction contract is approved. The five entries are starter coverage, not a complete allowlist.
+The D0 starter catalog covers Button, Input, StatusPill, SettingsRow, and a Settings-owned Domain accordion entry. The Settings Domain accordion is `FACTORY_READY` at Vitest/RTL altitude under P9-04 (`DomainAccordionRow` + `domains-accordion` parity trio). Do not invent a shared Accordion primitive or storageSummary UI. Production-boundary Playwright F3 for `/settings?section=domains` remains P12-07. The five entries are starter coverage, not a complete allowlist.
 
-Script-free HTML fixtures may prove deterministic static appearance only. React tests own behavior, semantics, focus, and accessibility. Live acceptance at `/settings?section=domains` must run through the production Next build, same-origin BFF, and FastAPI with server-produced DTOs; intercepted or mocked product responses do not satisfy acceptance.
+Script-free HTML fixtures may prove deterministic static appearance only. React tests own behavior, semantics, focus, and accessibility. Production-boundary live acceptance at `/settings?section=domains` must run through the production Next build, same-origin BFF, and FastAPI with server-produced DTOs (P12-07); intercepted or mocked product responses do not satisfy that acceptance.

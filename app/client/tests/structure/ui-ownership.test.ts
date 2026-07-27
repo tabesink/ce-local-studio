@@ -127,16 +127,42 @@ describe("ui ownership structural gate", () => {
     );
   });
 
-  it("forbids Domain accordion parity artifacts under tests/parity (blocked-P9-04)", () => {
+  it("requires Settings Domain accordion parity under settings-panel ownership", () => {
+    assert.equal(
+      existsSync(join(src, "features/settings-panel/DomainAccordionRow.tsx")),
+      true,
+      "missing features/settings-panel/DomainAccordionRow.tsx",
+    );
+    assert.equal(
+      hasLocalSymbolBody(readSrc("features/settings-panel/DomainAccordionRow.tsx"), "DomainAccordionRow"),
+      true,
+      "DomainAccordionRow.tsx must define DomainAccordionRow",
+    );
+    assert.equal(
+      existsSync(join(src, "ui/Accordion.tsx")),
+      false,
+      "shared Accordion under src/ui is forbidden; accordion remains Settings-owned",
+    );
     const parityRoot = join(testsRoot, "parity");
-    if (!existsSync(parityRoot)) return;
+    for (const rel of [
+      "manifests/domains-accordion.json",
+      "fixtures/domains-accordion.html",
+      "react/domains-accordion.test.tsx",
+    ]) {
+      assert.equal(
+        existsSync(join(parityRoot, rel)),
+        true,
+        `missing Domain accordion parity artifact: ${rel}`,
+      );
+    }
     const offenders = walk(parityRoot)
       .map((file) => relative(parityRoot, file).split("\\").join("/"))
-      .filter((rel) => ACCORDION_PARITY_RE.test(rel));
+      .filter((rel) => ACCORDION_PARITY_RE.test(rel) && !rel.includes("domains-accordion"));
     assert.deepEqual(
       offenders,
       [],
-      `Domain accordion parity is blocked until P9-04. Offenders: ${offenders.join(", ")}`,
+      `Only domains-accordion parity target is allowed. Offenders: ${offenders.join(", ")}`,
     );
   });
 });
+
