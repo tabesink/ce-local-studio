@@ -49,8 +49,8 @@ function turnToMessages(turn: ChatTurn): ChatMessage[] {
   if (turn.assistantAnswer) {
     blocks.push({ kind: "text", id: `${turn.id}-text`, text: turn.assistantAnswer });
   }
-  if (turn.safeError?.message) {
-    blocks.push({ kind: "error", id: `${turn.id}-error`, text: turn.safeError.message });
+  if (turn.error?.message) {
+    blocks.push({ kind: "error", id: `${turn.id}-error`, text: turn.error.message });
   }
   return [
     {

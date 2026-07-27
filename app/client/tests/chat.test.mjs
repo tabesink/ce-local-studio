@@ -32,6 +32,10 @@ describe("F-012 chat via LS chat-shell", () => {
 
   it("keeps chat network calls behind the slice adapter and shared SSE wrappers", () => {
     const api = read("src/features/chat-shell/api.ts");
+    assert.match(api, /TurnDto/);
+    assert.match(api, /EvidenceItemDto/);
+    assert.match(api, /ConversationSummaryDto/);
+    assert.match(api, /ConversationDetailResponseDto/);
     assert.match(api, /"\/composer-refs:discover"/);
     assert.match(api, /composerRefTokens/);
     assert.match(api, /postSse/);

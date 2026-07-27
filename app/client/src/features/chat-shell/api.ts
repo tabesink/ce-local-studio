@@ -1,21 +1,20 @@
-/* Context Engine adapter for the LS chat-shell slice.
-   This module is the only chat code that knows CE endpoints:
+/* Context Engine adapter for the chat-shell slice.
+   Thin wrappers over generated OpenAPI/SSE component types.
 
    listConversations()      GET  /api/v1/conversations
    createConversation()     POST /api/v1/conversations
    getConversation(id)      GET /api/v1/conversations/{id}
    renameConversation(id)   PATCH /api/v1/conversations/{id}
    deleteConversation(id)   DELETE /api/v1/conversations/{id}
-   discoverComposerRefs()   POST /api/v1/composer-refs:discover
-   streamConversationTurn() POST /api/v1/conversations/{id}/turns:stream (EVT-001 SSE)
-
-   Abort/queue/steer/compact and Pi runtime frames are not wired: no CE contract. */
+   discoverComposerRefs()   POST /api/v1/composer-refs:discover (gated unused until P11)
+   streamConversationTurn() POST /api/v1/conversations/{id}/turns:stream
+*/
 
 import { ceFetch } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/generated/openapi";
 import type { components as sseComponents } from "@/lib/api/generated/sse";
-import { getSse, postSse, type SseEvent } from "@/lib/api/sse";
+import { getSse, postSse } from "@/lib/api/sse";
 import { createCanonicalTurnConsumer } from "@/features/chat-shell/stream-protocol";
 import { runResumableTurnStream, type StreamTransportState } from "@/features/chat-shell/stream-reconnect";
 
@@ -24,7 +23,14 @@ type ConversationTitleRequest = components["schemas"]["ConversationTitleRequest"
 type TurnStreamRequest = components["schemas"]["TurnStreamRequest"];
 
 export type ComposerRefKind = NonNullable<ComposerRefDiscoverRequest["kinds"]>[number];
+export type AcceptedRef = components["schemas"]["AcceptedRefDto"];
+export type ChatTurn = components["schemas"]["TurnDto"];
+export type ConversationSummary = components["schemas"]["ConversationSummaryDto"];
+export type ConversationDetail = components["schemas"]["ConversationDetailResponseDto"];
+export type EvidenceItem = components["schemas"]["EvidenceItemDto"];
+export type TurnStreamEvent = sseComponents["schemas"]["TurnStreamEvent"];
 
+/** Lifted discover shape — catalog `ComposerRefDto.token` vs runtime `refToken` is P11 residual (KTD8). */
 export type ComposerRef = {
   refToken: string;
   kind: ComposerRefKind;
@@ -32,52 +38,6 @@ export type ComposerRef = {
   description?: string | null;
   disabledReason?: string | null;
 };
-
-export type AcceptedRef = {
-  id: string;
-  kind: ComposerRefKind;
-  order: number;
-  label: string | null;
-  description: string | null;
-};
-
-export type ChatTurn = {
-  id: string;
-  clientRequestId: string;
-  domainId: string | null;
-  route: "direct_llm" | "domain_rag";
-  status: "running" | "completed" | "failed" | "cancelled" | "redacted";
-  stopReason: string | null;
-  userMessage: string;
-  assistantAnswer: string | null;
-  safeError: { code: string | null; message: string | null } | null;
-  acceptedRefs: AcceptedRef[];
-  evidence: Array<{ id: string; citationLabel: string | null; sourceLabel: string | null; excerpt: string | null }>;
-  citations: Array<{ evidenceRefId: string; citationLabel: string | null }>;
-  budget: {
-    planStepCount: number;
-    retrievalOperationCount: number;
-    repairAttemptCount: number;
-  };
-  createdAt: string;
-  startedAt: string | null;
-  completedAt: string | null;
-  updatedAt: string;
-};
-
-export type ConversationSummary = {
-  id: string;
-  title: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type ConversationDetail = {
-  conversation: ConversationSummary;
-  turns: ChatTurn[];
-};
-
-export type TurnStreamEvent = sseComponents["schemas"]["TurnStreamEvent"];
 
 type TurnStreamInput = TurnStreamRequest & {
   conversationId: string;
@@ -101,13 +61,13 @@ function streamProtocolError(message: string): ApiError {
 }
 
 export async function listConversations(): Promise<ConversationSummary[]> {
-  const body = await ceFetch<{ conversations: ConversationSummary[] }>("/conversations");
+  const body = await ceFetch<components["schemas"]["ConversationListResponse"]>("/conversations");
   return body.conversations;
 }
 
 export async function createConversation(title: string | null = null): Promise<ConversationSummary> {
   const payload: ConversationTitleRequest = { title };
-  const body = await ceFetch<{ conversation: ConversationSummary }>("/conversations", {
+  const body = await ceFetch<components["schemas"]["ConversationMutationResponse"]>("/conversations", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -120,10 +80,13 @@ export async function getConversation(conversationId: string): Promise<Conversat
 
 export async function renameConversation(conversationId: string, title: string): Promise<ConversationSummary> {
   const payload: ConversationTitleRequest = { title };
-  const body = await ceFetch<{ conversation: ConversationSummary }>(`/conversations/${conversationId}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
+  const body = await ceFetch<components["schemas"]["ConversationMutationResponse"]>(
+    `/conversations/${conversationId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
   return body.conversation;
 }
 
@@ -131,6 +94,7 @@ export async function deleteConversation(conversationId: string): Promise<void> 
   await ceFetch<void>(`/conversations/${conversationId}`, { method: "DELETE" });
 }
 
+/** Unused by P9-02 UI (KTD1); retained for P11. Do not call from chat-shell hook. */
 export async function discoverComposerRefs(input: ComposerRefDiscoverRequest): Promise<ComposerRef[]> {
   const body = await ceFetch<{ refs: ComposerRef[] }>("/composer-refs:discover", {
     method: "POST",
@@ -142,22 +106,27 @@ export async function discoverComposerRefs(input: ComposerRefDiscoverRequest): P
 export async function streamConversationTurn(input: TurnStreamInput): Promise<void> {
   const consumer = createCanonicalTurnConsumer(0, input.onEvent, streamProtocolError);
   await runResumableTurnStream({
-    start: () => postSse(
-      `/conversations/${input.conversationId}/turns:stream`,
-      {
-        clientRequestId: input.clientRequestId,
-        message: input.message,
-        domainId: input.domainId || undefined,
-        composerRefTokens: input.composerRefTokens,
-      },
-      consumer.receive,
-    ),
-    resume: (after) => getSse(
-      `/conversations/${input.conversationId}/turns/${consumer.snapshot().turnId}/events?after=${after}`,
-      consumer.receive,
-    ),
+    start: () =>
+      postSse(
+        `/conversations/${input.conversationId}/turns:stream`,
+        {
+          clientRequestId: input.clientRequestId,
+          message: input.message,
+          domainId: input.domainId || undefined,
+          composerRefTokens: input.composerRefTokens,
+        },
+        consumer.receive,
+      ),
+    resume: (after) =>
+      getSse(
+        `/conversations/${input.conversationId}/turns/${consumer.snapshot().turnId}/events?after=${after}`,
+        consumer.receive,
+      ),
     snapshot: consumer.snapshot,
-    shouldRetry: (error) => !(error instanceof ApiError) || error.code !== "stream_protocol_error" || error.message.includes("sequence gap"),
+    shouldRetry: (error) =>
+      !(error instanceof ApiError) ||
+      error.code !== "stream_protocol_error" ||
+      error.message.includes("sequence gap"),
     onState: input.onTransportState,
   });
   consumer.finish();
@@ -171,15 +140,21 @@ export async function streamConversationTurnEvents(input: TurnReplayInput): Prom
     start: () => getSse(eventsPath(input.after ?? 0), consumer.receive),
     resume: (after) => getSse(eventsPath(after), consumer.receive),
     snapshot: consumer.snapshot,
-    shouldRetry: (error) => !(error instanceof ApiError) || error.code !== "stream_protocol_error" || error.message.includes("sequence gap"),
+    shouldRetry: (error) =>
+      !(error instanceof ApiError) ||
+      error.code !== "stream_protocol_error" ||
+      error.message.includes("sequence gap"),
     onState: input.onTransportState,
   });
   consumer.finish();
 }
 
 export async function cancelConversationTurn(conversationId: string, turnId: string): Promise<ChatTurn> {
-  const body = await ceFetch<{ turn: ChatTurn }>(`/conversations/${conversationId}/turns/${turnId}:cancel`, {
-    method: "POST",
-  });
+  const body = await ceFetch<components["schemas"]["TurnMutationResponse"]>(
+    `/conversations/${conversationId}/turns/${turnId}:cancel`,
+    {
+      method: "POST",
+    },
+  );
   return body.turn;
 }

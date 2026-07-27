@@ -237,7 +237,9 @@ function ChatShellInner() {
         {/* Status bar — safe metadata only */}
         <div className="mx-auto mt-1 flex w-full max-w-[var(--composer-w)] items-center justify-between gap-3 px-1 font-mono text-[length:var(--fs-xs)] text-[var(--dim)]/80">
           <span className="truncate">
-            {chat.domainId ? `domain: ${chat.domainId}` : "direct chat"}
+            {chat.domainId
+              ? `domain: ${chat.domains.find((d) => d.id === chat.domainId)?.displayName ?? "selected"}`
+              : "direct chat"}
           </span>
           <span className="flex shrink-0 items-center gap-3">
             <span>{chat.selectedRefs.length ? `${chat.selectedRefs.length} refs` : ""}</span>

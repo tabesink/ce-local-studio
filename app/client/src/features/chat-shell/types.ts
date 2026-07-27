@@ -1,9 +1,9 @@
 /* LS chat-shell timeline model adapted to Context Engine turns.
    Pi tool/thinking blocks are not produced: CE EVT-001 has no such events. */
 
-import type { AcceptedRef, ChatTurn } from "@/features/chat-shell/api";
+import type { AcceptedRef, ChatTurn, EvidenceItem } from "@/features/chat-shell/api";
 
-export type EvidenceRow = ChatTurn["evidence"][number];
+export type EvidenceRow = EvidenceItem;
 
 /* Evidence is not a timeline block: the turn-scoped Evidence Panel owns
    Evidence display (F-009 context-panel-tabs v1). */
