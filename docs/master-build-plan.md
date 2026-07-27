@@ -261,6 +261,17 @@ closure command) and changed-file Ruff passing.
 assertions, and keeps orchestration with P7-03, SSE/replay with P7-04,
 redaction with P7-05, system-wide privacy with P8, and draft UX with P9.
 
+P9-02 closure evidence (2026-07-27):
+`docs/_scratch/p9-02-chat-workbench-inventory.md` and
+`docs/_scratch/p9-02-chat-workbench-evidence.md` record generated chat DTO
+adoption, `src/lib/stream` live/resume/replay reduction over all nine producer
+SSE fixtures plus `410` replace helpers, gated composer-ref discovery, and the
+Evidence/Refs/Source workbench with opaque Library deep-link construction kept
+disabled until P9-03. Results were 39 node stream/chat tests, clean typecheck,
+and 7 Vitest inspector/deep-link tests. Residuals remain P11 discover/`token`,
+P9-03 preview, P9-05 CI validators, and P12 ingress/visual matrix. Phase P9
+stays open until P9-03–P9-05 land.
+
 ### P9-P11 - User interface, deployable runtime, and governed context workflows
 
 | Task | Status | Depends on | Deliverable |
