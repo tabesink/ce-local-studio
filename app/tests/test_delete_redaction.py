@@ -32,14 +32,21 @@ from context_engine.models import (
     TURN_STATUS_COMPLETED,
     TURN_STATUS_REDACTED,
     TURN_STATUS_RUNNING,
+    TURN_STOP_REASON_DIRECT_LLM,
     User,
 )
+from context_engine.config import Settings
 from context_engine.services.chat_turns import (
+    _complete_turn,
     _execution_fence_open,
     _persist_event,
+    _stored_events,
+    _terminal_snapshot,
     redact_turns_for_domain,
+    safe_turn_dto,
 )
 from context_engine.services.domains import enqueue_delete_domain
+from context_engine.services.sources import enqueue_delete_source
 
 
 def _session(tmp_path: Path) -> Session:
@@ -400,5 +407,113 @@ def test_redacted_turn_blocks_non_redacted_event_append(tmp_path: Path) -> None:
                 payload={"text": "Late answer."},
                 execution_generation=1,
             )
+    finally:
+        db.close()
+
+
+def test_source_delete_enqueue_omits_public_projection_and_terminal_snapshot(tmp_path: Path) -> None:
+    db = _session(tmp_path)
+    try:
+        admin, domain, source = _seed_domain(db, domain_id="domain-src")
+        _, conversation = _owner_conversation(db)
+        turn = _turn(
+            db,
+            conversation,
+            client_request_id="source-delete-omission",
+            route=TURN_ROUTE_DIRECT_LLM,
+            status=TURN_STATUS_RUNNING,
+            assistant_answer=None,
+        )
+        db.flush()
+        _persist_event(
+            db,
+            turn=turn,
+            event_type=TURN_EVENT_ANSWER_DELTA,
+            payload={"text": "SENTINEL_ANSWER_MUST_OMIT"},
+            commit=False,
+        )
+        db.add(
+            ConversationTurnEvidenceRef(
+                turn_id=turn.id,
+                evidence_order=1,
+                citation_label="E1",
+                source_label="manual.pdf",
+                excerpt="SENTINEL_EXCERPT_MUST_OMIT",
+                source_document_id=source.id,
+                source_block_id="block-src",
+            )
+        )
+        turn = _complete_turn(
+            db,
+            turn=turn,
+            stop_reason=TURN_STOP_REASON_DIRECT_LLM,
+            assistant_answer="SENTINEL_ANSWER_MUST_OMIT",
+        )
+        db.commit()
+
+        enqueue_delete_source(
+            db,
+            domain_id=domain.id,
+            source_id=source.id,
+            expected_version=source.version,
+            requested_by_user=admin,
+            audit_context=None,
+        )
+        db.refresh(turn)
+        settings = Settings(database_url="sqlite+pysqlite:///:memory:", testing=True)
+        dto = safe_turn_dto(db, settings, turn)
+        snapshot = _terminal_snapshot(db, settings, turn)
+        events = list(_stored_events(db, turn))
+        serialized = str(dto) + str(snapshot) + str([event.payload for event in events])
+
+        assert turn.status == TURN_STATUS_REDACTED
+        assert turn.user_message == "Retained question."
+        assert dto["status"] == TURN_STATUS_REDACTED
+        assert dto["assistantAnswer"] is None
+        assert dto["evidence"] == []
+        assert dto["acceptedRefs"] == []
+        assert dto["userMessage"] == "Retained question."
+        assert snapshot == {
+            "turnId": turn.public_ref,
+            "status": TURN_STATUS_REDACTED,
+            "answer": None,
+            "evidence": [],
+            "citations": [],
+        }
+        assert events[-1].event_type == TURN_EVENT_REDACTED
+        assert "SENTINEL_ANSWER_MUST_OMIT" not in serialized
+        assert "SENTINEL_EXCERPT_MUST_OMIT" not in serialized
+    finally:
+        db.close()
+
+
+def test_late_complete_after_redaction_cannot_unredact(tmp_path: Path) -> None:
+    db = _session(tmp_path)
+    try:
+        _, conversation = _owner_conversation(db)
+        turn = _turn(
+            db,
+            conversation,
+            client_request_id="late-complete",
+            route=TURN_ROUTE_DOMAIN_RAG,
+            domain_id="domain-a",
+            status=TURN_STATUS_RUNNING,
+            assistant_answer=None,
+        )
+        turn.execution_generation = 2
+        db.commit()
+
+        assert redact_turns_for_domain(db, "domain-a") == 1
+        late = _complete_turn(
+            db,
+            turn=turn,
+            stop_reason=TURN_STOP_REASON_DIRECT_LLM,
+            assistant_answer="LATE_ANSWER_MUST_NOT_LAND",
+            execution_generation=2,
+        )
+        db.refresh(late)
+        assert late.status == TURN_STATUS_REDACTED
+        assert late.assistant_answer is None
+        assert "LATE_ANSWER_MUST_NOT_LAND" not in (late.assistant_answer or "")
     finally:
         db.close()

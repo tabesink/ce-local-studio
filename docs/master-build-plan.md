@@ -21,7 +21,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | P4 | Source preparation | DONE | P3 | upload/storage/parser adapters produce canonical blocks and support retry/cancel/delete |
 | P5 | LightRAG indexing eligibility | DONE | P4 | vendored fixture proves idempotent submit, readiness, delete, provenance markers, eligibility |
 | P6 | Scoped Evidence retrieval | DONE | P5 | single-domain authorized retrieval maps only valid local blocks to safe Evidence |
-| P7 | Durable grounded streaming chat | NOT_STARTED | P6 | conversation ownership, intent gate, bounded RAG, SSE, idempotent replay, redaction pass |
+| P7 | Durable grounded streaming chat | DONE | P6 | conversation ownership, intent gate, bounded RAG, SSE, idempotent replay, redaction pass |
 | P8 | Operational safety and Phase 1 gate | NOT_STARTED | P1-P7 | transactional audit writes, allowlisted logs, request/trace correlation, health, privacy scans, and resilience evidence pass |
 | P9 | Thin Next.js frontend | NOT_STARTED | P1-P8 | login/chat/documents/settings and the reserved graph state use only versioned APIs and pass parity/accessibility checks |
 | P10 | Deployable application stack | NOT_STARTED | P8-P9 | runnable Compose stack, explicit migrations/bootstrap, worker lifecycle, smoke path, and operator runbook pass |
@@ -151,10 +151,26 @@ system-wide cross-sink privacy with P8, and browser navigation with P9.
 | P7-02 | DONE | P7-01 | server intent gate and direct/domain route invariants |
 | P7-03 | DONE | P7-02 | bounded plan/retrieve/repair/synthesize orchestration |
 | P7-04 | DONE | P7-03 | sealed versioned SSE live/resume/replay pipeline, terminal persistence, idempotent attach/replay, and grounded-refusal/evidence-only terminal projections |
-| P7-05 | NOT_STARTED | P7-04 | source/domain delete redaction hooks and public omission tests |
+| P7-05 | DONE | P7-04 | source/domain delete redaction hooks and public omission tests |
 | P8-01 | NOT_STARTED | P1-06,P7 | transactional audit-write allowlist coverage, denial events and privacy/adversarial audit tests |
 | P8-02 | NOT_STARTED | P8-01 | safe JSON logs, request/trace correlation and bounded-cardinality service metrics |
 | P8-03 | NOT_STARTED | P8-02 | liveness/readiness, privacy scans and resilience/load evidence with no observability read API or UI |
+
+P7-05 closure evidence (2026-07-27):
+`docs/_scratch/p7-05-delete-redaction-inventory.md` records retain/modify/defer
+for redaction helpers, source/domain delete enqueue, token expiry, and
+public-omission surfaces. `redact_turns_for_domain` gains `commit=` and a
+dependent-turn union; `enqueue_delete_domain` redacts and expires source- and
+evidence-kind composer tokens in the fence transaction; late turn finalize
+cannot un-redact. Public omission is proven for DTO, sanitized ledger,
+`turn.redacted`, and redacted `terminalSnapshot`. Results were 7 focused
+unit/service tests and 1 PostgreSQL 16 barrier test passing.
+`docs/_scratch/p7-05-delete-redaction-evidence.md` records commands and keeps
+P8 privacy/audit breadth, P9 UI/reducer, P9-03 location/content routes (M-11
+open-panel half), P11 composer depth, and P12-03 adversarial deletion as
+residuals. DRIFT-29 chat-redaction half is closed; full DRIFT-29 remains
+P8-01 for audit/privacy breadth. P7 phase exit is complete for Phase 1 chat
+backend tasks P7-01–P7-05.
 
 P7-04 closure evidence (2026-07-27):
 `docs/_scratch/p7-04-sse-pipeline-inventory.md` records retain/modify/defer for
