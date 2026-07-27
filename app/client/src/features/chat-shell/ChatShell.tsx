@@ -124,7 +124,7 @@ function ChatShellInner() {
           {chat.lastUserMessage ? (
             <button
               type="button"
-              onClick={() => void chat.submit(chat.lastUserMessage)}
+              onClick={() => void chat.retryLast()}
               className="shrink-0 rounded-md px-2 py-1 font-medium transition-colors hover:bg-[var(--err)]/15"
             >
               Retry

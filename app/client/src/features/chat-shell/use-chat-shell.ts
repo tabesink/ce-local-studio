@@ -186,10 +186,13 @@ export function useChatShell() {
     [],
   );
 
+  const viewConversationIdRef = useRef<string | null>(null);
+
   const clearPrivateView = useCallback(() => {
     identityEpochRef.current += 1;
     bumpInspectorFence(null, null);
     streamOwnerConversationIdRef.current = null;
+    viewConversationIdRef.current = null;
     clientRequestRef.current = null;
     projectionRef.current = createEmptyTurnProjection();
     setConversations([]);
@@ -217,6 +220,8 @@ export function useChatShell() {
   const projectStreamState = useCallback(
     (projection: TurnStreamProjection, event: TurnStreamEvent | null) => {
       const ownerId = streamOwnerConversationIdRef.current;
+      /* Drop projection updates when the user is viewing another conversation. */
+      if (ownerId === null || ownerId !== viewConversationIdRef.current) return;
       const fenceGen = inspectorFenceRef.current.generation;
       const fenceTurnId = inspectorFenceRef.current.selectedTurnId;
 
@@ -272,7 +277,8 @@ export function useChatShell() {
 
   const handleStreamEvent = useCallback(
     (event: TurnStreamEvent) => {
-      if (streamOwnerConversationIdRef.current === null) return;
+      const ownerId = streamOwnerConversationIdRef.current;
+      if (ownerId === null || ownerId !== viewConversationIdRef.current) return;
       const next = reduceTurnStreamEvent(projectionRef.current, event);
       projectionRef.current = next;
       projectStreamState(next, event);
@@ -315,6 +321,7 @@ export function useChatShell() {
       try {
         const detail = await getConversation(conversationId);
         if (!isInspectorFenceCurrent(conversationId, restoreTurnId, fenceGen)) return;
+        viewConversationIdRef.current = detail.conversation.id;
         setConversation(detail.conversation);
         setTurns(detail.turns);
         setSelectedEvidenceId(null);
@@ -396,6 +403,7 @@ export function useChatShell() {
     try {
       const created = await createConversation("Chat");
       bumpInspectorFence(created.id, null);
+      viewConversationIdRef.current = created.id;
       setConversation(created);
       setConversations((current) => [created, ...current]);
       setTurns([]);
@@ -463,6 +471,7 @@ export function useChatShell() {
       setError(null);
       projectionRef.current = createEmptyTurnProjection();
       streamOwnerConversationIdRef.current = conversationId;
+      viewConversationIdRef.current = conversationId;
       setStreamText("");
       setStreamStage(null);
       setStreamEvidence([]);
@@ -476,6 +485,7 @@ export function useChatShell() {
       setSelectedEvidenceId(null);
       bumpInspectorFence(conversationId, null);
 
+      let keepPendingBubble = false;
       try {
         await streamConversationTurn({
           conversationId,
@@ -486,7 +496,10 @@ export function useChatShell() {
           onEvent: handleStreamEvent,
           onTransportState: setStreamTransportState,
         });
-        if (streamOwnerConversationIdRef.current === conversationId) {
+        if (
+          streamOwnerConversationIdRef.current === conversationId &&
+          viewConversationIdRef.current === conversationId
+        ) {
           await loadConversation(conversationId);
         }
       } catch (err) {
@@ -500,6 +513,7 @@ export function useChatShell() {
         if (isAuthExpiryError(err)) {
           clearPrivateView();
           setError(formatErrorMessage(err));
+          setStreamingTurnId(null);
           return;
         }
 
@@ -508,6 +522,7 @@ export function useChatShell() {
             clientRequestRef.current = { ...clientRequestRef.current, phase: "conflict" };
           }
           setError(formatErrorMessage(err));
+          setStreamingTurnId(null);
           return;
         }
 
@@ -519,6 +534,7 @@ export function useChatShell() {
             clientRequestRef.current = { ...clientRequestRef.current, phase: "terminal_fail" };
           }
           setError(formatErrorMessage(err));
+          setStreamingTurnId(null);
           return;
         }
 
@@ -527,6 +543,21 @@ export function useChatShell() {
             clientRequestRef.current = { ...clientRequestRef.current, phase: "uncertain" };
           }
           setError(formatErrorMessage(err));
+          keepPendingBubble = true;
+          setStreamingTurnId(null);
+          return;
+        }
+
+        /* Accepted or otherwise attached: reload durable turn; Retry resumes GET. */
+        if (projectionRef.current.turnId) {
+          if (clientRequestRef.current) {
+            clientRequestRef.current = { ...clientRequestRef.current, phase: "accepted" };
+          }
+          setError(formatErrorMessage(err));
+          if (viewConversationIdRef.current === conversationId) {
+            await loadConversation(conversationId, { turnId: projectionRef.current.turnId });
+          }
+          setStreamingTurnId(null);
           return;
         }
 
@@ -536,9 +567,12 @@ export function useChatShell() {
         setError(formatErrorMessage(err));
         setStreamingTurnId(null);
       } finally {
-        setStreaming(false);
-        setStreamStage(null);
-        setPendingMessage(null);
+        /* Only clear this submit's presentation if we still own the stream slot. */
+        if (streamOwnerConversationIdRef.current === conversationId) {
+          setStreaming(false);
+          setStreamStage(null);
+          if (!keepPendingBubble) setPendingMessage(null);
+        }
       }
     },
     [
@@ -602,6 +636,7 @@ export function useChatShell() {
     setError(null);
     setReplayingTurnId(turnId);
     streamOwnerConversationIdRef.current = conversation.id;
+    viewConversationIdRef.current = conversation.id;
     projectionRef.current = createEmptyTurnProjection();
     try {
       await streamConversationTurnEvents({
@@ -703,6 +738,63 @@ export function useChatShell() {
     [messages],
   );
 
+  const retryLast = useCallback(async () => {
+    const conversationId = conversation?.id ?? streamOwnerConversationIdRef.current;
+    const turnId = projectionRef.current.turnId;
+    const phase = clientRequestRef.current?.phase;
+    if (conversationId && turnId && (phase === "accepted" || phase === "inflight")) {
+      setError(null);
+      setStreaming(true);
+      setStreamTransportState("connected");
+      streamOwnerConversationIdRef.current = conversationId;
+      viewConversationIdRef.current = conversationId;
+      try {
+        await streamConversationTurnEvents({
+          conversationId,
+          turnId,
+          onEvent: handleStreamEvent,
+          onTransportState: setStreamTransportState,
+        });
+        if (
+          streamOwnerConversationIdRef.current === conversationId &&
+          viewConversationIdRef.current === conversationId
+        ) {
+          await loadConversation(conversationId, { turnId });
+        }
+      } catch (err) {
+        if (streamOwnerConversationIdRef.current !== conversationId) return;
+        if (isCursorExpiredError(err)) {
+          await applyCursorExpiredRecovery(err, conversationId, turnId);
+          return;
+        }
+        if (isAuthExpiryError(err)) {
+          clearPrivateView();
+          setError(formatErrorMessage(err));
+          return;
+        }
+        setError(formatErrorMessage(err));
+      } finally {
+        if (streamOwnerConversationIdRef.current === conversationId) {
+          setStreaming(false);
+          setStreamStage(null);
+          setStreamingTurnId(null);
+        }
+      }
+      return;
+    }
+    const message = lastUserMessage || input;
+    if (message.trim()) await submit(message);
+  }, [
+    applyCursorExpiredRecovery,
+    clearPrivateView,
+    conversation,
+    handleStreamEvent,
+    input,
+    lastUserMessage,
+    loadConversation,
+    submit,
+  ]);
+
   return {
     conversations,
     conversation,
@@ -735,6 +827,7 @@ export function useChatShell() {
     loadConversation,
     startConversation,
     submit,
+    retryLast,
     cancelTurn,
     replayTurn,
     clearError,

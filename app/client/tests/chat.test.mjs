@@ -55,9 +55,23 @@ describe("F-012 chat via LS chat-shell", () => {
     const hook = read("src/features/chat-shell/use-chat-shell.ts");
     assert.match(hook, /reduceTurnStreamEvent/);
     assert.match(hook, /from "@\/lib\/stream"/);
+    assert.match(hook, /viewConversationIdRef/);
+    assert.match(hook, /retryLast/);
     assert.equal(hook.includes("applyTurnStreamEvent"), false, "hook must not embed a parallel applyTurnStreamEvent path");
     assert.equal(hook.includes("discoverComposerRefs"), false, "KTD1: zero discoverComposerRefs in hook");
     assert.equal(hook.includes("mentionQuery"), false, "hook must not own interactive @ mention discovery");
+
+    const shell = read("src/features/chat-shell/ChatShell.tsx");
+    assert.match(shell, /chat\.retryLast\(\)/);
+    assert.equal(
+      shell.includes("chat.submit(chat.lastUserMessage)"),
+      false,
+      "Retry must resume via retryLast, not a new POST submit",
+    );
+
+    const api = read("src/features/chat-shell/api.ts");
+    assert.match(api, /cursor_expired/);
+    assert.match(api, /status === 410/);
 
     const reducer = read("src/lib/stream/reducer.ts");
     for (const event of [

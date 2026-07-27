@@ -107,9 +107,21 @@ C-01 multi-member / deployed ingress → P12.
 - DRIFT-01 → IN_PROGRESS remains for non-chat response adoption / absent catalog ops;
   chat-shell lifted turn/evidence substitutes for this surface retired.
 
+## Post-review lifecycle hardening
+
+Follow-up on the same branch after code review:
+
+- Do not auto-retry `410` / `cursor_expired` on live or replay streams.
+- Fence stream projection to the viewed conversation (`viewConversationIdRef`).
+- After accept, transport failure reloads the durable turn; Retry resumes via GET events
+  (`retryLast`) instead of minting a new POST `clientRequestId`.
+- Uncertain pre-accept errors keep the pending bubble; ownership-guarded `finally` avoids
+  clearing another conversation’s presentation.
+
 ## Artifact revision
 
 Branch: `feat/p9-02-chat-workbench-reducer`
 
 Commits (slice): inventory/plan → generated DTO adapters → `src/lib/stream` + fixtures →
-reducer state + Evidence/Refs/Source workbench → this evidence/tracker closure.
+reducer state + Evidence/Refs/Source workbench → evidence/tracker closure → lifecycle
+review fixes.

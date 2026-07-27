@@ -126,10 +126,12 @@ export async function streamConversationTurn(input: TurnStreamInput): Promise<vo
         consumer.receive,
       ),
     snapshot: consumer.snapshot,
-    shouldRetry: (error) =>
-      !(error instanceof ApiError) ||
-      error.code !== "stream_protocol_error" ||
-      error.message.includes("sequence gap"),
+    shouldRetry: (error) => {
+      if (!(error instanceof ApiError)) return true;
+      if (error.status === 410 || error.code === "cursor_expired") return false;
+      if (error.code === "stream_protocol_error") return error.message.includes("sequence gap");
+      return true;
+    },
     onState: input.onTransportState,
   });
   consumer.finish();
@@ -143,10 +145,12 @@ export async function streamConversationTurnEvents(input: TurnReplayInput): Prom
     start: () => getSse(eventsPath(input.after ?? 0), consumer.receive),
     resume: (after) => getSse(eventsPath(after), consumer.receive),
     snapshot: consumer.snapshot,
-    shouldRetry: (error) =>
-      !(error instanceof ApiError) ||
-      error.code !== "stream_protocol_error" ||
-      error.message.includes("sequence gap"),
+    shouldRetry: (error) => {
+      if (!(error instanceof ApiError)) return true;
+      if (error.status === 410 || error.code === "cursor_expired") return false;
+      if (error.code === "stream_protocol_error") return error.message.includes("sequence gap");
+      return true;
+    },
     onState: input.onTransportState,
   });
   consumer.finish();
