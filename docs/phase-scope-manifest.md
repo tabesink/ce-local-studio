@@ -109,6 +109,10 @@ This is the machine-read D0 boundary. The table is sorted bytewise by record cla
 | scan-file | docs/plans/2026-07-27-001-feat-server-intent-gate-plan.md | active | P7-02 server intent gate plan |
 | scan-file | docs/plans/2026-07-27-002-feat-bounded-rag-orchestration-plan.md | active | P7-03 bounded RAG orchestration plan |
 | scan-file | docs/plans/2026-07-27-004-feat-sealed-sse-replay-pipeline-plan.md | active | P7-04 sealed SSE replay pipeline plan |
+| scan-file | docs/plans/2026-07-27-005-feat-delete-redaction-omission-plan.md | active | P7-05 delete redaction omission plan |
+| scan-file | docs/plans/2026-07-27-006-feat-audit-allowlist-denial-privacy-plan.md | active | P8-01 audit allowlist denial privacy plan |
+| scan-file | docs/plans/2026-07-27-007-feat-safe-json-logs-metrics-plan.md | active | P8-02 safe JSON logs metrics plan |
+| scan-file | docs/plans/2026-07-27-008-feat-health-privacy-resilience-gate-plan.md | active | P8-03 health privacy resilience gate plan |
 | scan-file | docs/prd.md | active | product authority |
 | scan-file | docs/quality/definition-of-done.md | active | completion gates |
 | scan-file | docs/quality/seeded-demo-and-test-data.md | active | deterministic fixture contract |
