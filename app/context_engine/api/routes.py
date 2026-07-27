@@ -601,7 +601,61 @@ def _composer_ref_api_error(exc: ComposerRefError) -> ApiError:
 
 
 def _chat_turn_api_error(exc: ChatTurnError) -> ApiError:
-    return ApiError(exc.status_code, exc.code, exc.message)
+    # Pre-stream / turn-boundary projector: only approved ErrorCodes escape.
+    # Mirrors Evidence allowlisting; never passthrough private/internal codes.
+    failures = {
+        "validation_error": (422, "validation_error", "Request validation failed."),
+        "domain_required": (422, "domain_required", "A knowledge domain is required."),
+        "domain_not_found": (404, "not_found", "Domain not found."),
+        "not_found": (404, "not_found", "Conversation turn not found."),
+        "domain_state_conflict": (
+            409,
+            "domain_not_query_eligible",
+            "This knowledge domain is not currently available for queries.",
+        ),
+        "domain_runtime_unavailable": (
+            409,
+            "domain_not_query_eligible",
+            "This knowledge domain is not currently available for queries.",
+        ),
+        "domain_runtime_dependency_unavailable": (
+            503,
+            "dependency_unavailable",
+            "Retrieval is temporarily unavailable.",
+        ),
+        "client_request_conflict": (
+            409,
+            "idempotency_conflict",
+            "Client request conflicts with an existing turn.",
+        ),
+        "idempotency_conflict": (
+            409,
+            "idempotency_conflict",
+            "Client request conflicts with an existing turn.",
+        ),
+        "conversation_turn_in_progress": (
+            409,
+            "operation_conflict",
+            "A conversation turn is already running.",
+        ),
+        "composer_ref_unavailable": (
+            409,
+            "operation_conflict",
+            "Composer reference is unavailable.",
+        ),
+        "synthesis_profile_not_ready": (
+            503,
+            "dependency_unavailable",
+            "Synthesis is temporarily unavailable.",
+        ),
+        "unauthenticated": (401, "unauthenticated", "Authentication required."),
+        "turn_not_cancellable": (409, "turn_not_cancellable", "Turn is not cancellable."),
+    }
+    status_code, code, message = failures.get(
+        exc.code,
+        (503, "dependency_unavailable", "Chat is temporarily unavailable."),
+    )
+    return ApiError(status_code, code, message)
 
 
 def _audit_context(request: Request, user: User) -> AuditContext:

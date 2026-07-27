@@ -148,13 +148,27 @@ system-wide cross-sink privacy with P8, and browser navigation with P9.
 | Task | Status | Depends on | Deliverable |
 | --- | --- | --- | --- |
 | P7-01 | DONE | P6 | conversations, turns and opaque public evidence-ref migrations plus owner CRUD |
-| P7-02 | NOT_STARTED | P7-01 | server intent gate and direct/domain route invariants |
+| P7-02 | DONE | P7-01 | server intent gate and direct/domain route invariants |
 | P7-03 | NOT_STARTED | P7-02 | bounded plan/retrieve/repair/synthesize orchestration |
 | P7-04 | NOT_STARTED | P7-03 | sealed versioned SSE live/resume/replay pipeline, terminal persistence, idempotent attach/replay, and grounded-refusal/evidence-only terminal projections |
 | P7-05 | NOT_STARTED | P7-04 | source/domain delete redaction hooks and public omission tests |
 | P8-01 | NOT_STARTED | P1-06,P7 | transactional audit-write allowlist coverage, denial events and privacy/adversarial audit tests |
 | P8-02 | NOT_STARTED | P8-01 | safe JSON logs, request/trace correlation and bounded-cardinality service metrics |
 | P8-03 | NOT_STARTED | P8-02 | liveness/readiness, privacy scans and resilience/load evidence with no observability read API or UI |
+
+P7-02 closure evidence (2026-07-27):
+`docs/_scratch/p7-02-intent-route-inventory.md` records retain/modify/defer for
+the pattern classifier, `classify_turn_route` / `start_or_replay_turn` authority,
+passthrough `_chat_turn_api_error`, non-authoritative `claim_turn`, and the
+empty-corpus eligibility exit criterion. Optional `domainId` now validates
+against `DOMAIN_ID_PATTERN`; turn-start failures project only approved
+ErrorCodes with Evidence-parity messages; selected ineligible domains never
+rewrite to `direct_llm`. Results were 30 focused intent/route/HTTP tests plus
+SSE compatibility, generated-contract, and phase-scope gates (46 total in the
+closure command) and changed-file Ruff passing.
+`docs/_scratch/p7-02-intent-route-evidence.md` records commands, privacy
+assertions, and keeps orchestration with P7-03, SSE/replay with P7-04,
+redaction with P7-05, system-wide privacy with P8, and draft UX with P9.
 
 ### P9-P11 - User interface, deployable runtime, and governed context workflows
 
