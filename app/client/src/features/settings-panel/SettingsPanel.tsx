@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, Database, KeyRound, Palette, Users } from "lucide-react";
 import {
   cx,
   EmptySafeNotice,
   IconButton,
   Input,
+  PageState,
   Select,
   SettingsButton,
   SettingsFactRows,
@@ -55,17 +57,47 @@ import type { CurrentUser } from "@/types/auth";
 
 type SectionId = "general" | "provider" | "domains" | "users";
 
+const ALLOWED_SECTIONS: readonly SectionId[] = ["general", "provider", "domains", "users"];
+const ADMIN_SECTIONS: readonly SectionId[] = ["provider", "domains", "users"];
+
 function errorMessage(error: unknown): string {
   if (isApiError(error)) return error.message;
   return "Request failed.";
 }
 
-/* LS settings-panel layout over CE-contracted admin surfaces. Controller,
-   storage, hardware, plugins, and skills sections stay absent (F-010 gate). */
+function parseSectionParam(raw: string | null): SectionId | null {
+  if (!raw) return null;
+  return (ALLOWED_SECTIONS as readonly string[]).includes(raw) ? (raw as SectionId) : null;
+}
+
+function domainStateTone(state: AdminDomain["state"]): "default" | "good" | "warning" | "danger" {
+  if (state === "running") return "good";
+  if (state === "deleting") return "warning";
+  return "default";
+}
+
+function domainStateLabel(state: AdminDomain["state"]): string {
+  if (state === "running") return "Running";
+  if (state === "deleting") return "Deleting";
+  return "Stopped";
+}
+
+/* Controllers-style Settings Domains accordion (cite environment-controls).
+   Controller/storage/hardware/plugins/skills sections stay absent (F-010). */
 export function SettingsPanel() {
+  return (
+    <Suspense fallback={<PageState title="Settings" message="Loading settings…" />}>
+      <SettingsPanelInner />
+    </Suspense>
+  );
+}
+
+function SettingsPanelInner() {
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === "administrator";
-  const [section, setSection] = useState<SectionId>("general");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [sectionNotice, setSectionNotice] = useState<string | null>(null);
   const [runtime, setRuntime] = useState<RuntimeSettingsSnapshot | null>(null);
   const [domains, setDomains] = useState<AdminDomain[]>([]);
   const [users, setUsers] = useState<CurrentUser[]>([]);
@@ -86,6 +118,70 @@ export function SettingsPanel() {
     }
     return rows;
   }, [isAdmin]);
+
+  const allowedSectionIds = useMemo(
+    () => new Set(sections.map((row) => row.id)),
+    [sections],
+  );
+
+  const section = useMemo<SectionId>(() => {
+    const requested = parseSectionParam(searchParams.get("section"));
+    if (!requested) return "general";
+    if (!allowedSectionIds.has(requested)) return "general";
+    return requested;
+  }, [allowedSectionIds, searchParams]);
+
+  useEffect(() => {
+    const raw = searchParams.get("section");
+    const requested = parseSectionParam(raw);
+    if (raw && !requested) {
+      setSectionNotice("That settings section is not available. Showing General.");
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("section");
+      const query = params.toString();
+      router.replace(query ? `/settings?${query}` : "/settings");
+      return;
+    }
+    if (requested && !allowedSectionIds.has(requested)) {
+      setSectionNotice("That settings section is not available for your account. Showing General.");
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("section");
+      const query = params.toString();
+      router.replace(query ? `/settings?${query}` : "/settings");
+      return;
+    }
+    if (requested && allowedSectionIds.has(requested)) {
+      setSectionNotice(null);
+    }
+  }, [allowedSectionIds, router, searchParams]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setRuntime(null);
+      setDomains([]);
+      setUsers([]);
+    }
+  }, [isAdmin]);
+
+  const selectSection = useCallback(
+    (next: SectionId) => {
+      if (!allowedSectionIds.has(next)) return;
+      const params = new URLSearchParams(searchParams.toString());
+      if (next === "general") params.delete("section");
+      else params.set("section", next);
+      const query = params.toString();
+      const href = query ? `/settings?${query}` : "/settings";
+      if (next === "general" && !searchParams.get("section")) {
+        router.replace(href);
+        return;
+      }
+      if (ADMIN_SECTIONS.includes(next) || next === "general") {
+        if (next === "general") router.replace(href);
+        else router.push(href);
+      }
+    },
+    [allowedSectionIds, router, searchParams],
+  );
 
   const reload = useCallback(async (opts?: { clearError?: boolean }) => {
     setLoading(true);
@@ -116,12 +212,13 @@ export function SettingsPanel() {
     <SettingsLayout<SectionId>
       sections={sections}
       activeSection={section}
-      onSelectSection={setSection}
+      onSelectSection={selectSection}
       title="Settings"
       status={loading ? "Loading" : ""}
       loading={loading}
       onReload={() => void reload()}
     >
+      {sectionNotice ? <SettingsNotice tone="warning" className="mb-4">{sectionNotice}</SettingsNotice> : null}
       {error ? <SettingsNotice tone="danger" className="mb-4">{error}</SettingsNotice> : null}
       {notice ? <SettingsNotice tone="good" className="mb-4">{notice}</SettingsNotice> : null}
       {section === "general" ? <PreferencesPanel /> : null}
@@ -292,6 +389,15 @@ function DomainsSection({
     }
   }, [draftEmbeddingId, embeddingProfiles]);
 
+  useEffect(() => {
+    if (expandedId && !domains.some((domain) => domain.id === expandedId)) {
+      setExpandedId(null);
+    }
+    if (pendingDelete && !domains.some((domain) => domain.id === pendingDelete.id)) {
+      setPendingDelete(null);
+    }
+  }, [domains, expandedId, pendingDelete]);
+
   const deployEnabled = canDeployDomain({
     id: draftId,
     displayName: draftName,
@@ -350,7 +456,10 @@ function DomainsSection({
       setDraftId("");
       setDraftName("");
       setDraftEmbeddingId(defaultEmbeddingProfileId(embeddingProfiles) ?? "");
-      onError(errorMessage(outcome.error));
+      onError(
+        "The Knowledge Domain was created, but start did not finish. Try Start again. " +
+          errorMessage(outcome.error),
+      );
       await reload();
     } finally {
       setBusy((current) => (current?.id === "__deploy__" ? null : current));
@@ -403,11 +512,12 @@ function DomainsSection({
                     </span>
                     <div className="truncate font-mono text-[length:var(--fs-xs)] text-(--ui-muted)">{domain.id}</div>
                   </div>
+                  <StatusPill tone={domainStateTone(domain.state)}>{domainStateLabel(domain.state)}</StatusPill>
                   <ToggleSwitch
                     checked={lifecycle === "stop"}
                     aria-label={`${lifecycle === "stop" ? "Stop" : "Start"} ${domain.displayName}`}
                     title={lifecycle === "stop" ? "Stop Knowledge Domain" : "Start Knowledge Domain"}
-                    disabled={anyBusy || lifecycle === null}
+                    disabled={anyBusy || lifecycle === null || domain.state === "deleting"}
                     onCheckedChange={() => {
                       if (lifecycle) void run(domain, lifecycle);
                     }}
@@ -427,12 +537,44 @@ function DomainsSection({
                           <label className="grid gap-1.5">
                             <span className="text-[length:var(--fs-xs)] text-(--ui-muted)">Embedding model</span>
                             <Input
-                              value={`${embeddingLabel} · locked`}
+                              value={`${embeddingLabel} · ${domain.embeddingProfile.vectorDimensions}d · locked`}
                               readOnly
                               aria-label={`${domain.displayName} embedding model`}
                               className="h-7 cursor-default font-mono text-(--ui-muted) focus:border-(--ui-separator) focus:ring-0"
                             />
                           </label>
+                          <SettingsFactRows
+                            rows={[
+                              {
+                                label: "Query eligible",
+                                value: domain.queryEligible ? "Yes" : "No",
+                                status: {
+                                  tone: domain.queryEligible ? "good" : "default",
+                                  label: domain.queryEligible ? "Eligible" : "Not eligible",
+                                },
+                              },
+                              {
+                                label: "Runtime ready",
+                                value: domain.runtimeReady ? "Yes" : "No",
+                                status: {
+                                  tone: domain.runtimeReady ? "good" : "warning",
+                                  label: domain.runtimeReady ? "Ready" : "Not ready",
+                                },
+                              },
+                              {
+                                label: "Control generation",
+                                value: String(domain.controlGeneration),
+                                mono: true,
+                                dim: true,
+                              },
+                              {
+                                label: "Version",
+                                value: String(domain.version),
+                                mono: true,
+                                dim: true,
+                              },
+                            ]}
+                          />
                         </div>
                         <div className="w-9 shrink-0" aria-hidden />
                       </div>

@@ -243,13 +243,21 @@ describe("Domain settings helpers (F-009 deploy)", () => {
     assert.match(panel, /ToggleSwitch/);
     assert.match(panel, /checked=\{lifecycle === "stop"\}/);
     assert.match(panel, /embeddingProfile\.name/);
+    assert.match(panel, /vectorDimensions/);
+    assert.match(panel, /queryEligible/);
+    assert.match(panel, /runtimeReady/);
+    assert.match(panel, /controlGeneration/);
+    assert.match(panel, /SettingsFactRows/);
+    assert.match(panel, /useSearchParams/);
+    assert.match(panel, /section=domains|params\.set\("section"/);
     assert.match(panel, /nextExpandedDomainId/);
     assert.doesNotMatch(panel, /storageLimitLabel/);
     assert.doesNotMatch(panel, /storageWarningLabel/);
     assert.doesNotMatch(panel, /storageSummary/);
-    assert.match(panel, /· locked/);
+    assert.match(panel, /· locked|locked/);
     assert.match(panel, /Embedding model/);
     assert.doesNotMatch(panel, /window\.confirm/);
+    assert.doesNotMatch(panel, /Knowledge Graphs/);
 
     assert.match(panel, /flex flex-wrap items-center gap-2 px-3\.5 py-2\.5/);
     assert.doesNotMatch(panel, /flex flex-col gap-2 px-3\.5 py-3/);
