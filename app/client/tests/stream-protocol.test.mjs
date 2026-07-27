@@ -1,8 +1,20 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { SseParser, InvalidSseEventError } from "../src/lib/api/sse-parser.ts";
-import { createCanonicalTurnConsumer, StreamProtocolError } from "../src/features/chat-shell/stream-protocol.ts";
+import { ApiError } from "../src/lib/api/errors.ts";
+import {
+  InvalidSseEventError,
+  SseParser,
+  StreamProtocolError,
+  createCanonicalTurnConsumer,
+  createEmptyTurnProjection,
+  createUnavailableTurnProjection,
+  extractTerminalSnapshot,
+  isCursorExpiredError,
+  isTerminalSnapshotDto,
+  reduceTurnStreamEvent,
+  replaceTurnProjectionFromTerminalSnapshot,
+} from "../src/lib/stream/index.ts";
 
 const fixtureRoot = new URL("../../tests/fixtures/sse/", import.meta.url);
 const fixture = (name) => readFileSync(new URL(name, fixtureRoot), "utf8");
@@ -18,6 +30,13 @@ function consume(name, size = Number.MAX_SAFE_INTEGER) {
   for (const chunk of chunks(fixture(name), size)) for (const frame of parser.push(chunk)) consumer.receive(frame);
   parser.finish();
   return { applied, cursor: consumer.finish() };
+}
+
+function reduceFixture(name, size = Number.MAX_SAFE_INTEGER) {
+  const { applied, cursor } = consume(name, size);
+  let projection = createEmptyTurnProjection();
+  for (const event of applied) projection = reduceTurnStreamEvent(projection, event);
+  return { applied, cursor, projection };
 }
 
 describe("canonical turn stream protocol", () => {
@@ -71,5 +90,127 @@ describe("canonical turn stream protocol", () => {
     const consumer = createCanonicalTurnConsumer(0, () => undefined);
     consumer.receive(parser.push(fixture("direct-success.sse"))[0]);
     assert.throws(() => consumer.finish(), StreamProtocolError);
+  });
+  it("joins multiline data lines before JSON.parse", () => {
+    const parser = new SseParser();
+    const frames = parser.push(
+      [
+        "id: evt_ml_1",
+        "event: answer.delta",
+        'data: {"schemaVersion":"1.0","eventId":"evt_ml_1","turnId":"turn_ml",',
+        'data: "sequence":1,"type":"answer.delta","occurredAt":"2026-07-27T12:00:00Z",',
+        'data: "payload":{"text":"split"}}',
+        "",
+        "",
+      ].join("\n"),
+    );
+    assert.equal(frames.length, 1);
+    assert.equal(frames[0].data.payload.text, "split");
+  });
+
+  for (const size of [1, 7, Number.MAX_SAFE_INTEGER]) {
+    it(`consumes evidence-only with chunk size ${size}`, () => {
+      const result = reduceFixture("evidence-only.sse", size);
+      assert.equal(result.applied.at(-1).type, "turn.completed");
+      assert.equal(result.applied.at(-1).payload.stopReason, "evidence_only");
+      assert.equal(result.projection.terminalStatus, "completed");
+      assert.equal(result.projection.evidence.length, 1);
+      assert.equal(result.projection.evidence[0].id, "evidence_eo_1");
+    });
+    it(`consumes no-grounded-context with chunk size ${size}`, () => {
+      const result = reduceFixture("no-grounded-context.sse", size);
+      assert.equal(result.applied.at(-1).type, "turn.completed");
+      assert.equal(result.applied.at(-1).payload.stopReason, "no_grounded_context");
+      assert.equal(result.projection.terminalStatus, "completed");
+      assert.equal(result.projection.evidence.length, 0);
+      assert.equal(result.projection.stage, null);
+    });
+    it(`consumes disconnect-resume with chunk size ${size}`, () => {
+      const result = reduceFixture("disconnect-resume.sse", size);
+      assert.equal(result.applied.at(-1).type, "turn.completed");
+      assert.equal(result.projection.answerText, "Before disconnect. After resume.");
+      assert.equal(result.projection.terminalStatus, "completed");
+    });
+    it(`consumes terminal-replay with chunk size ${size}`, () => {
+      const result = reduceFixture("terminal-replay.sse", size);
+      assert.equal(result.applied.at(-1).type, "turn.completed");
+      assert.equal(result.applied.at(-1).payload.replay, true);
+      assert.equal(result.projection.answerText, "Durable answer.");
+      assert.equal(result.projection.terminalStatus, "completed");
+    });
+  }
+});
+
+describe("cursor expired helpers and replace semantics", () => {
+  it("detects 410 cursor_expired ApiErrors and extracts terminalSnapshot", () => {
+    const body = {
+      error: {
+        code: "cursor_expired",
+        message: "The event cursor is no longer available.",
+        requestId: "req_01",
+      },
+      terminalSnapshot: {
+        turnId: "turn_01",
+        status: "redacted",
+        answer: null,
+        evidence: [],
+        citations: [],
+      },
+    };
+    const error = new ApiError({
+      status: 410,
+      code: "cursor_expired",
+      message: body.error.message,
+      requestId: "req_01",
+      fields: {},
+    });
+    error.terminalSnapshot = extractTerminalSnapshot(body);
+    assert.equal(isCursorExpiredError(error), true);
+    assert.equal(isTerminalSnapshotDto(error.terminalSnapshot), true);
+    assert.deepEqual(extractTerminalSnapshot(body), body.terminalSnapshot);
+    assert.equal(extractTerminalSnapshot({ error: body.error }), undefined);
+  });
+
+  it("replaces rather than merges turn projection from terminalSnapshot", () => {
+    let projection = createEmptyTurnProjection();
+    projection = reduceTurnStreamEvent(projection, {
+      schemaVersion: "1.0",
+      eventId: "evt_prior",
+      turnId: "turn_stale",
+      sequence: 1,
+      type: "turn.accepted",
+      occurredAt: "2026-07-27T12:00:00Z",
+      payload: { conversationId: "conversation_1", clientRequestId: "request_1", replay: false },
+    });
+    projection = reduceTurnStreamEvent(projection, {
+      schemaVersion: "1.0",
+      eventId: "evt_answer",
+      turnId: "turn_stale",
+      sequence: 2,
+      type: "answer.delta",
+      occurredAt: "2026-07-27T12:00:01Z",
+      payload: { text: "Stale partial answer that must not survive replace." },
+    });
+    assert.equal(projection.answerText.includes("Stale"), true);
+
+    const snapshot = {
+      turnId: "turn_01",
+      status: "redacted",
+      answer: null,
+      evidence: [],
+      citations: [],
+    };
+    const replaced = replaceTurnProjectionFromTerminalSnapshot(snapshot);
+    assert.equal(replaced.turnId, "turn_01");
+    assert.equal(replaced.answerText, "");
+    assert.deepEqual(replaced.evidence, []);
+    assert.equal(replaced.terminalStatus, "redacted");
+    assert.equal(replaced.unavailable, false);
+    assert.notEqual(replaced.answerText, projection.answerText);
+
+    const unavailable = createUnavailableTurnProjection();
+    assert.equal(unavailable.unavailable, true);
+    assert.equal(unavailable.answerText, "");
+    assert.match(unavailable.terminalMessage, /no longer available/i);
   });
 });

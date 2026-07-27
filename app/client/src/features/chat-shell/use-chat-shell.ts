@@ -1,27 +1,54 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isApiError } from "@/lib/api/errors";
 import {
   cancelConversationTurn,
   createConversation,
-  discoverComposerRefs,
   getConversation,
   listConversations,
   streamConversationTurn,
   streamConversationTurnEvents,
   type AcceptedRef,
   type ChatTurn,
-  type ComposerRef,
-  type ComposerRefKind,
   type ConversationSummary,
   type TurnStreamEvent,
   type StreamTransportState,
 } from "@/features/chat-shell/api";
 import { listMemberDomains, type MemberDomain } from "@/features/domains/api";
 import type { AssistantBlock, ChatMessage, EvidenceRow } from "@/features/chat-shell/types";
+import {
+  createEmptyTurnProjection,
+  createUnavailableTurnProjection,
+  getTerminalSnapshotFromError,
+  isCursorExpiredError,
+  isTerminalSnapshotDto,
+  reduceTurnStreamEvent,
+  replaceTurnProjectionFromTerminalSnapshot,
+  type TurnStreamProjection,
+} from "@/lib/stream";
 
-const MAX_SELECTED_REFS = 10;
+type SubmittedSnapshot = {
+  message: string;
+  domainId: string;
+  clientRequestId: string;
+};
+
+type ClientRequestPhase = "inflight" | "uncertain" | "conflict" | "accepted" | "terminal_fail";
+
+type ClientRequestState = {
+  message: string;
+  domainId: string;
+  id: string;
+  phase: ClientRequestPhase;
+};
+
+type InspectorFence = {
+  identityEpoch: number;
+  conversationId: string | null;
+  selectedTurnId: string | null;
+  generation: number;
+};
 
 function requestId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -30,17 +57,39 @@ function requestId(): string {
   return `turn-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function messageForError(error: unknown): string {
-  if (isApiError(error)) return error.message;
-  return "Request failed.";
+function formatErrorMessage(error: unknown): string {
+  if (!isApiError(error)) return "Request failed.";
+  const base = error.message || "Request failed.";
+  return error.requestId ? `${base} (request ${error.requestId})` : base;
 }
 
-function mentionQuery(value: string): string | null {
-  const marker = value.lastIndexOf("@");
-  if (marker < 0) return null;
-  const suffix = value.slice(marker + 1);
-  if (suffix.includes("\n")) return null;
-  return suffix.split(/\s/)[0] ?? "";
+function isAuthExpiryError(error: unknown): boolean {
+  if (!isApiError(error)) return false;
+  return (
+    error.code === "session_expired" ||
+    error.code === "unauthenticated" ||
+    error.status === 401
+  );
+}
+
+function isUncertainPreAcceptError(error: unknown): boolean {
+  if (!isApiError(error)) return true;
+  if (
+    error.code === "domain_required" ||
+    error.code === "domain_not_query_eligible" ||
+    error.code === "idempotency_conflict" ||
+    error.code === "validation_error" ||
+    error.code === "csrf_invalid" ||
+    isAuthExpiryError(error) ||
+    isCursorExpiredError(error)
+  ) {
+    return false;
+  }
+  return error.status === 0 || error.status === 408 || error.status === 429 || error.status >= 500;
+}
+
+function stageFromProjection(projection: TurnStreamProjection): string | null {
+  return projection.stage;
 }
 
 function turnToMessages(turn: ChatTurn): ChatMessage[] {
@@ -49,8 +98,8 @@ function turnToMessages(turn: ChatTurn): ChatMessage[] {
   if (turn.assistantAnswer) {
     blocks.push({ kind: "text", id: `${turn.id}-text`, text: turn.assistantAnswer });
   }
-  if (turn.safeError?.message) {
-    blocks.push({ kind: "error", id: `${turn.id}-error`, text: turn.safeError.message });
+  if (turn.error?.message) {
+    blocks.push({ kind: "error", id: `${turn.id}-error`, text: turn.error.message });
   }
   return [
     {
@@ -80,11 +129,6 @@ export function useChatShell() {
   const [domains, setDomains] = useState<MemberDomain[]>([]);
   const [input, setInput] = useState("");
   const [domainId, setDomainId] = useState("");
-  const [composerKind, setComposerKind] = useState<ComposerRefKind>("source");
-  const [composerQuery, setComposerQuery] = useState("");
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [discoveredRefs, setDiscoveredRefs] = useState<ComposerRef[]>([]);
-  const [selectedRefs, setSelectedRefs] = useState<ComposerRef[]>([]);
   const [streamText, setStreamText] = useState("");
   const [streamStage, setStreamStage] = useState<string | null>(null);
   const [streamEvidence, setStreamEvidence] = useState<EvidenceRow[]>([]);
@@ -97,11 +141,150 @@ export function useChatShell() {
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [pendingRefs, setPendingRefs] = useState<AcceptedRef[]>([]);
+  const [submittedSnapshot, setSubmittedSnapshot] = useState<SubmittedSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
-  const [discovering, setDiscovering] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [streamTransportState, setStreamTransportState] = useState<StreamTransportState>("connected");
   const [error, setError] = useState<string | null>(null);
+
+  const projectionRef = useRef<TurnStreamProjection>(createEmptyTurnProjection());
+  const streamOwnerConversationIdRef = useRef<string | null>(null);
+  const clientRequestRef = useRef<ClientRequestState | null>(null);
+  const submittedSnapshotRef = useRef<SubmittedSnapshot | null>(null);
+  const inspectorFenceRef = useRef<InspectorFence>({
+    identityEpoch: 0,
+    conversationId: null,
+    selectedTurnId: null,
+    generation: 0,
+  });
+  const identityEpochRef = useRef(0);
+
+  const bumpInspectorFence = useCallback(
+    (nextConversationId: string | null, nextSelectedTurnId: string | null) => {
+      const generation = inspectorFenceRef.current.generation + 1;
+      inspectorFenceRef.current = {
+        identityEpoch: identityEpochRef.current,
+        conversationId: nextConversationId,
+        selectedTurnId: nextSelectedTurnId,
+        generation,
+      };
+      return generation;
+    },
+    [],
+  );
+
+  const isInspectorFenceCurrent = useCallback(
+    (conversationId: string | null, turnId: string | null, generation: number) => {
+      const fence = inspectorFenceRef.current;
+      return (
+        fence.generation === generation &&
+        fence.identityEpoch === identityEpochRef.current &&
+        fence.conversationId === conversationId &&
+        fence.selectedTurnId === turnId
+      );
+    },
+    [],
+  );
+
+  const viewConversationIdRef = useRef<string | null>(null);
+
+  const clearPrivateView = useCallback(() => {
+    identityEpochRef.current += 1;
+    bumpInspectorFence(null, null);
+    streamOwnerConversationIdRef.current = null;
+    viewConversationIdRef.current = null;
+    clientRequestRef.current = null;
+    projectionRef.current = createEmptyTurnProjection();
+    setConversations([]);
+    setConversation(null);
+    setTurns([]);
+    setInput("");
+    setDomainId("");
+    setStreamText("");
+    setStreamStage(null);
+    setStreamEvidence([]);
+    setStreamingTurnId(null);
+    setReplayingTurnId(null);
+    setPanelOpen(false);
+    setSelectedTurnId(null);
+    setSelectedEvidenceId(null);
+    setPendingMessage(null);
+    setPendingRefs([]);
+    submittedSnapshotRef.current = null;
+    setSubmittedSnapshot(null);
+    setStreaming(false);
+    setStreamTransportState("connected");
+    setError(null);
+  }, [bumpInspectorFence]);
+
+  const projectStreamState = useCallback(
+    (projection: TurnStreamProjection, event: TurnStreamEvent | null) => {
+      const ownerId = streamOwnerConversationIdRef.current;
+      /* Drop projection updates when the user is viewing another conversation. */
+      if (ownerId === null || ownerId !== viewConversationIdRef.current) return;
+      const fenceGen = inspectorFenceRef.current.generation;
+      const fenceTurnId = inspectorFenceRef.current.selectedTurnId;
+
+      setStreamingTurnId(projection.turnId);
+      setStreamText(projection.answerText);
+      setStreamStage(stageFromProjection(projection));
+      setStreamEvidence(projection.evidence);
+      setPendingRefs(projection.acceptedRefs);
+
+      if (event?.type === "turn.accepted") {
+        const submitted = submittedSnapshotRef.current;
+        if (submitted) {
+          setInput((draft) => (draft.trim() === submitted.message ? "" : draft));
+        }
+        submittedSnapshotRef.current = null;
+        setSubmittedSnapshot(null);
+        if (clientRequestRef.current) {
+          clientRequestRef.current = { ...clientRequestRef.current, phase: "accepted" };
+        }
+      }
+
+      if (projection.evidence.length > 0) {
+        const conversationId = ownerId;
+        if (isInspectorFenceCurrent(conversationId, fenceTurnId, fenceGen) || fenceTurnId === null) {
+          setPanelOpen(true);
+        }
+      }
+
+      if (projection.terminalStatus === "failed" || projection.terminalStatus === "cancelled") {
+        if (projection.terminalMessage) setError(projection.terminalMessage);
+        if (clientRequestRef.current?.phase === "inflight") {
+          clientRequestRef.current = { ...clientRequestRef.current, phase: "terminal_fail" };
+        }
+      }
+
+      if (projection.terminalStatus === "redacted") {
+        setStreamText("");
+        setStreamEvidence([]);
+        setPendingRefs([]);
+        setStreamingTurnId(null);
+        if (isInspectorFenceCurrent(ownerId, fenceTurnId, fenceGen) || fenceTurnId === null) {
+          setPanelOpen(false);
+          setSelectedEvidenceId(null);
+        }
+      }
+
+      if (projection.unavailable && projection.terminalMessage) {
+        setError(projection.terminalMessage);
+      }
+    },
+    [isInspectorFenceCurrent],
+  );
+
+  const handleStreamEvent = useCallback(
+    (event: TurnStreamEvent) => {
+      const ownerId = streamOwnerConversationIdRef.current;
+      if (ownerId === null || ownerId !== viewConversationIdRef.current) return;
+      const next = reduceTurnStreamEvent(projectionRef.current, event);
+      projectionRef.current = next;
+      projectStreamState(next, event);
+    },
+    [projectStreamState],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -109,7 +292,14 @@ export function useChatShell() {
       .then((rows) => {
         if (!cancelled) setConversations(rows);
       })
-      .catch(() => undefined);
+      .catch((err) => {
+        if (cancelled) return;
+        if (isAuthExpiryError(err)) {
+          clearPrivateView();
+          setError(formatErrorMessage(err));
+          return;
+        }
+      });
     void listMemberDomains()
       .then((rows) => {
         if (!cancelled) setDomains(rows);
@@ -118,40 +308,102 @@ export function useChatShell() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [clearPrivateView]);
 
-  const loadConversation = useCallback(async (conversationId: string, options?: { turnId?: string | null }) => {
-    setLoading(true);
-    setError(null);
-    setStreamingTurnId(null);
-    setReplayingTurnId(null);
-    try {
-      const detail = await getConversation(conversationId);
-      setConversation(detail.conversation);
-      setTurns(detail.turns);
-      setSelectedEvidenceId(null);
+  const loadConversation = useCallback(
+    async (conversationId: string, options?: { turnId?: string | null }) => {
+      setLoading(true);
+      setError(null);
+      setStreamingTurnId(null);
+      setReplayingTurnId(null);
       const restoreTurnId = options?.turnId?.trim() || null;
-      const restoreTurn = restoreTurnId ? detail.turns.find((row) => row.id === restoreTurnId) : null;
-      if (restoreTurn) {
-        setSelectedTurnId(restoreTurn.id);
-        setPanelOpen(restoreTurn.evidence.length > 0);
-      } else {
-        setSelectedTurnId(null);
-        const lastTurn = detail.turns[detail.turns.length - 1];
-        setPanelOpen((lastTurn?.evidence.length ?? 0) > 0);
+      const fenceGen = bumpInspectorFence(conversationId, restoreTurnId);
+      try {
+        const detail = await getConversation(conversationId);
+        if (!isInspectorFenceCurrent(conversationId, restoreTurnId, fenceGen)) return;
+        viewConversationIdRef.current = detail.conversation.id;
+        setConversation(detail.conversation);
+        setTurns(detail.turns);
+        setSelectedEvidenceId(null);
+        const restoreTurn = restoreTurnId ? detail.turns.find((row) => row.id === restoreTurnId) : null;
+        if (restoreTurn) {
+          setSelectedTurnId(restoreTurn.id);
+          bumpInspectorFence(conversationId, restoreTurn.id);
+          setPanelOpen(restoreTurn.evidence.length > 0);
+        } else {
+          setSelectedTurnId(null);
+          bumpInspectorFence(conversationId, null);
+          const lastTurn = detail.turns[detail.turns.length - 1];
+          setPanelOpen((lastTurn?.evidence.length ?? 0) > 0);
+        }
+      } catch (err) {
+        if (!isInspectorFenceCurrent(conversationId, restoreTurnId, fenceGen)) return;
+        if (isAuthExpiryError(err)) {
+          clearPrivateView();
+          setError(formatErrorMessage(err));
+          return;
+        }
+        setError(formatErrorMessage(err));
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      setError(messageForError(err));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [bumpInspectorFence, clearPrivateView, isInspectorFenceCurrent],
+  );
+
+  const applyCursorExpiredRecovery = useCallback(
+    async (err: unknown, conversationId: string, turnId?: string | null) => {
+      const rawSnapshot = getTerminalSnapshotFromError(err);
+      if (isTerminalSnapshotDto(rawSnapshot)) {
+        const projection = replaceTurnProjectionFromTerminalSnapshot(rawSnapshot);
+        projectionRef.current = projection;
+        projectStreamState(projection, null);
+        await loadConversation(conversationId, { turnId: projection.turnId ?? turnId });
+        return;
+      }
+
+      const fenceGen = bumpInspectorFence(conversationId, turnId ?? null);
+      try {
+        const detail = await getConversation(conversationId);
+        if (!isInspectorFenceCurrent(conversationId, turnId ?? null, fenceGen)) return;
+        setConversation(detail.conversation);
+        setTurns(detail.turns);
+        const restored = turnId ? detail.turns.find((row) => row.id === turnId) : null;
+        if (restored) {
+          setSelectedTurnId(restored.id);
+          setPanelOpen(restored.evidence.length > 0);
+          setError(null);
+          return;
+        }
+        if (detail.turns.length > 0) {
+          setError(null);
+          return;
+        }
+        const unavailable = createUnavailableTurnProjection();
+        projectionRef.current = unavailable;
+        projectStreamState(unavailable, null);
+      } catch (reloadError) {
+        if (!isInspectorFenceCurrent(conversationId, turnId ?? null, fenceGen)) return;
+        if (isAuthExpiryError(reloadError)) {
+          clearPrivateView();
+          setError(formatErrorMessage(reloadError));
+          return;
+        }
+        const unavailable = createUnavailableTurnProjection();
+        projectionRef.current = unavailable;
+        projectStreamState(unavailable, null);
+      }
+    },
+    [bumpInspectorFence, clearPrivateView, isInspectorFenceCurrent, loadConversation, projectStreamState],
+  );
 
   const startConversation = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const created = await createConversation("Chat");
+      bumpInspectorFence(created.id, null);
+      viewConversationIdRef.current = created.id;
       setConversation(created);
       setConversations((current) => [created, ...current]);
       setTurns([]);
@@ -162,104 +414,45 @@ export function useChatShell() {
       setReplayingTurnId(null);
       setSelectedTurnId(null);
       setSelectedEvidenceId(null);
+      setPendingMessage(null);
+      setPendingRefs([]);
+      submittedSnapshotRef.current = null;
+      setSubmittedSnapshot(null);
       return created.id;
     } catch (err) {
-      setError(messageForError(err));
+      if (isAuthExpiryError(err)) {
+        clearPrivateView();
+        setError(formatErrorMessage(err));
+        return null;
+      }
+      setError(formatErrorMessage(err));
       return null;
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  const refreshDiscovery = useCallback(async () => {
-    if (!conversation || !pickerOpen) return;
-    setDiscovering(true);
-    try {
-      const refs = await discoverComposerRefs({
-        conversationId: conversation.id,
-        domainId: domainId.trim() || undefined,
-        kinds: [composerKind],
-        query: composerQuery || undefined,
-        limit: 10,
-      });
-      setDiscoveredRefs(refs);
-    } catch (err) {
-      setError(messageForError(err));
-      setDiscoveredRefs([]);
-    } finally {
-      setDiscovering(false);
-    }
-  }, [composerKind, composerQuery, conversation, domainId, pickerOpen]);
-
-  useEffect(() => {
-    void refreshDiscovery();
-  }, [refreshDiscovery]);
+  }, [bumpInspectorFence, clearPrivateView]);
 
   const updateInput = useCallback((value: string) => {
     setInput(value);
-    const query = mentionQuery(value);
-    if (query === null) return;
-    setPickerOpen(true);
-    setComposerQuery(query);
   }, []);
 
-  const addRef = useCallback((ref: ComposerRef) => {
-    setSelectedRefs((current) => {
-      if (current.some((item) => item.refToken === ref.refToken)) return current;
-      if (current.length >= MAX_SELECTED_REFS) return current;
-      return [...current, ref];
-    });
-    setPickerOpen(false);
+  const resolveClientRequestId = useCallback((message: string, nextDomainId: string): string => {
+    const prev = clientRequestRef.current;
+    const sameEffective =
+      prev !== null && prev.message === message && prev.domainId === nextDomainId;
+    if (sameEffective && prev.phase === "uncertain") {
+      clientRequestRef.current = { ...prev, phase: "inflight" };
+      return prev.id;
+    }
+    const id = requestId();
+    clientRequestRef.current = {
+      message,
+      domainId: nextDomainId,
+      id,
+      phase: "inflight",
+    };
+    return id;
   }, []);
-
-  const removeRef = useCallback((refToken: string) => {
-    setSelectedRefs((current) => current.filter((ref) => ref.refToken !== refToken));
-  }, []);
-
-  const applyTurnStreamEvent = useCallback((event: TurnStreamEvent) => {
-    if (event.type === "turn.accepted") {
-      setStreamingTurnId(event.turnId);
-      setStreamStage("Preparing answer");
-    }
-    if (event.type === "route.selected") {
-      setStreamStage(event.payload.route === "domain_rag" ? "Preparing grounded answer" : "Answering");
-    }
-    if (event.type === "retrieval.started") setStreamStage("Retrieving evidence");
-    if (event.type === "retrieval.completed") {
-      setStreamStage(event.payload.result === "evidence_found" ? "Answering from evidence" : "No grounded context");
-    }
-    if (event.type === "answer.delta") setStreamText((current) => `${current}${event.payload.text}`);
-    if (event.type === "evidence.delta") {
-      setStreamEvidence((current) => {
-        const known = new Set(current.map((item) => item.id));
-        return [...current, ...event.payload.items.filter((item) => !known.has(item.id))];
-      });
-      if (event.payload.items.length > 0) setPanelOpen(true);
-    }
-    if (event.type === "turn.completed") {
-      setPendingRefs(event.payload.acceptedRefs);
-      setStreamingTurnId(null);
-      setStreamStage(null);
-    }
-    if (event.type === "turn.failed" || event.type === "turn.cancelled") {
-      setError(event.payload.message);
-      setStreamingTurnId(null);
-      setStreamStage(null);
-    }
-    if (event.type === "turn.redacted") {
-      setStreamText("");
-      setStreamEvidence([]);
-      setPendingRefs([]);
-      setStreamingTurnId(null);
-      setPanelOpen(false);
-      setSelectedEvidenceId(null);
-    }
-  }, []);
-
-  const handleLiveStreamEvent = useCallback(
-    (event: TurnStreamEvent) => applyTurnStreamEvent(event),
-    [applyTurnStreamEvent],
-  );
 
   const submit = useCallback(
     async (messageOverride?: string) => {
@@ -269,46 +462,132 @@ export function useChatShell() {
       if (!conversationId) conversationId = await startConversation();
       if (!conversationId) return;
 
+      const effectiveDomainId = domainId.trim();
+      const clientRequestId = resolveClientRequestId(message, effectiveDomainId);
+
       setStreaming(true);
       setStreamTransportState("connected");
       setStreamingTurnId(null);
       setError(null);
+      projectionRef.current = createEmptyTurnProjection();
+      streamOwnerConversationIdRef.current = conversationId;
+      viewConversationIdRef.current = conversationId;
       setStreamText("");
       setStreamStage(null);
       setStreamEvidence([]);
       setPendingRefs([]);
       setPendingMessage(message);
+      const snapshot = { message, domainId: effectiveDomainId, clientRequestId };
+      submittedSnapshotRef.current = snapshot;
+      setSubmittedSnapshot(snapshot);
       /* New turn: the panel follows the in-flight turn again. */
       setSelectedTurnId(null);
       setSelectedEvidenceId(null);
-      const refs = selectedRefs;
-      setInput("");
-      setSelectedRefs([]);
-      setPickerOpen(false);
+      bumpInspectorFence(conversationId, null);
+
+      let keepPendingBubble = false;
       try {
-        await streamConversationTurn(
-          {
-            conversationId,
-            clientRequestId: requestId(),
-            message,
-            domainId: domainId.trim() || undefined,
-            composerRefTokens: refs.map((ref) => ref.refToken),
-            onEvent: handleLiveStreamEvent,
-            onTransportState: setStreamTransportState,
-          },
-        );
-        await loadConversation(conversationId);
+        await streamConversationTurn({
+          conversationId,
+          clientRequestId,
+          message,
+          domainId: effectiveDomainId || undefined,
+          composerRefTokens: [],
+          onEvent: handleStreamEvent,
+          onTransportState: setStreamTransportState,
+        });
+        if (
+          streamOwnerConversationIdRef.current === conversationId &&
+          viewConversationIdRef.current === conversationId
+        ) {
+          await loadConversation(conversationId);
+        }
       } catch (err) {
-        setError(messageForError(err));
+        if (streamOwnerConversationIdRef.current !== conversationId) return;
+
+        if (isCursorExpiredError(err)) {
+          await applyCursorExpiredRecovery(err, conversationId, projectionRef.current.turnId);
+          return;
+        }
+
+        if (isAuthExpiryError(err)) {
+          clearPrivateView();
+          setError(formatErrorMessage(err));
+          setStreamingTurnId(null);
+          return;
+        }
+
+        if (isApiError(err) && err.code === "idempotency_conflict") {
+          if (clientRequestRef.current) {
+            clientRequestRef.current = { ...clientRequestRef.current, phase: "conflict" };
+          }
+          setError(formatErrorMessage(err));
+          setStreamingTurnId(null);
+          return;
+        }
+
+        if (
+          isApiError(err) &&
+          (err.code === "domain_required" || err.code === "domain_not_query_eligible")
+        ) {
+          if (clientRequestRef.current) {
+            clientRequestRef.current = { ...clientRequestRef.current, phase: "terminal_fail" };
+          }
+          setError(formatErrorMessage(err));
+          setStreamingTurnId(null);
+          return;
+        }
+
+        if (isUncertainPreAcceptError(err) && !projectionRef.current.turnId) {
+          if (clientRequestRef.current) {
+            clientRequestRef.current = { ...clientRequestRef.current, phase: "uncertain" };
+          }
+          setError(formatErrorMessage(err));
+          keepPendingBubble = true;
+          setStreamingTurnId(null);
+          return;
+        }
+
+        /* Accepted or otherwise attached: reload durable turn; Retry resumes GET. */
+        if (projectionRef.current.turnId) {
+          if (clientRequestRef.current) {
+            clientRequestRef.current = { ...clientRequestRef.current, phase: "accepted" };
+          }
+          setError(formatErrorMessage(err));
+          if (viewConversationIdRef.current === conversationId) {
+            await loadConversation(conversationId, { turnId: projectionRef.current.turnId });
+          }
+          setStreamingTurnId(null);
+          return;
+        }
+
+        if (clientRequestRef.current) {
+          clientRequestRef.current = { ...clientRequestRef.current, phase: "terminal_fail" };
+        }
+        setError(formatErrorMessage(err));
         setStreamingTurnId(null);
-        setInput((current) => current || message);
       } finally {
-        setStreaming(false);
-        setStreamStage(null);
-        setPendingMessage(null);
+        /* Only clear this submit's presentation if we still own the stream slot. */
+        if (streamOwnerConversationIdRef.current === conversationId) {
+          setStreaming(false);
+          setStreamStage(null);
+          if (!keepPendingBubble) setPendingMessage(null);
+        }
       }
     },
-    [conversation, domainId, handleLiveStreamEvent, input, loadConversation, selectedRefs, startConversation, streaming],
+    [
+      applyCursorExpiredRecovery,
+      bumpInspectorFence,
+      clearPrivateView,
+      conversation,
+      domainId,
+      handleStreamEvent,
+      input,
+      loadConversation,
+      resolveClientRequestId,
+      startConversation,
+      streaming,
+    ],
   );
 
   const clearError = useCallback(() => setError(null), []);
@@ -341,9 +620,14 @@ export function useChatShell() {
       await loadConversation(conversation.id, { turnId });
       setStreamingTurnId(null);
     } catch (err) {
-      setError(messageForError(err));
+      if (isAuthExpiryError(err)) {
+        clearPrivateView();
+        setError(formatErrorMessage(err));
+        return;
+      }
+      setError(formatErrorMessage(err));
     }
-  }, [conversation, loadConversation, runningCancellableTurnId]);
+  }, [clearPrivateView, conversation, loadConversation, runningCancellableTurnId]);
 
   const replayTurn = useCallback(async () => {
     const turnId = selectedReplayableTurnId;
@@ -351,19 +635,38 @@ export function useChatShell() {
 
     setError(null);
     setReplayingTurnId(turnId);
+    streamOwnerConversationIdRef.current = conversation.id;
+    viewConversationIdRef.current = conversation.id;
+    projectionRef.current = createEmptyTurnProjection();
     try {
       await streamConversationTurnEvents({
         conversationId: conversation.id,
         turnId,
-        onEvent: applyTurnStreamEvent,
+        onEvent: handleStreamEvent,
       });
       await loadConversation(conversation.id, { turnId });
     } catch (err) {
-      setError(messageForError(err));
+      if (isCursorExpiredError(err)) {
+        await applyCursorExpiredRecovery(err, conversation.id, turnId);
+        return;
+      }
+      if (isAuthExpiryError(err)) {
+        clearPrivateView();
+        setError(formatErrorMessage(err));
+        return;
+      }
+      setError(formatErrorMessage(err));
     } finally {
       setReplayingTurnId(null);
     }
-  }, [applyTurnStreamEvent, conversation, loadConversation, selectedReplayableTurnId]);
+  }, [
+    applyCursorExpiredRecovery,
+    clearPrivateView,
+    conversation,
+    handleStreamEvent,
+    loadConversation,
+    selectedReplayableTurnId,
+  ]);
 
   /* Evidence Panel selection: click an assistant message to bind the panel to
      that turn; a turn with evidence opens the panel. */
@@ -371,11 +674,12 @@ export function useChatShell() {
     (turnId: string | null) => {
       setSelectedTurnId(turnId);
       setSelectedEvidenceId(null);
+      bumpInspectorFence(conversation?.id ?? null, turnId);
       if (turnId === null) return;
       const turn = turns.find((row) => row.id === turnId);
       if ((turn?.evidence.length ?? 0) > 0) setPanelOpen(true);
     },
-    [turns],
+    [bumpInspectorFence, conversation?.id, turns],
   );
 
   const selectEvidence = useCallback((evidenceId: string) => {
@@ -393,12 +697,26 @@ export function useChatShell() {
     return turns[turns.length - 1]?.evidence ?? [];
   }, [pendingMessage, selectedTurnId, streamEvidence, turns]);
 
+  const panelAcceptedRefs = useMemo<AcceptedRef[]>(() => {
+    if (selectedTurnId) {
+      return turns.find((row) => row.id === selectedTurnId)?.acceptedRefs ?? [];
+    }
+    if (pendingMessage !== null) return pendingRefs;
+    return turns[turns.length - 1]?.acceptedRefs ?? [];
+  }, [pendingMessage, pendingRefs, selectedTurnId, turns]);
+
   /* Timeline projection: persisted turns plus the live streaming turn.
      Evidence is not projected into blocks; the Evidence Panel renders it. */
   const messages = useMemo<ChatMessage[]>(() => {
     const rows = turns.flatMap(turnToMessages);
     if (pendingMessage !== null) {
-      rows.push({ id: "pending-user", role: "user", turnId: null, text: pendingMessage, acceptedRefs: pendingRefs });
+      rows.push({
+        id: "pending-user",
+        role: "user",
+        turnId: null,
+        text: pendingMessage,
+        acceptedRefs: pendingRefs,
+      });
       const blocks: AssistantBlock[] = [];
       if (streamStage) blocks.push({ kind: "event", id: "pending-stage", text: streamStage });
       if (streamText) blocks.push({ kind: "text", id: "pending-text", text: streamText });
@@ -420,6 +738,63 @@ export function useChatShell() {
     [messages],
   );
 
+  const retryLast = useCallback(async () => {
+    const conversationId = conversation?.id ?? streamOwnerConversationIdRef.current;
+    const turnId = projectionRef.current.turnId;
+    const phase = clientRequestRef.current?.phase;
+    if (conversationId && turnId && (phase === "accepted" || phase === "inflight")) {
+      setError(null);
+      setStreaming(true);
+      setStreamTransportState("connected");
+      streamOwnerConversationIdRef.current = conversationId;
+      viewConversationIdRef.current = conversationId;
+      try {
+        await streamConversationTurnEvents({
+          conversationId,
+          turnId,
+          onEvent: handleStreamEvent,
+          onTransportState: setStreamTransportState,
+        });
+        if (
+          streamOwnerConversationIdRef.current === conversationId &&
+          viewConversationIdRef.current === conversationId
+        ) {
+          await loadConversation(conversationId, { turnId });
+        }
+      } catch (err) {
+        if (streamOwnerConversationIdRef.current !== conversationId) return;
+        if (isCursorExpiredError(err)) {
+          await applyCursorExpiredRecovery(err, conversationId, turnId);
+          return;
+        }
+        if (isAuthExpiryError(err)) {
+          clearPrivateView();
+          setError(formatErrorMessage(err));
+          return;
+        }
+        setError(formatErrorMessage(err));
+      } finally {
+        if (streamOwnerConversationIdRef.current === conversationId) {
+          setStreaming(false);
+          setStreamStage(null);
+          setStreamingTurnId(null);
+        }
+      }
+      return;
+    }
+    const message = lastUserMessage || input;
+    if (message.trim()) await submit(message);
+  }, [
+    applyCursorExpiredRecovery,
+    clearPrivateView,
+    conversation,
+    handleStreamEvent,
+    input,
+    lastUserMessage,
+    loadConversation,
+    submit,
+  ]);
+
   return {
     conversations,
     conversation,
@@ -428,40 +803,31 @@ export function useChatShell() {
     turns,
     input,
     domainId,
-    composerKind,
-    composerQuery,
-    pickerOpen,
-    discoveredRefs,
-    selectedRefs,
     streaming,
     streamStage,
     streamTransportState,
     loading,
-    discovering,
     error,
     lastUserMessage,
     panelOpen,
     panelEvidence,
+    panelAcceptedRefs,
     selectedTurnId,
     selectedEvidenceId,
     streamingTurnId,
     runningCancellableTurnId,
     selectedReplayableTurnId,
     replayingTurnId,
+    submittedSnapshot,
     setPanelOpen,
     selectTurn,
     selectEvidence,
     setDomainId,
-    setComposerKind,
-    setComposerQuery,
-    setPickerOpen,
     updateInput,
-    addRef,
-    removeRef,
-    refreshDiscovery,
     loadConversation,
     startConversation,
     submit,
+    retryLast,
     cancelTurn,
     replayTurn,
     clearError,

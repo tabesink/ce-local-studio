@@ -261,12 +261,23 @@ closure command) and changed-file Ruff passing.
 assertions, and keeps orchestration with P7-03, SSE/replay with P7-04,
 redaction with P7-05, system-wide privacy with P8, and draft UX with P9.
 
+P9-02 closure evidence (2026-07-27):
+`docs/_scratch/p9-02-chat-workbench-inventory.md` and
+`docs/_scratch/p9-02-chat-workbench-evidence.md` record generated chat DTO
+adoption, `src/lib/stream` live/resume/replay reduction over all nine producer
+SSE fixtures plus `410` replace helpers, gated composer-ref discovery, and the
+Evidence/Refs/Source workbench with opaque Library deep-link construction kept
+disabled until P9-03. Results were 39 node stream/chat tests, clean typecheck,
+and 7 Vitest inspector/deep-link tests. Residuals remain P11 discover/`token`,
+P9-03 preview, P9-05 CI validators, and P12 ingress/visual matrix. Phase P9
+stays open until P9-03–P9-05 land.
+
 ### P9-P11 - User interface, deployable runtime, and governed context workflows
 
 | Task | Status | Depends on | Deliverable |
 | --- | --- | --- | --- |
 | P9-01 | DONE | P1,P8 | inventory every `components/**` and `_shared/ui/**` file/call site in `docs/_scratch/p9-01-ui-inventory.md`; disposition Button/Input/StatusPill to canonical `src/ui`, SettingsRow to Settings, and shell composition to `src/features/shell`; define `app/client/tests/structure/ui-ownership.test.ts`, `app/client/tests/parity/manifests/<target>.json`, `app/client/tests/parity/fixtures/<target>.html`, `app/client/tests/parity/react/<target>.test.tsx`, and `app/client/tests/e2e/`; migrate without a competing physical kit — evidence `docs/_scratch/p9-01-ui-ownership-evidence.md`; accordion + live Settings domains remain P9-04/P12-07 |
-| P9-02 | NOT_STARTED | P7 | generated HTTP/SSE client plus `/chat` conversation discovery, transcript/composer, turn-scoped Evidence/Refs/Source workbench, and canonical live/resume/replay reducer states |
+| P9-02 | DONE | P7 | generated HTTP/SSE client plus `/chat` conversation discovery, transcript/composer, turn-scoped Evidence/Refs/Source workbench, and canonical live/resume/replay reducer states — evidence `docs/_scratch/p9-02-chat-workbench-evidence.md`; P11 discover/`token` residual, P9-03 Library preview, and P12 ingress remain |
 | P9-03 | NOT_STARTED | P4-P6 | documents/outline/preview and graph route through approved contracts |
 | P9-04 | BLOCKED | P2-P3,P8,P9-01 | approve the Settings Domain accordion interaction amendment across behavior/component/state/accessibility contracts, then implement `/settings?section=domains`; no deferred operator or publication UI |
 | P9-05 | NOT_STARTED | P9-01 | import-direction, thin-route, server/browser boundary and contract/barrel CI validators |

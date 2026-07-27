@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { runResumableTurnStream } from "../src/features/chat-shell/stream-reconnect.ts";
+import {
+  DEFAULT_RESUME_MAX_ATTEMPTS,
+  runResumableTurnStream,
+} from "../src/lib/stream/reconnect.ts";
 
 function state() {
   return { receivedSequence: 0, appliedSequence: 0, turnId: null, terminal: false };
@@ -70,5 +73,26 @@ describe("bounded turn stream reconnect", () => {
     );
     assert.equal(resumes, 3);
     assert.equal(states.at(-1), "offline");
+  });
+
+  it("defaults to five resume attempts with an 8000ms backoff cap", async () => {
+    assert.equal(DEFAULT_RESUME_MAX_ATTEMPTS, 5);
+    const cursor = { ...state(), turnId: "turn_1", appliedSequence: 1, receivedSequence: 1 };
+    const delays = [];
+    let resumes = 0;
+    await assert.rejects(
+      runResumableTurnStream({
+        start: async () => undefined,
+        resume: async () => { resumes += 1; },
+        snapshot: () => ({ ...cursor }),
+        shouldRetry: () => true,
+        sleep: async (value) => { delays.push(value); },
+        random: () => 0,
+      }),
+      /exhausted/,
+    );
+    assert.equal(resumes, 5);
+    assert.deepEqual(delays, [250, 500, 1000, 2000, 4000]);
+    assert.ok(delays.every((value) => value <= 8_000));
   });
 });
