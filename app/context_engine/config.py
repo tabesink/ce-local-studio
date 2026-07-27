@@ -91,6 +91,10 @@ class Settings:
     )
     synthesis_timeout_seconds: int = field(default_factory=lambda: _env_int("CE_SYNTHESIS_TIMEOUT_SECONDS", 60))
     synthesis_max_output_tokens: int = field(default_factory=lambda: _env_int("CE_SYNTHESIS_MAX_OUTPUT_TOKENS", 4096))
+    turn_worker_id: str = field(default_factory=lambda: _env("CE_TURN_WORKER_ID", "turn-worker") or "turn-worker")
+    turn_lease_seconds: int = field(default_factory=lambda: _env_int("CE_TURN_LEASE_SECONDS", 180))
+    turn_tail_poll_milliseconds: int = field(default_factory=lambda: _env_int("CE_TURN_TAIL_POLL_MILLISECONDS", 250))
+    turn_tail_idle_seconds: int = field(default_factory=lambda: _env_int("CE_TURN_TAIL_IDLE_SECONDS", 30))
     lightrag_client_kind: str = field(default_factory=lambda: _env("CE_LIGHTRAG_CLIENT_KIND", "native") or "native")
     worker_idle_seconds: int = field(default_factory=lambda: _env_int("CE_WORKER_IDLE_SECONDS", 2))
 
@@ -149,6 +153,14 @@ class Settings:
             raise ValueError("synthesis_timeout_seconds must be positive.")
         if self.synthesis_max_output_tokens <= 0:
             raise ValueError("synthesis_max_output_tokens must be positive.")
+        if self.turn_lease_seconds <= 0:
+            raise ValueError("turn_lease_seconds must be positive.")
+        if self.turn_lease_seconds <= self.synthesis_timeout_seconds:
+            raise ValueError("turn_lease_seconds must exceed synthesis_timeout_seconds.")
+        if self.turn_tail_poll_milliseconds <= 0:
+            raise ValueError("turn_tail_poll_milliseconds must be positive.")
+        if self.turn_tail_idle_seconds <= 0:
+            raise ValueError("turn_tail_idle_seconds must be positive.")
 
     @classmethod
     def from_env(cls) -> Settings:

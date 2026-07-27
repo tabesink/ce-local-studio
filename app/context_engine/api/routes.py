@@ -932,6 +932,7 @@ def get_conversation_turn_events(
     after: int = Query(default=0, ge=0),
     current: CurrentSession = Depends(require_current_session),
     db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
 ) -> StreamingResponse:
     _reject_unknown_query(request, {"after"})
     try:
@@ -941,6 +942,7 @@ def get_conversation_turn_events(
             conversation_id=conversation_id,
             turn_id=turn_id,
             after=after,
+            settings=settings,
         )
     except ConversationError as exc:
         raise _conversation_api_error(exc) from exc

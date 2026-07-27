@@ -10,6 +10,7 @@ from typing import Any, Protocol
 from context_engine.config import Settings
 from context_engine.db import create_db_engine, create_session_factory
 from context_engine.services.domains import DomainDeleteWorker
+from context_engine.services.chat_turns import ConversationTurnWorker
 from context_engine.services.indexing import SourceIndexWorker
 from context_engine.services.runtime_config import validate_config_encryption_key
 from context_engine.services.sources import SourceDeleteWorker, SourcePreparationWorker
@@ -45,17 +46,24 @@ def touch_worker_heartbeat(path: Path | str) -> None:
 def run_once_pass(
     prep_worker: _RunOnceWorker,
     index_worker: _RunOnceWorker,
+    turn_worker: _RunOnceWorker,
     delete_worker: _RunOnceWorker,
     db: Any,
 ) -> bool:
-    """Claim at most one unit of work in prep → index → delete order."""
-    return bool(prep_worker.run_once(db) or index_worker.run_once(db) or delete_worker.run_once(db))
+    """Claim at most one unit of work in prep → index → turn → delete order."""
+    return bool(
+        prep_worker.run_once(db)
+        or index_worker.run_once(db)
+        or turn_worker.run_once(db)
+        or delete_worker.run_once(db)
+    )
 
 
 def build_workers(settings: Settings) -> dict[str, _RunOnceWorker]:
     return {
         "prep": SourcePreparationWorker(settings),
         "index": SourceIndexWorker(settings),
+        "turn": ConversationTurnWorker(settings),
         "delete": _CompositeDeleteWorker(settings),
     }
 
@@ -65,6 +73,7 @@ def run_loop(
     session_factory: Callable[[], Any],
     prep_worker: _RunOnceWorker,
     index_worker: _RunOnceWorker,
+    turn_worker: _RunOnceWorker,
     delete_worker: _RunOnceWorker,
     idle_seconds: float,
     sleep_fn: Callable[[float], None] = time.sleep,
@@ -77,7 +86,7 @@ def run_loop(
         db = session_factory()
         did_work = False
         try:
-            did_work = run_once_pass(prep_worker, index_worker, delete_worker, db)
+            did_work = run_once_pass(prep_worker, index_worker, turn_worker, delete_worker, db)
         except Exception:
             safe_log(
                 logger,
@@ -122,6 +131,7 @@ def main(argv: list[str] | None = None) -> int:
             session_factory=session_factory,
             prep_worker=workers["prep"],
             index_worker=workers["index"],
+            turn_worker=workers["turn"],
             delete_worker=workers["delete"],
             idle_seconds=float(settings.worker_idle_seconds),
             heartbeat_path=heartbeat_path,

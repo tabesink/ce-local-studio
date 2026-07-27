@@ -4,12 +4,14 @@ import hashlib
 import json
 import logging
 import re
+import time
 import uuid
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session, load_only, selectinload
 
 from context_engine.adapters.synthesis import (
@@ -62,6 +64,7 @@ from context_engine.services.auth import MutationAuthenticationError, iso_utc, r
 from context_engine.services.chat_intent import requires_domain
 from context_engine.services.composer_refs import (
     ComposerRefError,
+    ValidatedComposerRef,
     composer_ref_fingerprint,
     normalize_composer_ref_tokens,
     persist_accepted_composer_refs,
@@ -132,6 +135,7 @@ class TurnStartResult:
     prior_user_questions: tuple[str, ...]
     request_id: str | None = None
     assembly_context: PromptAssemblyContext | None = None
+    execution_generation: int | None = None
 
 
 @dataclass(frozen=True)
@@ -492,10 +496,6 @@ def start_or_replay_turn(
         )
     except ComposerRefError as exc:
         raise ChatTurnError(exc.status_code, exc.code, exc.message) from exc
-    assembly_context = PromptAssemblyService(db).assemble(composer_validation.refs)
-    synthesis = _resolve_synthesis(db, settings)
-    prior_questions = _prior_user_questions(db, conversation.id)
-
     try:
         owner = revalidate_mutation_actor(
             db,
@@ -545,12 +545,9 @@ def start_or_replay_turn(
     conversation.updated_at = now
     conversation.version += 1
     db.add(turn)
-    db.commit()
-    db.refresh(turn)
+    db.flush()
     if composer_validation.refs:
         persist_accepted_composer_refs(db, turn_id=turn.id, refs=composer_validation.refs)
-        db.commit()
-        db.refresh(turn)
     _persist_event(
         db,
         turn=turn,
@@ -573,7 +570,11 @@ def start_or_replay_turn(
         payload=route_payload,
         commit=False,
     )
+    # Accepted refs and the accepted/route prefix are durable before a worker
+    # can claim this turn.
+    turn.claimable_at = now
     db.commit()
+    db.refresh(turn)
     safe_log(
         logger,
         "chat.turn_claimed",
@@ -588,10 +589,9 @@ def start_or_replay_turn(
     return TurnStartResult(
         turn=turn,
         replay=False,
-        synthesis=synthesis,
-        prior_user_questions=prior_questions,
+        synthesis=None,
+        prior_user_questions=(),
         request_id=request_id,
-        assembly_context=None if assembly_context.is_empty else assembly_context,
     )
 
 
@@ -1010,7 +1010,18 @@ def _persist_event(
     event_type: str,
     payload: dict[str, Any],
     commit: bool = True,
+    execution_generation: int | None = None,
 ) -> TurnStreamEvent:
+    db.refresh(turn)
+    if turn.status != TURN_STATUS_RUNNING and event_type not in {
+        TURN_EVENT_COMPLETED,
+        TURN_EVENT_FAILED,
+        TURN_EVENT_CANCELLED,
+        TURN_EVENT_REDACTED,
+    }:
+        raise RuntimeError("Cannot append an event to a terminal turn.")
+    if execution_generation is not None and turn.execution_generation != execution_generation:
+        raise RuntimeError("Turn execution lease was lost.")
     sequence = (
         db.scalar(
             select(func.coalesce(func.max(ConversationTurnEvent.sequence), 0)).where(
@@ -1104,12 +1115,18 @@ def _public_evidence_items(db: Session, turn: ConversationTurn) -> list[dict[str
     return items
 
 
-def _public_evidence_event(db: Session, turn: ConversationTurn) -> TurnStreamEvent:
+def _public_evidence_event(
+    db: Session,
+    turn: ConversationTurn,
+    *,
+    execution_generation: int | None = None,
+) -> TurnStreamEvent:
     return _persist_event(
         db,
         turn=turn,
         event_type=TURN_EVENT_EVIDENCE_DELTA,
         payload={"items": _public_evidence_items(db, turn)},
+        execution_generation=execution_generation,
     )
 
 def _public_evidence_refs_for_adapter(turn: ConversationTurn) -> tuple[PublicEvidenceRef, ...]:
@@ -1153,7 +1170,13 @@ def _persist_evidence_refs(
     *,
     turn: ConversationTurn,
     evidence: list[InternalMappedEvidence],
+    execution_generation: int | None = None,
 ) -> ConversationTurn:
+    db.refresh(turn)
+    if turn.status != TURN_STATUS_RUNNING or (
+        execution_generation is not None and turn.execution_generation != execution_generation
+    ):
+        return turn
     conversation = _lock_conversation_for_detail_change(db, turn)
     for index, item in enumerate(evidence, start=1):
         db.add(
@@ -1175,7 +1198,12 @@ def _persist_evidence_refs(
     return _refresh_turn(db, turn)
 
 
-def _finalize_turn_if_running(db: Session, turn: ConversationTurn, values: dict[str, Any]) -> bool:
+def _finalize_turn_if_running(
+    db: Session,
+    turn: ConversationTurn,
+    values: dict[str, Any],
+    execution_generation: int | None = None,
+) -> bool:
     """Compare-and-set finalize: only a still-running turn may be finalized.
 
     A concurrent redaction (source/domain delete) may already have moved the turn
@@ -1184,7 +1212,15 @@ def _finalize_turn_if_running(db: Session, turn: ConversationTurn, values: dict[
     conversation = _lock_conversation_for_detail_change(db, turn)
     result = db.execute(
         update(ConversationTurn)
-        .where(ConversationTurn.id == turn.id, ConversationTurn.status == TURN_STATUS_RUNNING)
+        .where(
+            ConversationTurn.id == turn.id,
+            ConversationTurn.status == TURN_STATUS_RUNNING,
+            *(
+                [ConversationTurn.execution_generation == execution_generation]
+                if execution_generation is not None
+                else []
+            ),
+        )
         .values(**values)
         .execution_options(synchronize_session=False)
     )
@@ -1205,6 +1241,7 @@ def _complete_turn(
     plan_step_count: int | None = None,
     retrieval_operation_count: int | None = None,
     repair_attempt_count: int | None = None,
+    execution_generation: int | None = None,
 ) -> ConversationTurn:
     now = utc_now()
     values: dict[str, Any] = {
@@ -1222,7 +1259,7 @@ def _complete_turn(
         values["retrieval_operation_count"] = retrieval_operation_count
     if repair_attempt_count is not None:
         values["repair_attempt_count"] = repair_attempt_count
-    if not _finalize_turn_if_running(db, turn, values):
+    if not _finalize_turn_if_running(db, turn, values, execution_generation):
         return turn
     db.flush()
     db.refresh(turn)
@@ -1232,6 +1269,7 @@ def _complete_turn(
         event_type=TURN_EVENT_COMPLETED,
         payload=_completed_payload(turn, replay=False),
         commit=False,
+        execution_generation=execution_generation,
     )
     db.commit()
     turn = _refresh_turn(db, turn)
@@ -1248,7 +1286,15 @@ def _complete_turn(
     return turn
 
 
-def _fail_turn(db: Session, *, turn: ConversationTurn, code: str, message: str, stop_reason: str) -> ConversationTurn:
+def _fail_turn(
+    db: Session,
+    *,
+    turn: ConversationTurn,
+    code: str,
+    message: str,
+    stop_reason: str,
+    execution_generation: int | None = None,
+) -> ConversationTurn:
     now = utc_now()
     values: dict[str, Any] = {
         "status": TURN_STATUS_FAILED,
@@ -1259,7 +1305,7 @@ def _fail_turn(db: Session, *, turn: ConversationTurn, code: str, message: str, 
         "completed_at": now,
         "updated_at": now,
     }
-    if not _finalize_turn_if_running(db, turn, values):
+    if not _finalize_turn_if_running(db, turn, values, execution_generation):
         return turn
     db.flush()
     db.refresh(turn)
@@ -1269,6 +1315,7 @@ def _fail_turn(db: Session, *, turn: ConversationTurn, code: str, message: str, 
         event_type=TURN_EVENT_FAILED,
         payload={"code": code, "message": message, "retryable": False, "replay": False},
         commit=False,
+        execution_generation=execution_generation,
     )
     db.commit()
     turn = _refresh_turn(db, turn)
@@ -1391,6 +1438,7 @@ class TurnOrchestrator:
 
     def _stream_direct(self, db: Session, *, settings: Settings, start: TurnStartResult) -> Iterator[TurnStreamEvent]:
         turn = start.turn
+        generation = start.execution_generation
         tokens: list[str] = []
         assert start.synthesis is not None
         try:
@@ -1405,7 +1453,11 @@ class TurnOrchestrator:
                 if token:
                     tokens.append(token)
                     yield _persist_event(
-                        db, turn=turn, event_type=TURN_EVENT_ANSWER_DELTA, payload={"text": token}
+                        db,
+                        turn=turn,
+                        event_type=TURN_EVENT_ANSWER_DELTA,
+                        payload={"text": token},
+                        execution_generation=generation,
                     )
         except (SynthesisAdapterError, SynthesisProviderError, Exception):
             turn = _fail_turn(
@@ -1414,6 +1466,7 @@ class TurnOrchestrator:
                 code="provider_failure",
                 message=SAFE_PROVIDER_FAILURE_MESSAGE,
                 stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
+                execution_generation=generation,
             )
             _record_turn_trace(settings, turn, request_id=start.request_id)
             yield _latest_event(db, turn)
@@ -1426,6 +1479,7 @@ class TurnOrchestrator:
                 code="provider_failure",
                 message=SAFE_PROVIDER_FAILURE_MESSAGE,
                 stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
+                execution_generation=generation,
             )
             _record_turn_trace(settings, turn, request_id=start.request_id)
             yield _latest_event(db, turn)
@@ -1438,6 +1492,7 @@ class TurnOrchestrator:
             plan_step_count=0,
             retrieval_operation_count=0,
             repair_attempt_count=0,
+            execution_generation=generation,
         )
         _record_turn_trace(settings, turn, request_id=start.request_id)
         yield _latest_event(db, turn)
@@ -1450,6 +1505,7 @@ class TurnOrchestrator:
         start: TurnStartResult,
     ) -> Iterator[TurnStreamEvent]:
         turn = start.turn
+        generation = start.execution_generation
         operation = operation_for_message(turn.user_message)
         intent = intent_for_operation(operation)
         yield _persist_event(
@@ -1457,6 +1513,7 @@ class TurnOrchestrator:
             turn=turn,
             event_type=TURN_EVENT_RETRIEVAL_STARTED,
             payload={"attempt": 1, "maxAttempts": 1},
+            execution_generation=generation,
         )
         try:
             evidence = self._retrieval_port.retrieve(
@@ -1473,6 +1530,7 @@ class TurnOrchestrator:
                 code=exc.code,
                 message=exc.message,
                 stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
+                execution_generation=generation,
             )
             _record_turn_trace(settings, turn, request_id=start.request_id)
             yield _latest_event(db, turn)
@@ -1483,6 +1541,7 @@ class TurnOrchestrator:
                 turn=turn,
                 event_type=TURN_EVENT_RETRIEVAL_COMPLETED,
                 payload={"result": "no_grounded_context", "evidenceCount": 0},
+                execution_generation=generation,
             )
             turn = _complete_turn(
                 db,
@@ -1492,17 +1551,19 @@ class TurnOrchestrator:
                 plan_step_count=1,
                 retrieval_operation_count=1,
                 repair_attempt_count=0,
+                execution_generation=generation,
             )
             _record_turn_trace(settings, turn, request_id=start.request_id)
             yield _latest_event(db, turn)
             return
-        turn = _persist_evidence_refs(db, turn=turn, evidence=evidence)
-        yield _public_evidence_event(db, turn)
+        turn = _persist_evidence_refs(db, turn=turn, evidence=evidence, execution_generation=generation)
+        yield _public_evidence_event(db, turn, execution_generation=generation)
         yield _persist_event(
             db,
             turn=turn,
             event_type=TURN_EVENT_RETRIEVAL_COMPLETED,
             payload={"result": "evidence_found", "evidenceCount": len(_public_evidence_refs(turn))},
+            execution_generation=generation,
         )
         public_evidence = _public_evidence_refs_for_adapter(turn)
         tokens: list[str] = []
@@ -1524,7 +1585,11 @@ class TurnOrchestrator:
                 if token:
                     tokens.append(token)
                     yield _persist_event(
-                        db, turn=turn, event_type=TURN_EVENT_ANSWER_DELTA, payload={"text": token}
+                        db,
+                        turn=turn,
+                        event_type=TURN_EVENT_ANSWER_DELTA,
+                        payload={"text": token},
+                        execution_generation=generation,
                     )
                     answer_delta_persisted = True
         except (SynthesisAdapterError, SynthesisProviderError, Exception):
@@ -1535,6 +1600,7 @@ class TurnOrchestrator:
                     code="provider_failure",
                     message=SAFE_PROVIDER_FAILURE_MESSAGE,
                     stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
+                    execution_generation=generation,
                 )
             else:
                 turn = _complete_turn(
@@ -1545,6 +1611,7 @@ class TurnOrchestrator:
                     plan_step_count=1,
                     retrieval_operation_count=1,
                     repair_attempt_count=0,
+                    execution_generation=generation,
                 )
             _record_turn_trace(
                 settings,
@@ -1564,6 +1631,7 @@ class TurnOrchestrator:
                     code="provider_failure",
                     message=SAFE_PROVIDER_FAILURE_MESSAGE,
                     stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
+                    execution_generation=generation,
                 )
             else:
                 turn = _complete_turn(
@@ -1574,6 +1642,7 @@ class TurnOrchestrator:
                     plan_step_count=1,
                     retrieval_operation_count=1,
                     repair_attempt_count=0,
+                    execution_generation=generation,
                 )
             _record_turn_trace(
                 settings,
@@ -1592,6 +1661,7 @@ class TurnOrchestrator:
             plan_step_count=1,
             retrieval_operation_count=1,
             repair_attempt_count=0,
+            execution_generation=generation,
         )
         _record_turn_trace(
             settings,
@@ -1601,6 +1671,174 @@ class TurnOrchestrator:
             citation_count=len(_public_evidence_refs(turn)),
         )
         yield _latest_event(db, turn)
+
+
+def _accepted_refs_for_worker(turn: ConversationTurn) -> tuple[ValidatedComposerRef, ...]:
+    return tuple(
+        ValidatedComposerRef(
+            order=ref.ref_order,
+            kind=ref.ref_kind,
+            label=ref.safe_label,
+            description=ref.safe_description,
+            domain_id=ref.domain_id,
+            source_document_id=ref.source_document_id,
+            source_block_id=ref.source_block_id,
+            evidence_ref_id=ref.evidence_ref_id,
+            prompt_template_id=ref.prompt_template_id,
+        )
+        for ref in sorted(turn.composer_refs, key=lambda ref: (ref.ref_order, ref.id))
+        if ref.redacted_at is None
+    )
+
+
+def _has_answer_delta(db: Session, turn: ConversationTurn) -> bool:
+    return (
+        db.scalar(
+            select(ConversationTurnEvent.id)
+            .where(
+                ConversationTurnEvent.turn_id == turn.id,
+                ConversationTurnEvent.event_type == TURN_EVENT_ANSWER_DELTA,
+            )
+            .limit(1)
+        )
+        is not None
+    )
+
+
+class ConversationTurnWorker:
+    """Claims accepted turns and owns all retrieval/synthesis execution."""
+
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        synthesis_adapter: SynthesisStreamAdapter | RegistrySynthesisStreamAdapter | None = None,
+        retrieval_port: P6RetrievalPort | None = None,
+    ) -> None:
+        self._settings = settings
+        self._synthesis_adapter = synthesis_adapter
+        self._retrieval_port = retrieval_port
+
+    def run_once(self, db: Session) -> bool:
+        turn = self._claim_next_turn(db)
+        if turn is None:
+            return False
+        generation = turn.execution_generation
+        if _has_answer_delta(db, turn):
+            _fail_turn(
+                db,
+                turn=turn,
+                code="provider_failure",
+                message=SAFE_PROVIDER_FAILURE_MESSAGE,
+                stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
+                execution_generation=generation,
+            )
+            return True
+        try:
+            synthesis = _resolve_synthesis(db, self._settings)
+            assembly = PromptAssemblyService(db).assemble(_accepted_refs_for_worker(turn))
+            start = TurnStartResult(
+                turn=turn,
+                replay=False,
+                synthesis=synthesis,
+                prior_user_questions=_prior_user_questions(db, turn.conversation_id),
+                assembly_context=None if assembly.is_empty else assembly,
+                execution_generation=generation,
+            )
+            # Event persistence is the worker's durable side effect. The
+            # iterator is intentionally exhausted here, never by HTTP.
+            list(
+                TurnOrchestrator(
+                    synthesis_adapter=self._synthesis_adapter,
+                    retrieval_port=self._retrieval_port,
+                ).stream_turn(db, settings=self._settings, start=start)
+            )
+        except ChatTurnError as exc:
+            _fail_turn(
+                db,
+                turn=turn,
+                code=exc.code,
+                message=exc.message,
+                stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
+                execution_generation=generation,
+            )
+        except RuntimeError:
+            # A lease/status fence intentionally rejects stale execution.
+            db.rollback()
+        return True
+
+    def _claim_next_turn(self, db: Session) -> ConversationTurn | None:
+        now = utc_now()
+        lease_expired = ConversationTurn.lease_expires_at.is_not(None) & (
+            ConversationTurn.lease_expires_at < now
+        )
+        turn = db.scalar(
+            select(ConversationTurn)
+            .options(selectinload(ConversationTurn.composer_refs))
+            .where(
+                ConversationTurn.status == TURN_STATUS_RUNNING,
+                ConversationTurn.claimable_at.is_not(None),
+                ConversationTurn.claimable_at <= now,
+                or_(ConversationTurn.lease_expires_at.is_(None), lease_expired),
+            )
+            .order_by(ConversationTurn.claimable_at, ConversationTurn.created_at, ConversationTurn.id)
+            .with_for_update(skip_locked=True)
+        )
+        if turn is None:
+            return None
+        turn.lease_owner = self._settings.turn_worker_id
+        turn.lease_expires_at = now + timedelta(seconds=self._settings.turn_lease_seconds)
+        turn.execution_generation += 1
+        turn.updated_at = now
+        db.commit()
+        db.refresh(turn)
+        return turn
+
+
+def run_turn_workers_until_idle(
+    db: Session,
+    settings: Settings,
+    *,
+    synthesis_adapter: SynthesisStreamAdapter | RegistrySynthesisStreamAdapter | None = None,
+    retrieval_port: P6RetrievalPort | None = None,
+) -> None:
+    """Deterministic test helper; production workers use ``run_once``."""
+    worker = ConversationTurnWorker(
+        settings,
+        synthesis_adapter=synthesis_adapter,
+        retrieval_port=retrieval_port,
+    )
+    while worker.run_once(db):
+        pass
+
+
+def _tail_turn_events(
+    db: Session,
+    turn: ConversationTurn,
+    *,
+    after: int = 0,
+    settings: Settings,
+) -> Iterator[TurnStreamEvent]:
+    cursor = after
+    # Tests already run the worker to completion before tailing; keep the idle
+    # bound short so suites do not wait on production reconnect windows.
+    idle_seconds = 0.5 if settings.testing else float(settings.turn_tail_idle_seconds)
+    poll_seconds = 0.01 if settings.testing else settings.turn_tail_poll_milliseconds / 1000
+    idle_deadline = time.monotonic() + idle_seconds
+    while True:
+        db.expire_all()
+        current = db.get(ConversationTurn, turn.id)
+        if current is None:
+            return
+        rows = list(_stored_events(db, current, after=cursor))
+        for event in rows:
+            cursor = event.sequence
+            yield event
+        if current.status != TURN_STATUS_RUNNING:
+            return
+        if time.monotonic() >= idle_deadline:
+            return
+        time.sleep(poll_seconds)
 
 
 def stream_turn_events(
@@ -1631,8 +1869,14 @@ def stream_turn_events(
         retrieval_port=retrieval_port,
         request_id=request_id,
     )
-    orchestrator = TurnOrchestrator(synthesis_adapter=synthesis_adapter, retrieval_port=retrieval_port)
-    yield from orchestrator.stream_turn(db, settings=settings, start=start)
+    if settings.testing:
+        run_turn_workers_until_idle(
+            db,
+            settings,
+            synthesis_adapter=synthesis_adapter,
+            retrieval_port=retrieval_port,
+        )
+    yield from _tail_turn_events(db, start.turn, settings=settings)
 
 
 def stream_turn_events_by_turn(
@@ -1642,11 +1886,14 @@ def stream_turn_events_by_turn(
     conversation_id: str,
     turn_id: str,
     after: int = 0,
+    settings: Settings | None = None,
 ) -> Iterator[TurnStreamEvent]:
     if after < 0:
         raise _validation_error()
     turn = get_owned_turn(db, owner=owner, conversation_id=conversation_id, turn_id=turn_id)
-    return _stored_events(db, turn, after=after)
+    if settings is None:
+        return _stored_events(db, turn, after=after)
+    return _tail_turn_events(db, turn, after=after, settings=settings)
 
 
 
