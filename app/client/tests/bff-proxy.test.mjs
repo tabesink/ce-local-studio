@@ -94,6 +94,25 @@ describe("same-origin Context Engine BFF", () => {
     assert.equal(await response.text(), "pdf-slice");
   });
 
+  it("forwards X-Content-Type-Options nosniff on document content", async () => {
+    const request = new Request("https://context.example.test/api/v1/documents/doc1/content", {
+      method: "GET",
+      headers: { cookie: "ce_session=opaque" },
+    });
+    const response = await proxyContextEngineRequest(request, ["documents", "doc1", "content"], config, async () =>
+      new Response("%PDF", {
+        status: 200,
+        headers: {
+          "content-type": "application/pdf",
+          "x-content-type-options": "nosniff",
+          etag: '"preview-etag-1"',
+        },
+      }),
+    );
+    assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(response.headers.get("cache-control"), "private, no-store, no-transform");
+  });
+
   it("streams the upstream body and exposes only safe no-store response headers", async () => {
     const encoder = new TextEncoder();
     const body = new ReadableStream({

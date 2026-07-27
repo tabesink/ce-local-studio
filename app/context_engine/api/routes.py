@@ -1690,6 +1690,7 @@ def list_member_documents(
     response_model=DocumentDetailResponse,
     responses={
         404: {"model": ErrorEnvelope, "description": "Document not found."},
+        422: {"model": ErrorEnvelope, "description": "Request validation failed."},
     },
 )
 def get_member_document(
@@ -1724,6 +1725,7 @@ def get_member_document(
         404: {"model": ErrorEnvelope, "description": "Document not found."},
         409: {"model": ErrorEnvelope, "description": "Governed preview unavailable."},
         416: {"model": ErrorEnvelope, "description": "Range not satisfiable."},
+        422: {"model": ErrorEnvelope, "description": "Request validation failed."},
         503: {"model": ErrorEnvelope, "description": "Document content unavailable."},
     },
 )
@@ -1773,7 +1775,8 @@ def get_member_document_content(
         404: {"model": ErrorEnvelope, "description": "Evidence not found."},
         409: {"model": ErrorEnvelope, "description": "Governed preview unavailable."},
         410: {"model": ErrorEnvelope, "description": "Evidence unavailable."},
-        503: {"model": ErrorEnvelope, "description": "Document content unavailable."},
+        422: {"model": ErrorEnvelope, "description": "Request validation failed."},
+        503: {"model": ErrorEnvelope, "description": "Dependency unavailable."},
     },
 )
 def get_member_evidence_location(

@@ -28,6 +28,7 @@ const RESPONSE_HEADERS = [
   "retry-after",
   "set-cookie",
   "x-accel-buffering",
+  "x-content-type-options",
   "x-request-id",
 ] as const;
 

@@ -100,6 +100,8 @@ function DocumentsPageInner() {
   const [domains, setDomains] = useState<MemberDomain[]>([]);
   const [domainId, setDomainId] = useState(urlDomain);
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [selectedRef, setSelectedRef] = useState<string | null>(null);
   const [detail, setDetail] = useState<DocumentSummary | null>(null);
   const [preview, setPreview] = useState<PreviewState>({ kind: "idle" });
@@ -119,6 +121,7 @@ function DocumentsPageInner() {
   const locationGenerationRef = useRef(0);
   const contentAbortRef = useRef<AbortController | null>(null);
   const objectUrlRef = useRef<string | null>(null);
+  const adminSourcesRef = useRef<AdminSource[]>([]);
   const identityKey = user ? `${user.id}:${user.role}` : null;
 
   const clearObjectUrl = useCallback(() => {
@@ -149,6 +152,7 @@ function DocumentsPageInner() {
     contentAbortRef.current?.abort();
     contentAbortRef.current = null;
     selectionGenerationRef.current += 1;
+    locationGenerationRef.current += 1;
     setSelectedRef(null);
     setDetail(null);
     setOutline([]);
@@ -167,6 +171,7 @@ function DocumentsPageInner() {
   useEffect(() => {
     closeViewer();
     setDocuments([]);
+    setNextCursor(null);
     setAdminSources([]);
     setError(null);
   }, [identityKey, closeViewer]);
@@ -196,24 +201,55 @@ function DocumentsPageInner() {
     if (!user) return;
     const generation = ++listGenerationRef.current;
     setLoading(true);
+    setLoadingMore(false);
     setError(null);
     try {
-      const { documents: rows } = await listDocuments({
+      const { documents: rows, nextCursor: cursor } = await listDocuments({
         domainId: domainId || null,
       });
       if (listGenerationRef.current !== generation) return;
       setDocuments(rows);
-      if (selectedRef && !rows.some((row) => row.ref === selectedRef)) {
+      setNextCursor(cursor);
+      if (
+        selectedRef &&
+        !rows.some((row) => row.ref === selectedRef) &&
+        !adminSourcesRef.current.some((source) => source.documentRef === selectedRef)
+      ) {
         closeViewer();
       }
     } catch (err) {
       if (listGenerationRef.current !== generation) return;
       setDocuments([]);
+      setNextCursor(null);
       setError(errorMessage(err));
     } finally {
       if (listGenerationRef.current === generation) setLoading(false);
     }
   }, [user, domainId, selectedRef, closeViewer]);
+
+  const loadMoreDocuments = useCallback(async () => {
+    if (!user || !nextCursor || loadingMore) return;
+    const generation = listGenerationRef.current;
+    setLoadingMore(true);
+    setError(null);
+    try {
+      const { documents: rows, nextCursor: cursor } = await listDocuments({
+        domainId: domainId || null,
+        cursor: nextCursor,
+      });
+      if (listGenerationRef.current !== generation) return;
+      setDocuments((current) => {
+        const seen = new Set(current.map((row) => row.ref));
+        return [...current, ...rows.filter((row) => !seen.has(row.ref))];
+      });
+      setNextCursor(cursor);
+    } catch (err) {
+      if (listGenerationRef.current !== generation) return;
+      setError(errorMessage(err));
+    } finally {
+      if (listGenerationRef.current === generation) setLoadingMore(false);
+    }
+  }, [user, nextCursor, loadingMore, domainId]);
 
   useEffect(() => {
     void reloadLibrary();
@@ -221,14 +257,17 @@ function DocumentsPageInner() {
 
   const reloadAdminSources = useCallback(async () => {
     if (!user || !isAdmin || !domainId) {
+      adminSourcesRef.current = [];
       setAdminSources([]);
       return;
     }
     try {
       const rows = await listAdminSources(domainId);
+      adminSourcesRef.current = rows;
       setAdminSources(rows);
     } catch (err) {
       setError(errorMessage(err));
+      adminSourcesRef.current = [];
       setAdminSources([]);
     }
   }, [user, isAdmin, domainId]);
@@ -250,8 +289,12 @@ function DocumentsPageInner() {
       setPreviewSafe({ kind: "loading" });
       try {
         const { blob } = await fetchDocumentContent(documentRef, { signal: controller.signal });
-        if (selectionGenerationRef.current !== generation) return;
+        if (selectionGenerationRef.current !== generation || controller.signal.aborted) return;
         const objectUrl = URL.createObjectURL(blob);
+        if (selectionGenerationRef.current !== generation || controller.signal.aborted) {
+          revokeObjectUrl(objectUrl);
+          return;
+        }
         setPreviewSafe({ kind: "pdf", objectUrl, page, exactLocationUnavailable });
       } catch (err) {
         if (controller.signal.aborted || selectionGenerationRef.current !== generation) return;
@@ -263,7 +306,15 @@ function DocumentsPageInner() {
           });
           return;
         }
-        if (isApiError(err) && (err.status === 404 || err.status === 410 || err.code === "evidence_unavailable")) {
+        if (isApiError(err) && (err.status === 404 || err.code === "document_not_found")) {
+          setPreviewSafe({
+            kind: "unavailable",
+            message: "Document is not available.",
+            requestId: err.requestId,
+          });
+          return;
+        }
+        if (isApiError(err) && (err.status === 410 || err.code === "evidence_unavailable")) {
           setPreviewSafe({
             kind: "unavailable",
             message: "Evidence no longer available.",
@@ -283,6 +334,7 @@ function DocumentsPageInner() {
 
   const openDocument = useCallback(
     async (documentRef: string, options?: { page?: number | null; exactLocationUnavailable?: boolean }) => {
+      locationGenerationRef.current += 1;
       const generation = ++selectionGenerationRef.current;
       setSelectedRef(documentRef);
       setDetail(null);
@@ -303,7 +355,15 @@ function DocumentsPageInner() {
         }
       } catch (err) {
         if (selectionGenerationRef.current !== generation) return;
-        if (isApiError(err) && (err.status === 404 || err.status === 410)) {
+        if (isApiError(err) && (err.status === 404 || err.code === "document_not_found")) {
+          setPreviewSafe({
+            kind: "unavailable",
+            message: "Document is not available.",
+            requestId: err.requestId,
+          });
+          return;
+        }
+        if (isApiError(err) && (err.status === 410 || err.code === "evidence_unavailable")) {
           setPreviewSafe({
             kind: "unavailable",
             message: "Evidence no longer available.",
@@ -319,6 +379,23 @@ function DocumentsPageInner() {
       }
     },
     [loadPdfContent, setPreviewSafe],
+  );
+
+  const openAdminOnlySource = useCallback(
+    (source: AdminSource) => {
+      locationGenerationRef.current += 1;
+      selectionGenerationRef.current += 1;
+      contentAbortRef.current?.abort();
+      contentAbortRef.current = null;
+      setSelectedRef(source.documentRef);
+      setDetail(null);
+      setAnchorNotice(null);
+      setPreviewSafe({
+        kind: "unavailable",
+        message: "This source is not yet available in the member library.",
+      });
+    },
+    [setPreviewSafe],
   );
 
   // Inbound deep link: evidence location (server anchor wins over URL page hint).
@@ -393,11 +470,29 @@ function DocumentsPageInner() {
     };
   }, [isAdmin, selectedAdminSource]);
 
+  type LibraryRow =
+    | { kind: "library"; doc: DocumentSummary }
+    | { kind: "adminOnly"; source: AdminSource };
+
+  const libraryRows = useMemo((): LibraryRow[] => {
+    const rows: LibraryRow[] = documents.map((doc) => ({ kind: "library", doc }));
+    if (!isAdmin) return rows;
+    const seen = new Set(documents.map((doc) => doc.ref));
+    for (const source of adminSources) {
+      if (seen.has(source.documentRef) || source.state === "deleting") continue;
+      rows.push({ kind: "adminOnly", source });
+    }
+    return rows;
+  }, [documents, adminSources, isAdmin]);
+
   const filtered = useMemo(() => {
     const needle = filter.trim().toLowerCase();
-    if (!needle) return documents;
-    return documents.filter((row) => row.label.toLowerCase().includes(needle));
-  }, [filter, documents]);
+    if (!needle) return libraryRows;
+    return libraryRows.filter((row) => {
+      const label = row.kind === "library" ? row.doc.label : row.source.displayName;
+      return label.toLowerCase().includes(needle);
+    });
+  }, [filter, libraryRows]);
 
   if (!user) {
     return <PageState title="Library" message="Sign in to browse Source Documents." />;
@@ -519,53 +614,103 @@ function DocumentsPageInner() {
           {filtered.length === 0 && !loading ? (
             <EmptySafeNotice>No Source Documents available for this Knowledge Domain.</EmptySafeNotice>
           ) : (
-            <Table>
-              <THead>
-                <tr>
-                  <TH>Filename</TH>
-                  <TH>Preview</TH>
-                  <TH>Domain</TH>
-                  <TH align="right">Pages</TH>
-                  <TH align="right">Updated</TH>
-                </tr>
-              </THead>
-              <TBody>
-                {filtered.map((doc) => (
-                  <TRow
-                    key={doc.ref}
-                    interactive
-                    onClick={() => void openDocument(doc.ref)}
-                    data-selected={selectedRef === doc.ref ? "true" : undefined}
-                  >
-                    <TCell className="max-w-64">
-                      <span
-                        className="flex items-center gap-2"
-                        data-testid={`documents-row-${doc.ref}`}
-                        data-filename={doc.label}
-                        data-document-ref={doc.ref}
+            <>
+              <Table>
+                <THead>
+                  <tr>
+                    <TH>Filename</TH>
+                    <TH>Preview</TH>
+                    <TH>Domain</TH>
+                    <TH align="right">Pages</TH>
+                    <TH align="right">Updated</TH>
+                  </tr>
+                </THead>
+                <TBody>
+                  {filtered.map((row) => {
+                    if (row.kind === "adminOnly") {
+                      const source = row.source;
+                      return (
+                        <TRow
+                          key={`admin-${source.id}`}
+                          interactive
+                          onClick={() => openAdminOnlySource(source)}
+                          data-selected={selectedRef === source.documentRef ? "true" : undefined}
+                        >
+                          <TCell className="max-w-64">
+                            <span
+                              className="flex items-center gap-2"
+                              data-testid={`documents-row-${source.documentRef}`}
+                              data-filename={source.displayName}
+                              data-document-ref={source.documentRef}
+                              data-admin-only="true"
+                            >
+                              <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--dim)]" />
+                              <span className="truncate text-[length:var(--fs-sm)] text-[var(--fg)]">
+                                {source.displayName}
+                              </span>
+                            </span>
+                          </TCell>
+                          <TCell>
+                            <StatusPill tone="warning">ops</StatusPill>
+                          </TCell>
+                          <TCell className="max-w-40 truncate text-[length:var(--fs-sm)] text-[var(--dim)]">
+                            {domains.find((domain) => domain.id === source.domainId)?.displayName ?? "—"}
+                          </TCell>
+                          <TCell align="right" className="font-mono text-[length:var(--fs-xs)] text-[var(--dim)]">
+                            —
+                          </TCell>
+                          <TCell align="right" className="whitespace-nowrap font-mono text-[length:var(--fs-xs)] text-[var(--dim)]">
+                            {new Date(source.updatedAt).toLocaleString()}
+                          </TCell>
+                        </TRow>
+                      );
+                    }
+                    const doc = row.doc;
+                    return (
+                      <TRow
+                        key={doc.ref}
+                        interactive
+                        onClick={() => void openDocument(doc.ref)}
+                        data-selected={selectedRef === doc.ref ? "true" : undefined}
                       >
-                        <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--dim)]" />
-                        <span className="truncate text-[length:var(--fs-sm)] text-[var(--fg)]">{doc.label}</span>
-                      </span>
-                    </TCell>
-                    <TCell>
-                      <StatusPill tone={doc.previewKind === "pdf" ? "good" : "warning"}>
-                        {doc.previewKind}
-                      </StatusPill>
-                    </TCell>
-                    <TCell className="max-w-40 truncate text-[length:var(--fs-sm)] text-[var(--dim)]">
-                      {doc.domain.displayName}
-                    </TCell>
-                    <TCell align="right" className="font-mono text-[length:var(--fs-xs)] text-[var(--dim)]">
-                      {doc.pageCount ?? "—"}
-                    </TCell>
-                    <TCell align="right" className="whitespace-nowrap font-mono text-[length:var(--fs-xs)] text-[var(--dim)]">
-                      {new Date(doc.updatedAt).toLocaleString()}
-                    </TCell>
-                  </TRow>
-                ))}
-              </TBody>
-            </Table>
+                        <TCell className="max-w-64">
+                          <span
+                            className="flex items-center gap-2"
+                            data-testid={`documents-row-${doc.ref}`}
+                            data-filename={doc.label}
+                            data-document-ref={doc.ref}
+                          >
+                            <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--dim)]" />
+                            <span className="truncate text-[length:var(--fs-sm)] text-[var(--fg)]">{doc.label}</span>
+                          </span>
+                        </TCell>
+                        <TCell>
+                          <StatusPill tone={doc.previewKind === "pdf" ? "good" : "warning"}>
+                            {doc.previewKind}
+                          </StatusPill>
+                        </TCell>
+                        <TCell className="max-w-40 truncate text-[length:var(--fs-sm)] text-[var(--dim)]">
+                          {doc.domain.displayName}
+                        </TCell>
+                        <TCell align="right" className="font-mono text-[length:var(--fs-xs)] text-[var(--dim)]">
+                          {doc.pageCount ?? "—"}
+                        </TCell>
+                        <TCell align="right" className="whitespace-nowrap font-mono text-[length:var(--fs-xs)] text-[var(--dim)]">
+                          {new Date(doc.updatedAt).toLocaleString()}
+                        </TCell>
+                      </TRow>
+                    );
+                  })}
+                </TBody>
+              </Table>
+              {nextCursor ? (
+                <div className="mt-3" data-testid="documents-load-more">
+                  <SettingsButton disabled={loadingMore} onClick={() => void loadMoreDocuments()}>
+                    {loadingMore ? "Loading…" : "Load more"}
+                  </SettingsButton>
+                </div>
+              ) : null}
+            </>
           )}
           {!isAdmin ? (
             <div data-testid="documents-member-readonly" className="sr-only">

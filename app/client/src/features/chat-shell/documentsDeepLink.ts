@@ -10,6 +10,10 @@ export type DocumentsDeepLinkFields = {
   documentRef?: string | null;
   evidenceRef?: string | null;
   page?: number | null;
+  /** Opaque conversation ref for return-to-chat when history Back is unavailable. */
+  conversation?: string | null;
+  /** Opaque turn ref for return-to-chat when history Back is unavailable. */
+  turn?: string | null;
 };
 
 /** Library preview surface enabled after P9-03 member content/location path. */
@@ -37,6 +41,13 @@ export function buildDocumentsDeepLinkHref(fields: DocumentsDeepLinkFields): str
 
   if (typeof fields.page === "number" && Number.isFinite(fields.page) && fields.page > 0) {
     params.set("page", String(Math.trunc(fields.page)));
+  }
+
+  const conversation = nonEmpty(fields.conversation);
+  const turn = nonEmpty(fields.turn);
+  if (conversation && turn) {
+    params.set("conversation", conversation);
+    params.set("turn", turn);
   }
 
   return `/documents?${params.toString()}`;

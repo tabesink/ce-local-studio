@@ -11,7 +11,14 @@ from context_engine.config import Settings
 from context_engine.models import (
     SOURCE_BLOCK_KIND_TEXT,
     SOURCE_INDEX_STATE_READY,
+    SOURCE_STATE_DELETING,
     SOURCE_STATE_PREPARED,
+    TURN_ROUTE_DIRECT_LLM,
+    TURN_STATUS_COMPLETED,
+    TURN_STATUS_REDACTED,
+    Conversation,
+    ConversationTurn,
+    ConversationTurnEvidenceRef,
     Domain,
     SourceBlock,
     SourceDocument,
@@ -21,6 +28,7 @@ from context_engine.services.documents import (
     DocumentError,
     content_disposition_for_label,
     get_document_content,
+    get_evidence_location,
     parse_byte_range,
     preview_etag,
     preview_kind_for_source,
@@ -269,4 +277,251 @@ def test_get_document_content_rejects_non_pdf_original(
     )
     with pytest.raises(DocumentError) as exc_info:
         get_document_content(_ScalarSession(), settings, source.public_ref)
+    assert exc_info.value.code == "document_preview_unavailable"
+
+
+class _LocationSession:
+    """Minimal session stub that exercises get_evidence_location ownership fences."""
+
+    def __init__(
+        self,
+        *,
+        evidence: ConversationTurnEvidenceRef | None,
+        turn: ConversationTurn | None = None,
+        conversation: Conversation | None = None,
+        source: SourceDocument | None = None,
+        block: SourceBlock | None = None,
+        domain: Domain | None = None,
+        page_count: int | None = 18,
+    ) -> None:
+        self._evidence = evidence
+        self._page_count = page_count
+        self._by_key: dict[tuple[type, str], object] = {}
+        for entity in (turn, conversation, source, block, domain):
+            if entity is not None:
+                self._by_key[(type(entity), entity.id)] = entity
+
+    def scalar(self, statement):  # noqa: ANN001
+        entity = None
+        try:
+            entity = statement.column_descriptions[0].get("entity")
+        except Exception:
+            entity = None
+        if entity is ConversationTurnEvidenceRef:
+            return self._evidence
+        return self._page_count
+
+    def get(self, model, key):  # noqa: ANN001
+        return self._by_key.get((model, key))
+
+
+def _location_graph(*, owner_user_id: str = "user-owner"):
+    domain = _domain()
+    source = _source()
+    block = SourceBlock(
+        id=str(uuid4()),
+        source_document_id=source.id,
+        domain_id=domain.id,
+        source_order=1,
+        kind=SOURCE_BLOCK_KIND_TEXT,
+        canonical_markdown="private body",
+        page_start=18,
+        page_end=18,
+        section_path="4.2 Relief valve",
+        created_at=datetime(2026, 7, 25, 12, 0, 0),
+    )
+    conversation = Conversation(
+        id=str(uuid4()),
+        public_ref="conv_" + "c" * 32,
+        owner_user_id=owner_user_id,
+        title="Pump question",
+        created_at=datetime(2026, 7, 25, 12, 0, 0),
+        updated_at=datetime(2026, 7, 25, 12, 0, 0),
+    )
+    turn = ConversationTurn(
+        id=str(uuid4()),
+        public_ref="turn_" + "t" * 32,
+        conversation_id=conversation.id,
+        client_request_id="loc-req-1",
+        route=TURN_ROUTE_DIRECT_LLM,
+        status=TURN_STATUS_COMPLETED,
+        user_message="Where is the relief valve?",
+        assistant_answer="See [1].",
+        created_at=datetime(2026, 7, 25, 12, 0, 0),
+        updated_at=datetime(2026, 7, 25, 12, 0, 0),
+    )
+    evidence = ConversationTurnEvidenceRef(
+        id=str(uuid4()),
+        public_ref="ev_" + "e" * 32,
+        turn_id=turn.id,
+        evidence_order=1,
+        source_document_id=source.id,
+        source_block_id=block.id,
+        citation_label="[1]",
+        source_label="pump-service-manual.pdf",
+        excerpt="relief valve",
+        created_at=datetime(2026, 7, 25, 12, 0, 0),
+    )
+    return domain, source, block, conversation, turn, evidence
+
+
+def test_get_evidence_location_success_for_owner(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    domain, source, block, conversation, turn, evidence = _location_graph()
+    settings = Settings(
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'loc-ok.db'}",
+        testing=True,
+        source_storage_root=str(tmp_path / "source-root"),
+    )
+    monkeypatch.setattr(documents_module, "source_is_query_eligible", lambda *_a, **_k: True)
+    session = _LocationSession(
+        evidence=evidence,
+        turn=turn,
+        conversation=conversation,
+        source=source,
+        block=block,
+        domain=domain,
+    )
+
+    payload = get_evidence_location(
+        session,
+        settings,
+        owner_user_id="user-owner",
+        evidence_ref=evidence.public_ref,
+    )
+    dto = EvidenceLocationResponseDto.model_validate(payload)
+    assert dto.evidence.id == evidence.public_ref
+    assert dto.document.ref == source.public_ref
+    assert dto.anchor.page_number == 18
+    assert dto.anchor.section_label == "4.2 Relief valve"
+    assert "private body" not in str(payload)
+    assert source.id not in str(payload)
+    assert block.id not in str(payload)
+
+
+def test_get_evidence_location_wrong_owner_is_404(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    domain, source, block, conversation, turn, evidence = _location_graph()
+    settings = Settings(
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'loc-owner.db'}",
+        testing=True,
+        source_storage_root=str(tmp_path / "source-root"),
+    )
+    monkeypatch.setattr(documents_module, "source_is_query_eligible", lambda *_a, **_k: True)
+    session = _LocationSession(
+        evidence=evidence,
+        turn=turn,
+        conversation=conversation,
+        source=source,
+        block=block,
+        domain=domain,
+    )
+    with pytest.raises(DocumentError) as exc_info:
+        get_evidence_location(
+            session,
+            settings,
+            owner_user_id="user-other",
+            evidence_ref=evidence.public_ref,
+        )
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.code == "evidence_not_found"
+
+
+def test_get_evidence_location_unknown_ref_is_404(tmp_path: Path) -> None:
+    settings = Settings(
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'loc-missing.db'}",
+        testing=True,
+        source_storage_root=str(tmp_path / "source-root"),
+    )
+    with pytest.raises(DocumentError) as exc_info:
+        get_evidence_location(
+            _LocationSession(evidence=None),
+            settings,
+            owner_user_id="user-owner",
+            evidence_ref="ev_" + "z" * 32,
+        )
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.code == "evidence_not_found"
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        "redacted_turn",
+        "redacted_evidence",
+        "deleting_source",
+        "ineligible",
+    ],
+)
+def test_get_evidence_location_delete_and_redaction_fences(
+    mutate: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    domain, source, block, conversation, turn, evidence = _location_graph()
+    eligible = True
+    if mutate == "redacted_turn":
+        turn.status = TURN_STATUS_REDACTED
+    elif mutate == "redacted_evidence":
+        evidence.redacted_at = datetime(2026, 7, 25, 13, 0, 0)
+        evidence.citation_label = None
+        evidence.source_label = None
+        evidence.excerpt = None
+    elif mutate == "deleting_source":
+        source.state = SOURCE_STATE_DELETING
+    else:
+        eligible = False
+
+    settings = Settings(
+        database_url=f"sqlite+pysqlite:///{tmp_path / f'loc-{mutate}.db'}",
+        testing=True,
+        source_storage_root=str(tmp_path / "source-root"),
+    )
+    monkeypatch.setattr(documents_module, "source_is_query_eligible", lambda *_a, **_k: eligible)
+    session = _LocationSession(
+        evidence=evidence,
+        turn=turn,
+        conversation=conversation,
+        source=source,
+        block=block,
+        domain=domain,
+    )
+    with pytest.raises(DocumentError) as exc_info:
+        get_evidence_location(
+            session,
+            settings,
+            owner_user_id="user-owner",
+            evidence_ref=evidence.public_ref,
+        )
+    assert exc_info.value.status_code == 410
+    assert exc_info.value.code == "evidence_unavailable"
+
+
+def test_get_evidence_location_non_pdf_preview_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    domain, source, block, conversation, turn, evidence = _location_graph()
+    source.content_type = "text/markdown"
+    source.original_filename = "notes.md"
+    settings = Settings(
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'loc-nonpdf.db'}",
+        testing=True,
+        source_storage_root=str(tmp_path / "source-root"),
+    )
+    monkeypatch.setattr(documents_module, "source_is_query_eligible", lambda *_a, **_k: True)
+    session = _LocationSession(
+        evidence=evidence,
+        turn=turn,
+        conversation=conversation,
+        source=source,
+        block=block,
+        domain=domain,
+    )
+    with pytest.raises(DocumentError) as exc_info:
+        get_evidence_location(
+            session,
+            settings,
+            owner_user_id="user-owner",
+            evidence_ref=evidence.public_ref,
+        )
+    assert exc_info.value.status_code == 409
     assert exc_info.value.code == "document_preview_unavailable"

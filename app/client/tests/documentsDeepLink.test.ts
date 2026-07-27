@@ -20,6 +20,19 @@ describe("documentsDeepLink outbound (P9-03 U6)", () => {
     expect(href).toBe("/documents?document=doc_safe_7&evidence=ev_safe_12&page=18");
   });
 
+  it("includes return-to-chat conversation/turn when both are present", () => {
+    const href = buildDocumentsDeepLinkHref({
+      documentRef: "doc_safe_7",
+      evidenceRef: "ev_safe_12",
+      page: 18,
+      conversation: "conv_1",
+      turn: "turn_9",
+    });
+    expect(href).toBe(
+      "/documents?document=doc_safe_7&evidence=ev_safe_12&page=18&conversation=conv_1&turn=turn_9",
+    );
+  });
+
   it("omits page when absent and returns null when refs are missing", () => {
     expect(
       buildDocumentsDeepLinkHref({

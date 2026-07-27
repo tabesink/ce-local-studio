@@ -4327,11 +4327,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Request validation failed."
           }
         },
         "summary": "Get Member Document"
@@ -4445,11 +4445,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Request validation failed."
           },
           "503": {
             "content": {
@@ -4624,11 +4624,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Request validation failed."
           },
           "503": {
             "content": {
@@ -4638,7 +4638,7 @@
                 }
               }
             },
-            "description": "Document content unavailable."
+            "description": "Dependency unavailable."
           }
         },
         "summary": "Get Member Evidence Location"
