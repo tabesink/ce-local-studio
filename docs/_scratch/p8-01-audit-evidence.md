@@ -63,3 +63,7 @@ CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL=postgresql+psycopg://postgres:postgres@12
 - Nested delete-fence outer-audit rollback on PostgreSQL remains covered by
   existing delete-redaction PG proofs when harness available; not re-run in
   this evidence capture.
+- Broader AE6 privacy fixtures (credential rotate, upload filename, redaction
+  excerpt plant → audit-row scan) and HTTP TestClient proof of member
+  `/admin/*` → `503 audit_unavailable` on injected denial-audit failure remain
+  follow-ups; unit denial-matrix + conversation title privacy scans landed.

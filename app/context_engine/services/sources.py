@@ -572,19 +572,27 @@ def retry_source(
         raise SourceError(409, "operation_conflict", "Source preparation is already in progress.")
     # Parser kind remains the value frozen at upload; do not re-read runtime defaults.
     frozen_parser_kind = source.parser_kind
-    now = utc_now()
-    source.preparation_generation += 1
-    source.version += 1
-    source.updated_at = now
-    source.parser_kind = frozen_parser_kind
-    operation = _new_prepare_operation(
-        source=source,
-        requested_by_user=requested_by_user,
-        request_id=audit_context.request_id if audit_context is not None else None,
-        message="Preparation queued.",
-    )
+    operation_id = str(uuid.uuid4())
 
     def mutate() -> SourcePreparationOperation:
+        now = utc_now()
+        source.preparation_generation += 1
+        source.version += 1
+        source.updated_at = now
+        source.parser_kind = frozen_parser_kind
+        operation = SourcePreparationOperation(
+            id=operation_id,
+            source_document_id=source.id,
+            domain_id=source.domain_id,
+            operation_type=SOURCE_PREP_OPERATION_PREPARE,
+            status=SOURCE_PREP_STATUS_QUEUED,
+            preparation_generation_at_start=source.preparation_generation,
+            requested_by_user_id=requested_by_user.id,
+            request_id=audit_context.request_id if audit_context is not None else None,
+            message="Preparation queued.",
+            created_at=now,
+            updated_at=now,
+        )
         db.add(operation)
         db.flush()
         return operation
@@ -597,14 +605,14 @@ def retry_source(
                 event_name=AUDIT_EVENT_SOURCE_PREPARATION_RETRIED,
                 context=audit_context,
                 target_kind="source_preparation_operation",
-                target_id=operation.id,
+                target_id=operation_id,
                 metadata={
-                    "operationType": operation.operation_type,
-                    "operationStatus": operation.status,
+                    "operationType": SOURCE_PREP_OPERATION_PREPARE,
+                    "operationStatus": SOURCE_PREP_STATUS_QUEUED,
                 },
             )
         else:
-            mutate()
+            operation = mutate()
             db.commit()
     except IntegrityError as exc:
         db.rollback()

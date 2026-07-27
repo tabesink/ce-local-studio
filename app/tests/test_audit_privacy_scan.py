@@ -138,3 +138,22 @@ def test_audit_metadata_keys_closed_for_planted_content(db: Session) -> None:
             },
         )
     assert db.scalars(select(AuditEvent)).first() is None
+
+
+def test_direct_audit_record_rejects_smuggled_forbidden_metadata_keys(db: Session) -> None:
+    from context_engine.services.audit import AuditError, AuditService
+
+    for key, value in (
+        ("credential", "SECRET_CREDENTIAL_SENTINEL"),
+        ("path", "https://runtime.example.invalid/path"),
+        ("objectKey", "s3://bucket/object-key"),
+        ("prompt", "SECRET_PROMPT_SENTINEL"),
+        ("excerpt", "SECRET_EXCERPT_SENTINEL"),
+    ):
+        with pytest.raises(AuditError):
+            AuditService(db).record(
+                "source.uploaded",
+                context=AuditContext(actor_kind="administrator", request_id="req-meta-2"),
+                metadata={key: value},
+            )
+    assert list(db.scalars(select(AuditEvent))) == []
