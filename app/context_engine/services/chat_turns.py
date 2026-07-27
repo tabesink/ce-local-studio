@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import uuid
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
@@ -63,7 +64,7 @@ from context_engine.services.composer_refs import (
     validate_composer_ref_tokens,
 )
 from context_engine.services.conversations import get_owned_conversation, lock_owned_conversation
-from context_engine.services.domains import controller_from_settings, domain_available
+from context_engine.services.domains import DOMAIN_ID_PATTERN, controller_from_settings, domain_available
 from context_engine.services.evidence import (
     EvidenceRetrievalError,
     InternalMappedEvidence,
@@ -94,6 +95,7 @@ CLIENT_REQUEST_ID_MIN_CHARS = 8
 CLIENT_REQUEST_ID_MAX_CHARS = 80
 TURN_MESSAGE_MAX_CHARS = 4000
 MAX_PRIOR_USER_QUESTIONS = 4
+_DOMAIN_ID_RE = re.compile(DOMAIN_ID_PATTERN)
 SAFE_PROVIDER_FAILURE_MESSAGE = "The answer could not be completed."
 SAFE_TURN_CANCELLED_MESSAGE = "The answer was cancelled."
 RETRIEVAL_INTENTS = ("fact", "overview", "verbatim")
@@ -245,7 +247,7 @@ def normalize_optional_domain_id(value: str | None) -> str | None:
     if value is None:
         return None
     domain_id = value.strip()
-    if not domain_id or len(domain_id) > 64:
+    if not domain_id or _DOMAIN_ID_RE.fullmatch(domain_id) is None:
         raise _validation_error()
     return domain_id
 
