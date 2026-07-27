@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import timedelta
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -12,11 +13,25 @@ from sqlalchemy.orm import Session
 
 from context_engine.config import Settings
 from context_engine.db import Base, utc_now
-from context_engine.models import AuditEvent, AuthSession, User
+from context_engine.models import (
+    DOMAIN_STATE_STOPPED,
+    ROLE_ADMINISTRATOR,
+    TURN_ROUTE_DIRECT_LLM,
+    TURN_STATUS_COMPLETED,
+    TURN_STOP_REASON_DIRECT_LLM,
+    AuditEvent,
+    AuthSession,
+    ConversationTurn,
+    ConversationTurnEvidenceRef,
+    Domain,
+    User,
+)
 from context_engine.services.audit import ALLOWED_AUDIT_METADATA_KEYS, AuditContext
+from context_engine.services.auth import create_user
+from context_engine.services.chat_turns import redact_turns_for_domain
 from context_engine.services.conversations import create_conversation, update_conversation_title
-
-SERVICE_SETTINGS = Settings(testing=True)
+from context_engine.services.runtime_config import SecretCrypto, rotate_provider_credential, seed_runtime_config
+from context_engine.services.sources import upload_source_bytes
 
 FORBIDDEN_SUBSTRINGS = (
     "SECRET_PROMPT_SENTINEL",
@@ -24,6 +39,8 @@ FORBIDDEN_SUBSTRINGS = (
     "SECRET_EXCERPT_SENTINEL",
     "SECRET_CREDENTIAL_SENTINEL",
     "SECRET_TITLE_SENTINEL",
+    "SECRET_FILENAME_SENTINEL",
+    "SECRET_BODY_SENTINEL",
     "https://runtime.example.invalid/path",
     "s3://bucket/object-key",
     "Traceback (most recent call last)",
@@ -94,13 +111,14 @@ def _auth_session(db: Session, owner: User) -> AuthSession:
 
 
 def test_conversation_title_sentinels_absent_from_audit_rows(db: Session) -> None:
+    settings = Settings(testing=True)
     owner = _user(db, "member-privacy@example.test")
     auth_session = _auth_session(db, owner)
     context = AuditContext(actor_user=owner, request_id="req-privacy-1")
 
     conversation = create_conversation(
         db,
-        settings=SERVICE_SETTINGS,
+        settings=settings,
         owner=owner,
         title="SECRET_TITLE_SENTINEL",
         auth_session=auth_session,
@@ -108,7 +126,7 @@ def test_conversation_title_sentinels_absent_from_audit_rows(db: Session) -> Non
     )
     update_conversation_title(
         db,
-        settings=SERVICE_SETTINGS,
+        settings=settings,
         owner=owner,
         conversation_id=conversation.public_ref,
         title="SECRET_TITLE_SENTINEL renamed",
@@ -123,6 +141,116 @@ def test_conversation_title_sentinels_absent_from_audit_rows(db: Session) -> Non
     for event in events:
         assert event.target_id == conversation.public_ref
         assert "SECRET_TITLE" not in (event.metadata_json or "")
+
+
+def test_ae6_credential_upload_redaction_sentinels_absent_from_audit_rows(
+    db: Session,
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        testing=True,
+        source_storage_root=str(tmp_path / "source-storage"),
+        domain_runtime_root=str(tmp_path / "domain-runtimes"),
+        domain_runtime_controller_kind="local",
+    )
+    seed_runtime_config(db)
+    admin = create_user(
+        db,
+        "admin-privacy@example.test",
+        "Password123!",
+        role=ROLE_ADMINISTRATOR,
+    )
+    member = create_user(db, "member-privacy-ae6@example.test", "Password123!")
+    auth_session = _auth_session(db, member)
+    admin_audit = AuditContext(actor_user=admin, request_id="req-privacy-ae6-admin")
+    member_audit = AuditContext(actor_user=member, request_id="req-privacy-ae6-member")
+
+    rotate_provider_credential(
+        db,
+        "openai",
+        "SECRET_CREDENTIAL_SENTINEL",
+        SecretCrypto.from_settings(settings),
+        expected_version=1,
+        audit_context=admin_audit,
+    )
+
+    conversation = create_conversation(
+        db,
+        settings=settings,
+        owner=member,
+        title="SECRET_TITLE_SENTINEL",
+        auth_session=auth_session,
+        audit_context=member_audit,
+    )
+    update_conversation_title(
+        db,
+        settings=settings,
+        owner=member,
+        conversation_id=conversation.public_ref,
+        title="SECRET_TITLE_SENTINEL renamed",
+        expected_version=conversation.version,
+        auth_session=auth_session,
+        audit_context=member_audit,
+    )
+
+    domain = Domain(
+        id="domain-privacy-ae6",
+        display_name="Privacy AE6",
+        state=DOMAIN_STATE_STOPPED,
+        embedding_profile_id="openai-embedding-default",
+    )
+    db.add(domain)
+    db.commit()
+
+    source, _operation = upload_source_bytes(
+        db,
+        settings=settings,
+        domain_id=domain.id,
+        filename="SECRET_FILENAME_SENTINEL.pdf",
+        content_type="application/pdf",
+        data=b"%PDF-1.4 SECRET_BODY_SENTINEL privacy-scan",
+        requested_by_user=admin,
+        audit_context=admin_audit,
+    )
+    assert "SECRET_FILENAME_SENTINEL" in source.original_filename
+
+    now = utc_now()
+    turn = ConversationTurn(
+        conversation_id=conversation.id,
+        client_request_id="privacy-ae6-turn",
+        route=TURN_ROUTE_DIRECT_LLM,
+        status=TURN_STATUS_COMPLETED,
+        stop_reason=TURN_STOP_REASON_DIRECT_LLM,
+        user_message="SECRET_PROMPT_SENTINEL",
+        assistant_answer="SECRET_ANSWER_SENTINEL",
+        started_at=now,
+        completed_at=now,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(turn)
+    db.flush()
+    db.add(
+        ConversationTurnEvidenceRef(
+            turn_id=turn.id,
+            evidence_order=1,
+            citation_label="E1",
+            source_label="SECRET_FILENAME_SENTINEL.pdf",
+            excerpt="SECRET_EXCERPT_SENTINEL",
+            source_document_id=source.id,
+            source_block_id="block-privacy-ae6",
+        )
+    )
+    db.commit()
+
+    changed = redact_turns_for_domain(db, domain.id, audit_context=admin_audit)
+    assert changed == 1
+
+    events = list(db.scalars(select(AuditEvent)))
+    assert any(event.event_name == "runtime_settings.provider_config_rotated" for event in events)
+    assert any(event.event_name == "source.uploaded" for event in events)
+    assert any(event.event_name == "chat.turn_redacted" for event in events)
+    _assert_audit_rows_private(events)
 
 
 def test_audit_metadata_keys_closed_for_planted_content(db: Session) -> None:
