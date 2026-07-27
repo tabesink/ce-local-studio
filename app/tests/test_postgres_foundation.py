@@ -672,6 +672,9 @@ def test_p1_03_role_recheck_denial_audit_and_owner_isolation_on_postgresql_16() 
                     assert all(event.outcome == "denied" for event in denied_events)
                     assert all(event.safe_error_code == "forbidden" for event in denied_events)
                     assert all(event.request_id for event in denied_events)
+                    # P8-01: denial rows stay role-safe — no resource-existence target.
+                    assert all(event.target_id is None for event in denied_events)
+                    assert all(event.target_kind is None for event in denied_events)
             finally:
                 engine.dispose()
     finally:

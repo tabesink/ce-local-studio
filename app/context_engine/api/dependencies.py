@@ -12,7 +12,7 @@ from context_engine.config import Settings
 from context_engine.db import session_scope, utc_now
 from context_engine.models import AUDIT_EVENT_SECURITY_ADMIN_ROUTE_DENIED, AUDIT_OUTCOME_DENIED, AuthSession, ROLE_ADMINISTRATOR, User
 from context_engine.security import hash_session_token
-from context_engine.services.audit import AuditContext, AuditService
+from context_engine.services.audit import AuditContext, AuditError, AuditService
 
 
 @dataclass(frozen=True)
@@ -73,12 +73,18 @@ def require_admin(
     db: Session = Depends(get_db),
 ) -> User:
     if current.user.role != ROLE_ADMINISTRATOR:
-        AuditService(db).record(
-            AUDIT_EVENT_SECURITY_ADMIN_ROUTE_DENIED,
-            context=AuditContext(actor_user=current.user, request_id=request_id_from(request)),
-            outcome=AUDIT_OUTCOME_DENIED,
-            safe_error_code="forbidden",
-        )
-        db.commit()
+        try:
+            AuditService(db).record(
+                AUDIT_EVENT_SECURITY_ADMIN_ROUTE_DENIED,
+                context=AuditContext(actor_user=current.user, request_id=request_id_from(request)),
+                outcome=AUDIT_OUTCOME_DENIED,
+                safe_error_code="forbidden",
+            )
+            db.commit()
+        except AuditError:
+            raise
+        except Exception:
+            db.rollback()
+            raise AuditError() from None
         raise ApiError(403, "forbidden", "Forbidden.")
     return current.user
