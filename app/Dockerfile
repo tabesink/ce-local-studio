@@ -10,6 +10,7 @@ ENV PIP_NO_CACHE_DIR=1 \
 WORKDIR /app
 
 COPY pyproject.toml uv.lock alembic.ini ./
+COPY migrations ./migrations
 COPY context_engine ./context_engine
 COPY vendor ./vendor
 

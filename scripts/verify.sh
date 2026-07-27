@@ -30,7 +30,7 @@ run_check "frontend typecheck" bash -c "cd '$APP_DIR/client' && npm run typechec
 run_check "frontend tests" bash -c "cd '$APP_DIR/client' && npm test"
 run_check "frontend production build" bash -c "cd '$APP_DIR/client' && npm run build"
 run_check "backend Docker build" bash -c "cd '$APP_DIR' && docker build --target runtime -t context-engine-verify ."
-run_check "Compose configuration" bash -c "cd '$APP_DIR' && POSTGRES_DB=verify POSTGRES_USER=verify POSTGRES_PASSWORD=verify CE_ADMIN_USERNAME=verify CE_ADMIN_PASSWORD=verify CONFIG_ENCRYPTION_KEY=verify docker compose -f compose.stack.yml config --quiet"
+run_check "Compose configuration" bash -c "cd '$APP_DIR' && POSTGRES_DB=verify POSTGRES_USER=verify POSTGRES_PASSWORD=verify CE_ADMIN_USERNAME=verify CE_ADMIN_PASSWORD=verify CONFIG_ENCRYPTION_KEY=verify-encryption-key-not-csrf!!!! CE_STACK_PUBLIC_ORIGIN=http://127.0.0.1:3000 CE_INTERNAL_HOSTS=api CE_TRUSTED_BFF_PEERS=172.30.55.10/32 CE_CSRF_SIGNING_KEY=verify-csrf-signing-key-32bytes-min!! docker compose -f compose.stack.yml config --quiet"
 
 if ((FAILURES > 0)); then
   printf '\nverification: FAIL (%d check(s))\n' "$FAILURES" >&2

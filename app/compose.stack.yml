@@ -1,6 +1,23 @@
+# Ingress-wired HTTP Compose profile (P10-01).
+# Primary: fill CE_STACK_PUBLIC_ORIGIN + CE_* from .env.stack.example.
+# Secondary bypass: leave CE_STACK_PUBLIC_ORIGIN / CE_* empty with CONTEXT_ENGINE_TESTING=true
+# (policy disabled — not deployment evidence).
+#
+# Trusted BFF peer is the frontend container static IP on ce_stack (172.30.55.10/32).
+# The bridge gateway (172.30.55.1) is intentionally outside the peer allowlist so
+# host callers of the published API port are not treated as the BFF.
+
+networks:
+  ce_stack:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.55.0/24
+
 services:
   postgres:
     image: postgres:16
+    networks: [ce_stack]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB locally}
       POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER locally}
@@ -21,6 +38,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    networks: [ce_stack]
     command: ["alembic", "upgrade", "head"]
     environment:
       CONTEXT_ENGINE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?set POSTGRES_USER locally}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD locally}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB locally}
@@ -33,6 +51,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    networks: [ce_stack]
     command: ["python", "-m", "uvicorn", "context_engine.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       CONTEXT_ENGINE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?set POSTGRES_USER locally}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD locally}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB locally}
@@ -40,7 +59,7 @@ services:
       CE_ADMIN_PASSWORD: ${CE_ADMIN_PASSWORD:?set CE_ADMIN_PASSWORD locally}
       CE_SESSION_COOKIE_SECURE: ${CE_SESSION_COOKIE_SECURE:-false}
       CONTEXT_ENGINE_TESTING: ${CONTEXT_ENGINE_TESTING:-true}
-      CE_PUBLIC_ORIGIN: ${CE_PUBLIC_ORIGIN:-}
+      CE_PUBLIC_ORIGIN: ${CE_STACK_PUBLIC_ORIGIN:-}
       CE_INTERNAL_HOSTS: ${CE_INTERNAL_HOSTS:-}
       CE_TRUSTED_BFF_PEERS: ${CE_TRUSTED_BFF_PEERS:-}
       CE_CSRF_SIGNING_KEY: ${CE_CSRF_SIGNING_KEY:-}
@@ -69,6 +88,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    networks: [ce_stack]
     command: ["python", "-m", "context_engine.worker"]
     environment:
       CONTEXT_ENGINE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?set POSTGRES_USER locally}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD locally}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB locally}
@@ -76,7 +96,7 @@ services:
       CE_ADMIN_PASSWORD: ${CE_ADMIN_PASSWORD:?set CE_ADMIN_PASSWORD locally}
       CE_SESSION_COOKIE_SECURE: ${CE_SESSION_COOKIE_SECURE:-false}
       CONTEXT_ENGINE_TESTING: ${CONTEXT_ENGINE_TESTING:-true}
-      CE_PUBLIC_ORIGIN: ${CE_PUBLIC_ORIGIN:-}
+      CE_PUBLIC_ORIGIN: ${CE_STACK_PUBLIC_ORIGIN:-}
       CE_INTERNAL_HOSTS: ${CE_INTERNAL_HOSTS:-}
       CE_TRUSTED_BFF_PEERS: ${CE_TRUSTED_BFF_PEERS:-}
       CE_CSRF_SIGNING_KEY: ${CE_CSRF_SIGNING_KEY:-}
@@ -117,8 +137,12 @@ services:
       args:
         # Always the compose service DNS name — do not inherit host-native API bases.
         CONTEXT_ENGINE_API_BASE: http://api:8000
+    networks:
+      ce_stack:
+        ipv4_address: 172.30.55.10
     environment:
       CONTEXT_ENGINE_API_BASE: http://api:8000
+      CONTEXT_ENGINE_PUBLIC_ORIGIN: ${CE_STACK_PUBLIC_ORIGIN:-}
     ports:
       - "127.0.0.1:${STACK_FRONTEND_PORT:-3000}:3000"
     healthcheck:

@@ -306,6 +306,15 @@ structure/BFF/design-kit tests and clean typecheck. Residuals remain FE-01
 mega-kit demolition, P10 Compose/`PUBLIC_ORIGIN`, and P12 two-user/BFCache /
 deployed-ingress proofs. Phase P9 closes with P9-05.
 
+P10-01 closure evidence (2026-07-27):
+`docs/_scratch/p10-01-compose-config-inventory.md` and
+`docs/_scratch/p10-01-compose-config-evidence.md` record backend image
+`migrations/` COPY, pinned Compose network peer for the frontend BFF,
+shared `CE_STACK_PUBLIC_ORIGIN` for FastAPI/BFF, and the ingress-wired HTTP
+example profile (`CONTEXT_ENGINE_TESTING=true` + full CE_* — not P12
+deployment evidence). Residuals remain P10-02 smoke/bootstrap/storage
+readiness, P10-03 drain runbook, and P12 TLS/direct-API denial.
+
 ### P9-P11 - User interface, deployable runtime, and governed context workflows
 
 | Task | Status | Depends on | Deliverable |
@@ -315,7 +324,7 @@ deployed-ingress proofs. Phase P9 closes with P9-05.
 | P9-03 | DONE | P4-P6 | documents/outline/preview and graph route through approved contracts — evidence `docs/_scratch/p9-03-documents-library-evidence.md`; non-PDF/PPT viewers and P12 ingress remain |
 | P9-04 | DONE | P2-P3,P8,P9-01 | approve the Settings Domain accordion interaction amendment across behavior/component/state/accessibility contracts, then implement `/settings?section=domains`; no deferred operator or publication UI — evidence `docs/_scratch/p9-04-settings-domains-evidence.md`; production-boundary Playwright F3 remains P12-07 |
 | P9-05 | DONE | P9-01 | import-direction, thin-route, server/browser boundary and contract/barrel CI validators — evidence `docs/_scratch/p9-05-ci-validators-evidence.md`; FE-01 mega-kit demolition, Compose public-origin topology, and two-user/BFCache E2E remain FE-01/P10/P12 |
-| P10-01 | NOT_STARTED | P8,P9 | Compose services and production-like server configuration for PostgreSQL, migration, API, worker and frontend |
+| P10-01 | DONE | P8,P9 | Compose services and ingress-wired HTTP server configuration for PostgreSQL, migration, API, worker and frontend — evidence `docs/_scratch/p10-01-compose-config-evidence.md`; BFF/API/SSE smoke and storage readiness remain P10-02; drain runbook P10-03; TLS/direct-API denial P12 |
 | P10-02 | NOT_STARTED | P10-01 | explicit migration/bootstrap plus BFF/API/SSE core-path smoke stack |
 | P10-03 | NOT_STARTED | P10-02 | startup/shutdown, worker claim recovery and deployment operator runbook |
 | P11-01 | NOT_STARTED | P6 | prompt_templates/composer_ref_tokens/accepted-ref schema and seeds for source/evidence/template refs |
