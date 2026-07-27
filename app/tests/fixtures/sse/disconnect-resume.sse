@@ -17,3 +17,4 @@ data: {"schemaVersion":"1.0","eventId":"evt_disc_4","turnId":"turn_disc1","seque
 id: evt_disc_5
 event: turn.completed
 data: {"schemaVersion":"1.0","eventId":"evt_disc_5","turnId":"turn_disc1","sequence":5,"type":"turn.completed","occurredAt":"2026-07-27T12:40:04Z","payload":{"route":"direct_llm","status":"completed","stopReason":"direct_llm","citations":[],"acceptedRefs":[],"budget":{"planStepCount":0,"retrievalOperationCount":0,"repairAttemptCount":0},"replay":true}}
+

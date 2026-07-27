@@ -21,3 +21,4 @@ data: {"schemaVersion":"1.0","eventId":"evt_eo_5","turnId":"turn_evid1","sequenc
 id: evt_eo_6
 event: turn.completed
 data: {"schemaVersion":"1.0","eventId":"evt_eo_6","turnId":"turn_evid1","sequence":6,"type":"turn.completed","occurredAt":"2026-07-27T12:20:05Z","payload":{"route":"domain_rag","status":"completed","stopReason":"evidence_only","citations":[{"evidenceRefId":"evidence_eo_1","citationLabel":"[1]"}],"acceptedRefs":[],"budget":{"planStepCount":1,"retrievalOperationCount":1,"repairAttemptCount":0},"replay":true}}
+

@@ -15,8 +15,11 @@ import { ApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/generated/openapi";
 import type { components as sseComponents } from "@/lib/api/generated/sse";
 import { getSse, postSse } from "@/lib/api/sse";
-import { createCanonicalTurnConsumer } from "@/features/chat-shell/stream-protocol";
-import { runResumableTurnStream, type StreamTransportState } from "@/features/chat-shell/stream-reconnect";
+import {
+  createCanonicalTurnConsumer,
+  runResumableTurnStream,
+  type StreamTransportState,
+} from "@/lib/stream";
 
 type ComposerRefDiscoverRequest = components["schemas"]["ComposerRefDiscoverRequest"];
 type ConversationTitleRequest = components["schemas"]["ConversationTitleRequest"];
@@ -54,7 +57,7 @@ type TurnReplayInput = {
   onTransportState?: (state: StreamTransportState) => void;
 };
 
-export type { StreamTransportState } from "@/features/chat-shell/stream-reconnect";
+export type { StreamTransportState } from "@/lib/stream";
 
 function streamProtocolError(message: string): ApiError {
   return new ApiError({ status: 0, code: "stream_protocol_error", message, requestId: null, fields: {} });

@@ -71,17 +71,22 @@ describe("F-012 chat via LS chat-shell", () => {
     ]) {
       assert.match(applicationPath, new RegExp(`event\.type === ${event}`));
     }
-    const protocol = read("src/features/chat-shell/stream-protocol.ts");
+    const protocol = read("src/lib/stream/turn-consumer.ts");
     assert.match(protocol, /schemaVersion\.split\("\."\)\[0\] !== "1"/);
     assert.match(protocol, /receivedSequence/);
     assert.match(protocol, /appliedSequence/);
     assert.match(protocol, /sequence gap/);
     assert.match(protocol, /frame\.id !== eventId/);
     assert.match(protocol, /closed before a terminal event/);
+    const protocolReexport = read("src/features/chat-shell/stream-protocol.ts");
+    assert.match(protocolReexport, /@\/lib\/stream/);
     const sse = read("src/lib/api/sse.ts");
     assert.match(sse, /response\.body\.getReader\(\)/);
-    const parser = read("src/lib/api/sse-parser.ts");
+    assert.match(sse, /attachTerminalSnapshot|terminalSnapshot/);
+    const parser = read("src/lib/stream/sse-parser.ts");
     assert.match(parser, /ended mid-frame/);
+    const parserReexport = read("src/lib/api/sse-parser.ts");
+    assert.match(parserReexport, /@\/lib\/stream\/sse-parser/);
     assert.match(
       hook,
       /const handleLiveStreamEvent = useCallback\([\s\S]*?=> applyTurnStreamEvent\(event\),/,

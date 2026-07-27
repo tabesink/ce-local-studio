@@ -17,3 +17,4 @@ data: {"schemaVersion":"1.0","eventId":"evt_ngc_4","turnId":"turn_ngc01","sequen
 id: evt_ngc_5
 event: turn.completed
 data: {"schemaVersion":"1.0","eventId":"evt_ngc_5","turnId":"turn_ngc01","sequence":5,"type":"turn.completed","occurredAt":"2026-07-27T12:00:04Z","payload":{"route":"domain_rag","status":"completed","stopReason":"no_grounded_context","citations":[],"acceptedRefs":[],"budget":{"planStepCount":1,"retrievalOperationCount":1,"repairAttemptCount":0},"replay":true}}
+

@@ -1,8 +1,9 @@
 import { ApiError, normalizeApiError } from "@/lib/api/errors";
 import { contextEngineApiPath } from "@/lib/api/client";
-import { InvalidSseEventError, SseParser, type SseEvent } from "@/lib/api/sse-parser";
+import { attachTerminalSnapshot } from "@/lib/stream/cursor-expired";
+import { InvalidSseEventError, SseParser, type SseEvent } from "@/lib/stream/sse-parser";
 
-export type { SseEvent } from "@/lib/api/sse-parser";
+export type { SseEvent } from "@/lib/stream/sse-parser";
 
 function invalidStream(error: InvalidSseEventError): ApiError {
   return new ApiError({ status: 0, code: error.code, message: error.message, requestId: null, fields: {} });
@@ -35,7 +36,10 @@ async function openSse(path: string, init: RequestInit, onEvent: (event: SseEven
   if (!response.ok) {
     const contentType = response.headers.get("content-type") ?? "";
     const payload = contentType.includes("application/json") ? await response.json().catch(() => null) : null;
-    const error = normalizeApiError(response.status, payload) as ApiError & { retryAfterMs?: number };
+    const error = attachTerminalSnapshot(
+      normalizeApiError(response.status, payload),
+      payload,
+    ) as ApiError & { retryAfterMs?: number; terminalSnapshot?: unknown };
     const retryAfter = response.headers.get("retry-after");
     if (retryAfter) {
       const seconds = Number(retryAfter);
