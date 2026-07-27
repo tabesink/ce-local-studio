@@ -105,6 +105,9 @@ This is the machine-read D0 boundary. The table is sorted bytewise by record cla
 | scan-file | docs/plans/2026-07-22-003-feat-ce-frontend-factory-plan.md | active | subordinate frontend child |
 | scan-file | docs/plans/2026-07-25-001-feat-scoped-retrieval-provenance-plan.md | active | P6-01 scoped retrieval plan |
 | scan-file | docs/plans/2026-07-25-002-feat-stateless-evidence-projection-plan.md | active | P6-02 stateless Evidence plan |
+| scan-file | docs/plans/2026-07-26-001-feat-conversation-ownership-plan.md | active | P7-01 conversation ownership plan |
+| scan-file | docs/plans/2026-07-27-001-feat-server-intent-gate-plan.md | active | P7-02 server intent gate plan |
+| scan-file | docs/plans/2026-07-27-002-feat-bounded-rag-orchestration-plan.md | active | P7-03 bounded RAG orchestration plan |
 | scan-file | docs/prd.md | active | product authority |
 | scan-file | docs/quality/definition-of-done.md | active | completion gates |
 | scan-file | docs/quality/seeded-demo-and-test-data.md | active | deterministic fixture contract |
