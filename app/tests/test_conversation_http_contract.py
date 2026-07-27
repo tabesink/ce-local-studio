@@ -32,7 +32,8 @@ from context_engine.services.request_security import (
 
 
 def _context():
-    database_path = f".data/ce-conversation-http-{uuid4().hex}.db"
+    database_path = Path(f".data/ce-conversation-http-{uuid4().hex}.db").resolve()
+    database_path.parent.mkdir(parents=True, exist_ok=True)
     settings = Settings(
         database_url=f"sqlite+pysqlite:///{database_path}",
         testing=True,
@@ -43,7 +44,7 @@ def _context():
         session_cookie_secure=False,
     )
     app = create_app(settings)
-    app.state.test_database_path = Path(database_path).resolve()
+    app.state.test_database_path = database_path
     Base.metadata.create_all(app.state.engine)
     db = app.state.session_factory()
     try:
