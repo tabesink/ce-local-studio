@@ -306,7 +306,7 @@ function DomainPicker({ chat }: { chat: ChatState }) {
       >
         <option value="">Direct chat</option>
         {chat.domains.map((domain) => (
-          <option key={domain.id} value={domain.id} disabled={!domain.available}>
+          <option key={domain.id} value={domain.id} disabled={!domain.queryEligible}>
             {domain.displayName}
           </option>
         ))}

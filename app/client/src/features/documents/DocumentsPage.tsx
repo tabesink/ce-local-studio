@@ -575,7 +575,7 @@ function DocumentsPageInner() {
                 >
                   {domains.length === 0 ? <option value="">No domains</option> : null}
                   {domains.map((domain) => (
-                    <option key={domain.id} value={domain.id} disabled={!domain.available}>
+                    <option key={domain.id} value={domain.id} disabled={!domain.queryEligible}>
                       {domain.displayName}
                     </option>
                   ))}

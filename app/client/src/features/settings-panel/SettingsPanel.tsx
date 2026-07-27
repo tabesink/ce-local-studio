@@ -7,7 +7,6 @@ import {
   EmptySafeNotice,
   IconButton,
   Input,
-  ProgressBar,
   Select,
   SettingsButton,
   SettingsFactRows,
@@ -43,18 +42,13 @@ import {
 } from "@/features/domains/api";
 import {
   canDeployDomain,
-  clampStoragePercent,
   defaultEmbeddingProfileId,
   deployDomain,
-  embeddingProfileLabel,
   filterEmbeddingProfiles,
   isValidDomainId,
   nextExpandedDomainId,
   primaryLifecycleAction,
   shouldRequestDelete,
-  storageLimitLabel,
-  storageTone,
-  storageWarningLabel,
   type DomainBusyAction,
 } from "@/features/settings-panel/domainSettingsHelpers";
 import type { CurrentUser } from "@/types/auth";
@@ -86,7 +80,7 @@ export function SettingsPanel() {
     if (isAdmin) {
       rows.push(
         { id: "provider", label: "Model Provider", description: "Providers and model profiles", icon: <KeyRound className="h-3.5 w-3.5" /> },
-        { id: "domains", label: "Knowledge Graphs", description: "Domain-backed retrieval", icon: <Database className="h-3.5 w-3.5" /> },
+        { id: "domains", label: "Knowledge Domains", description: "Domain-backed retrieval", icon: <Database className="h-3.5 w-3.5" /> },
         { id: "users", label: "Users", description: "User accounts", icon: <Users className="h-3.5 w-3.5" /> },
       );
     }
@@ -305,18 +299,22 @@ function DomainsSection({
     hasEmbeddingProfiles: embeddingProfiles.length > 0,
   });
 
-  const run = async (domainId: string, action: "start" | "stop" | "delete") => {
-    setBusy({ id: domainId, action });
+  const run = async (
+    domain: AdminDomain,
+    action: "start" | "stop" | "delete",
+  ) => {
+    setBusy({ id: domain.id, action });
     try {
-      if (action === "start") await startDomain(domainId);
-      if (action === "stop") await stopDomain(domainId);
-      if (action === "delete") await deleteDomain(domainId);
-      onChanged(`Knowledge Graph ${domainId}: ${action} requested.`);
+      if (action === "start") await startDomain(domain.id);
+      if (action === "stop") await stopDomain(domain.id);
+      if (action === "delete") await deleteDomain(domain.id, domain.version);
+      onChanged(`Knowledge Domain ${domain.id}: ${action} requested.`);
+      await reload();
     } catch (err) {
       onError(errorMessage(err));
       await reload();
     } finally {
-      setBusy((current) => (current?.id === domainId ? null : current));
+      setBusy((current) => (current?.id === domain.id ? null : current));
     }
   };
 
@@ -340,7 +338,8 @@ function DomainsSection({
         setDraftId("");
         setDraftName("");
         setDraftEmbeddingId(defaultEmbeddingProfileId(embeddingProfiles) ?? "");
-        onChanged(`Knowledge Graph ${draftId.trim()}: deploy requested.`);
+        onChanged(`Knowledge Domain ${draftId.trim()}: deploy requested.`);
+        await reload();
         return;
       }
       if (outcome.kind === "create_failed") {
@@ -362,7 +361,7 @@ function DomainsSection({
     if (!pendingDelete || !shouldRequestDelete(true)) return;
     const target = pendingDelete;
     setPendingDelete(null);
-    void run(target.id, "delete");
+    void run(target, "delete");
   };
 
   const anyBusy = busy !== null;
@@ -371,20 +370,17 @@ function DomainsSection({
   return (
     <>
       <SettingsGroup
-        title="Knowledge Graphs"
+        title="Knowledge Domains"
         description="Lifecycle on backend. No Docker details in UI."
       >
         {domains.length === 0 ? (
-          <EmptySafeNotice>No Knowledge Graphs configured.</EmptySafeNotice>
+          <EmptySafeNotice>No Knowledge Domains are available.</EmptySafeNotice>
         ) : (
           domains.map((domain) => {
             const lifecycle = primaryLifecycleAction(domain.state);
             const expanded = expandedId === domain.id;
-            const panelId = `knowledge-graph-${domain.id}-panel`;
-            const embeddingLabel = embeddingProfileLabel(domain.embeddingProfileId, embeddingProfiles);
-            const storageSummary = domain.storageSummary;
-            const totalStoragePercent = clampStoragePercent(storageSummary?.totalPercent ?? 0);
-            const storageWarningTone = storageTone(storageSummary?.warning ?? "ok");
+            const panelId = `knowledge-domain-${domain.id}-panel`;
+            const embeddingLabel = domain.embeddingProfile.name?.trim() || domain.embeddingProfile.id;
             return (
               <div key={domain.id}>
                 <div className="flex items-center gap-3 px-3.5 py-2.5 transition-colors hover:bg-(--ui-hover)/35">
@@ -392,7 +388,7 @@ function DomainsSection({
                     aria-expanded={expanded}
                     aria-controls={panelId}
                     aria-label={`${expanded ? "Collapse" : "Expand"} ${domain.displayName}`}
-                    title={`${expanded ? "Collapse" : "Expand"} Knowledge Graph`}
+                    title={`${expanded ? "Collapse" : "Expand"} Knowledge Domain`}
                     onClick={() => setExpandedId((current) => nextExpandedDomainId(current, domain.id))}
                     className="shrink-0 text-(--ui-muted) hover:bg-(--ui-hover) hover:text-(--ui-fg)"
                   >
@@ -410,10 +406,10 @@ function DomainsSection({
                   <ToggleSwitch
                     checked={lifecycle === "stop"}
                     aria-label={`${lifecycle === "stop" ? "Stop" : "Start"} ${domain.displayName}`}
-                    title={lifecycle === "stop" ? "Stop Knowledge Graph" : "Start Knowledge Graph"}
+                    title={lifecycle === "stop" ? "Stop Knowledge Domain" : "Start Knowledge Domain"}
                     disabled={anyBusy || lifecycle === null}
                     onCheckedChange={() => {
-                      if (lifecycle) void run(domain.id, lifecycle);
+                      if (lifecycle) void run(domain, lifecycle);
                     }}
                   />
                 </div>
@@ -437,43 +433,6 @@ function DomainsSection({
                               className="h-7 cursor-default font-mono text-(--ui-muted) focus:border-(--ui-separator) focus:ring-0"
                             />
                           </label>
-                          {storageSummary ? (
-                            <div
-                              data-testid="domain-storage-summary"
-                              className="border-t border-(--ui-separator) pt-3"
-                            >
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[length:var(--fs-base)] font-semibold text-(--ui-fg)">
-                                      Storage
-                                    </span>
-                                    <span className="font-mono text-[length:var(--fs-xs)] text-(--ui-muted)">
-                                      {totalStoragePercent}%
-                                    </span>
-                                  </div>
-                                  <div className="truncate font-mono text-[length:var(--fs-xs)] text-(--ui-muted)">
-                                    {storageLimitLabel(storageSummary)}
-                                  </div>
-                                </div>
-                                {storageSummary.warning !== "ok" ? (
-                                  <StatusPill tone={storageWarningTone}>
-                                    {storageWarningLabel(storageSummary.warning)}
-                                  </StatusPill>
-                                ) : null}
-                              </div>
-                              <div data-testid="domain-storage-total-bar" className="mt-2.5">
-                                <ProgressBar
-                                  progress={totalStoragePercent}
-                                  tone={storageWarningTone}
-                                  role="meter"
-                                  aria-label={`${domain.displayName} total storage`}
-                                  aria-valuetext={storageLimitLabel(storageSummary)}
-                                  className="h-2 bg-(--ui-border)/65"
-                                />
-                              </div>
-                            </div>
-                          ) : null}
                         </div>
                         <div className="w-9 shrink-0" aria-hidden />
                       </div>
@@ -500,22 +459,22 @@ function DomainsSection({
       </SettingsGroup>
 
       <SettingsGroup
-        title="New Knowledge Graph"
-        description="Create and start a domain-backed retrieval graph."
+        title="New Knowledge Domain"
+        description="Create and start a domain-backed retrieval domain."
       >
         <div className="flex flex-wrap items-center gap-2 px-3.5 py-2.5">
           <SettingsInput
             value={draftName}
             onChange={setDraftName}
             placeholder="Name"
-            aria-label="New Knowledge Graph display name"
+            aria-label="New Knowledge Domain display name"
             className="w-32 shrink-0"
           />
           <SettingsInput
             value={draftId}
             onChange={setDraftId}
             placeholder="id"
-            aria-label="New Knowledge Graph id"
+            aria-label="New Knowledge Domain id"
             className="w-28 shrink-0 font-mono"
           />
           <div className="min-w-40 flex-1">
@@ -537,17 +496,17 @@ function DomainsSection({
           </SettingsButton>
           {embeddingProfiles.length === 0 ? (
             <span className="min-w-full text-[length:var(--fs-sm)] text-(--ui-muted)">
-              Add an embedding model profile before deploying a Knowledge Graph.
+              Add an embedding model profile before deploying a Knowledge Domain.
             </span>
           ) : null}
         </div>
       </SettingsGroup>
 
       <UiModal isOpen={pendingDelete !== null} onClose={() => setPendingDelete(null)} maxWidth="max-w-md">
-        <UiModalHeader title="Delete Knowledge Graph" onClose={() => setPendingDelete(null)} />
+        <UiModalHeader title="Delete Knowledge Domain" onClose={() => setPendingDelete(null)} />
         <div className="space-y-4 px-6 py-4">
           <p className="text-[length:var(--fs-base)] text-(--ui-fg)">
-            Delete Knowledge Graph &ldquo;{pendingDelete?.displayName}&rdquo;? This cannot be undone.
+            Delete Knowledge Domain &ldquo;{pendingDelete?.displayName}&rdquo;? This cannot be undone.
           </p>
           <div className="flex justify-end gap-2">
             <SettingsButton onClick={() => setPendingDelete(null)}>Cancel</SettingsButton>
