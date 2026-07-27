@@ -1,0 +1,106 @@
+<!--
+  Synthetic parity fixture for Input.
+  Not product authority. Not routable. Script-free and network-free.
+  Shared scenarios mirror tests/parity/manifests/input.json.
+  Live API has no dedicated help prop — not shown here.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Input parity fixture (synthetic)</title>
+    <style>
+      :root {
+        --ui-bg: #141414;
+        --ui-fg: #f2f2f2;
+        --ui-muted: #9a9a9a;
+        --ui-separator: #2f2f2f;
+        --ui-danger: #e35d5d;
+        --ui-info: #3b9eff;
+        --fs-base: 13px;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --ui-bg: #f4f5f5;
+        --ui-fg: #1a1a1a;
+        --ui-muted: #6b6b6b;
+        --ui-separator: #0d0d0d1a;
+        --ui-danger: #c23b3b;
+        --ui-info: #2563eb;
+      }
+      body {
+        margin: 0;
+        background: var(--ui-bg);
+        color: var(--ui-fg);
+      }
+      .region {
+        padding: 16px;
+        border-bottom: 1px solid var(--ui-separator);
+        max-width: 420px;
+      }
+      .caption {
+        margin: 0 0 10px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .field-label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .field {
+        box-sizing: border-box;
+        width: 100%;
+        height: 32px;
+        border-radius: 6px;
+        border: 1px solid var(--ui-separator);
+        background: var(--ui-bg);
+        color: var(--ui-fg);
+        padding: 0 10px;
+        font-size: var(--fs-base);
+      }
+      .field-error {
+        border-color: var(--ui-danger);
+      }
+      .error-text {
+        margin: 6px 0 0;
+        font-size: 12px;
+        color: var(--ui-danger);
+      }
+      .field:disabled {
+        opacity: 0.55;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark">
+      <p class="caption">zai-dark · labeled</p>
+      <div data-snapshot="labeled">
+        <span class="field-label">Display name</span>
+        <input class="field" type="text" placeholder="Enter a display name" value="" readonly />
+      </div>
+    </section>
+    <section class="region" data-theme="zai-dark" data-snapshot="error">
+      <p class="caption">zai-dark · error</p>
+      <span class="field-label">Display name</span>
+      <input class="field field-error" type="text" value="" readonly />
+      <p class="error-text">Display name is required</p>
+    </section>
+    <section class="region" data-theme="zai-dark" data-snapshot="disabled">
+      <p class="caption">zai-dark · disabled</p>
+      <span class="field-label">Display name</span>
+      <input class="field" type="text" value="Locked value" disabled />
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light">
+      <p class="caption">zai-light · labeled</p>
+      <span class="field-label">Display name</span>
+      <input class="field" type="text" placeholder="Enter a display name" value="" readonly />
+    </section>
+  </body>
+</html>

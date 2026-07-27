@@ -33,6 +33,9 @@
     "next-env.d.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
+    "tests/parity/react/**/*.ts",
+    "tests/parity/react/**/*.tsx",
+    "vitest.config.ts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],

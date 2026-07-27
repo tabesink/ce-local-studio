@@ -1,0 +1,163 @@
+<!--
+  Synthetic parity fixture for StatusPill.
+  Not product authority. Not routable. Script-free and network-free.
+  Shared scenarios mirror tests/parity/manifests/status-pill.json.
+  Tone mapping (docs only): default↔neutral, good↔success.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>StatusPill parity fixture (synthetic)</title>
+    <style>
+      :root {
+        --ui-bg: #141414;
+        --ui-fg: #f2f2f2;
+        --ui-muted: #9a9a9a;
+        --ui-surface: #1e1e1e;
+        --ui-info: #3b9eff;
+        --ui-success: #3fbf6a;
+        --ui-warning: #d4a017;
+        --ui-danger: #e35d5d;
+        --fs-sm: 11px;
+        --fs-xs: 10px;
+        --rad-xs: 3.5px;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --ui-bg: #f4f5f5;
+        --ui-fg: #1a1a1a;
+        --ui-muted: #6b6b6b;
+        --ui-surface: #0d0d0d08;
+        --ui-info: #2563eb;
+        --ui-success: #1e8a3e;
+        --ui-warning: #b45309;
+        --ui-danger: #c23b3b;
+      }
+      body {
+        margin: 0;
+        background: var(--ui-bg);
+        color: var(--ui-fg);
+      }
+      .region {
+        padding: 16px;
+        border-bottom: 1px solid color-mix(in oklab, var(--ui-muted) 30%, transparent);
+      }
+      .caption {
+        margin: 0 0 10px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+      .pill-dot {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: var(--fs-sm);
+      }
+      .pill-dot .dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 9999px;
+      }
+      .tone-default {
+        color: var(--ui-muted);
+      }
+      .tone-default .dot {
+        background: var(--ui-muted);
+      }
+      .tone-info {
+        color: var(--ui-info);
+      }
+      .tone-info .dot {
+        background: var(--ui-info);
+      }
+      .tone-good {
+        color: var(--ui-success);
+      }
+      .tone-good .dot {
+        background: var(--ui-success);
+      }
+      .tone-warning {
+        color: var(--ui-warning);
+      }
+      .tone-warning .dot {
+        background: var(--ui-warning);
+      }
+      .tone-danger {
+        color: var(--ui-danger);
+      }
+      .tone-danger .dot {
+        background: var(--ui-danger);
+      }
+      .pill-badge {
+        display: inline-flex;
+        align-items: center;
+        height: 20px;
+        padding: 0 6px;
+        border-radius: var(--rad-xs);
+        font-size: var(--fs-xs);
+        font-weight: 500;
+      }
+      .badge-default {
+        background: var(--ui-surface);
+        color: var(--ui-muted);
+      }
+      .badge-info {
+        background: color-mix(in oklab, var(--ui-info) 10%, transparent);
+        color: var(--ui-info);
+      }
+      .badge-good {
+        background: color-mix(in oklab, var(--ui-success) 10%, transparent);
+        color: var(--ui-success);
+      }
+      .badge-warning {
+        background: color-mix(in oklab, var(--ui-warning) 10%, transparent);
+        color: var(--ui-warning);
+      }
+      .badge-danger {
+        background: color-mix(in oklab, var(--ui-danger) 10%, transparent);
+        color: var(--ui-danger);
+      }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark">
+      <p class="caption">zai-dark · tones-dot</p>
+      <div class="row" data-snapshot="tones-dot">
+        <span class="pill-dot tone-default"><span class="dot"></span>Idle</span>
+        <span class="pill-dot tone-info"><span class="dot"></span>Syncing</span>
+        <span class="pill-dot tone-good"><span class="dot"></span>Ready</span>
+        <span class="pill-dot tone-warning"><span class="dot"></span>Degraded</span>
+        <span class="pill-dot tone-danger"><span class="dot"></span>Failed</span>
+      </div>
+    </section>
+    <section class="region" data-theme="zai-dark" data-snapshot="tones-badge">
+      <p class="caption">zai-dark · tones-badge</p>
+      <div class="row">
+        <span class="pill-badge badge-default">Idle</span>
+        <span class="pill-badge badge-info">Syncing</span>
+        <span class="pill-badge badge-good">Ready</span>
+        <span class="pill-badge badge-warning">Degraded</span>
+        <span class="pill-badge badge-danger">Failed</span>
+      </div>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light">
+      <p class="caption">zai-light · tones-dot</p>
+      <div class="row">
+        <span class="pill-dot tone-default"><span class="dot"></span>Idle</span>
+        <span class="pill-dot tone-info"><span class="dot"></span>Syncing</span>
+        <span class="pill-dot tone-good"><span class="dot"></span>Ready</span>
+        <span class="pill-dot tone-warning"><span class="dot"></span>Degraded</span>
+        <span class="pill-dot tone-danger"><span class="dot"></span>Failed</span>
+      </div>
+    </section>
+  </body>
+</html>

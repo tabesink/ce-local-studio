@@ -1,4 +1,4 @@
-import { AppShell } from "@/components/layout/AppShell";
+import { AppShell } from "@/features/shell";
 import { PageState } from "@/components/ui/PageState";
 
 export default function ForbiddenPage() {

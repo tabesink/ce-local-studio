@@ -120,14 +120,14 @@ See responsive-and-desktop-matrix.md for the exact viewport matrix.
 
 This section is the sole D0 owner of the parity-manifest schema, catalog states, and readiness rules. D0 documents the factory; it does not create application fixtures or award React/runtime completion.
 
-Catalog states are `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED_CONTRACT`, and `FACTORY_READY`. A target may become `FACTORY_READY` only after all applicable shared, HTML-static, React, accessibility, and browser assertions pass.
+Catalog states are `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED_CONTRACT`, and `FACTORY_READY`. For starter targets (Button, Input, StatusPill, SettingsRow), `FACTORY_READY` is earned after all applicable shared, HTML-static, React (Vitest/Testing Library), and accessibility assertions pass. Playwright route-level visual matrix and production-boundary Settings domains acceptance remain P12-07 (domains implementation P9-04) and are not required to mark those four targets factory-ready.
 
 | Target | Owner | D0 state | Required brownfield disposition |
 | --- | --- | --- | --- |
-| Button | `src/ui` | NOT_STARTED | inventory existing implementations; retain/reverify, migrate, or replace in P9-01 |
-| Input | `src/ui` | NOT_STARTED | inventory existing implementations; retain/reverify, migrate, or replace in P9-01 |
-| StatusPill | `src/ui` | NOT_STARTED | inventory existing implementations; retain/reverify, migrate, or replace in P9-01 |
-| SettingsRow | `src/features/settings-panel` | NOT_STARTED | keep as a Settings composition and reverify in P9-01 |
+| Button | `src/ui` | FACTORY_READY | migrate + retain-and-reverify live API; P9-01 shared/HTML/React (Vitest/RTL) + R10 subset proven |
+| Input | `src/ui` | FACTORY_READY | migrate + retain-and-reverify live API; P9-01 shared/HTML/React (Vitest/RTL) + R10 subset proven |
+| StatusPill | `src/ui` | FACTORY_READY | migrate + retain-and-reverify live tones (`default`↔neutral, `good`↔success); P9-01 parity proven |
+| SettingsRow | `src/features/settings-panel` | FACTORY_READY | Settings-owned composition; P9-01 shared/HTML/React (Vitest/RTL) + R10 subset proven |
 | Settings Domain accordion | `src/features/settings-panel` | BLOCKED_CONTRACT | approve P9-04 interaction contract before manifest, fixture, implementation, or readiness work |
 
 The starter set is not a complete UI allowlist. Uncovered roles continue using the contracted canonical CE control; agents record a parity gap rather than inventing local chrome.
@@ -139,12 +139,13 @@ Each later target manifest is versioned and contains:
 - HTML-static assertions: script-free snapshot regions, masks, and expected visual outcomes only;
 - React assertions: interaction, keyboard/touch, focus/return, semantics, screen-reader behavior, reduced motion, validation/busy/disabled/status states, zoom, and responsive behavior.
 
-The exact future output paths are:
+The exact output paths (aligned with master-build-plan P9-01) are:
 
+- `app/client/tests/structure/ui-ownership.test.ts` for canonical ownership / no-competing-kit enforcement;
 - `app/client/tests/parity/manifests/<target-id>.json` for versioned scenarios;
-- `app/client/tests/parity/html/<target-id>.html` for synthetic, script-free, network-free, non-routable static guidance;
-- `app/client/tests/components/<target-id>.test.tsx` for React behavior and accessibility;
-- `app/client/tests/e2e/settings-domains.spec.ts` for the production-boundary Settings proof.
+- `app/client/tests/parity/fixtures/<target-id>.html` for synthetic, script-free, network-free, non-routable static guidance;
+- `app/client/tests/parity/react/<target-id>.test.tsx` for React behavior and accessibility;
+- `app/client/tests/e2e/` for browser scaffolding; production-boundary Settings domains proof remains a later P12-07 / P9-04 artifact (for example `settings-domains.spec.ts`), not a P9-01 exit gate.
 
 HTML assets are excluded from production bundles and may contain only synthetic data. They never authorize product behavior. Live `/settings?section=domains` acceptance uses the production Next build, same-origin BFF, FastAPI, and server-produced DTOs with no request interception or mocked product response.
 

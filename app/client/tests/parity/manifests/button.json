@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "targetId": "button",
+  "owner": "src/ui",
+  "catalogState": "FACTORY_READY",
+  "disposition": "migrate+retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical body: app/client/src/ui/Button.tsx (live _shared API retained).",
+      "Inventory: docs/_scratch/p9-01-ui-inventory.md (KEEP LIVE APIs).",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "primary": "Save draft",
+      "secondary": "Cancel",
+      "danger": "Remove item",
+      "ghost": "More options",
+      "icon": "Open menu",
+      "loading": "Saving"
+    },
+    "variants": ["primary", "secondary", "danger", "ghost", "icon"],
+    "states": ["default", "disabled", "loading"],
+    "sizes": ["sm", "md", "lg"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": [
+      "--ui-fg",
+      "--ui-bg",
+      "--ui-muted",
+      "--ui-border",
+      "--ui-danger",
+      "--ui-surface"
+    ],
+    "geometry": {
+      "controlHeightHint": "compact workstation control (~28–32px via density tokens)",
+      "radius": "rounded-lg / --ui-radius family",
+      "density": "compact"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark", "theme-light", "variants", "states"],
+    "expectedTokenGeometry": [
+      "Primary uses --ui-fg/--ui-bg contrast",
+      "Danger label uses --ui-danger",
+      "Disabled/loading regions show reduced opacity presentation only"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "Enter and Space activate the button via user-event",
+      "focus": "Default button is focusable; disabled/loading are not activatable",
+      "screenReader": "loading exposes aria-busy; label text retained while loading",
+      "reducedMotion": "render under prefers-reduced-motion media where cheap; spinner presence is presentation",
+      "validationBusyDisabledStatus": "loading sets disabled + aria-busy; native disabled supported",
+      "zoom": "label remains readable at component level (no Playwright zoom matrix in U5)",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "inline-flex control does not require a dedicated narrow layout claim beyond shared viewport labels"
+    }
+  }
+}

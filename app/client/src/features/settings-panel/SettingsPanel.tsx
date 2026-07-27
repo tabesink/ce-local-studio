@@ -15,7 +15,6 @@ import {
   SettingsInput,
   SettingsLayout,
   SettingsNotice,
-  SettingsRow,
   StatusPill,
   ToggleSwitch,
   UiModal,
@@ -24,6 +23,7 @@ import {
 } from "@/components/ui";
 import { isApiError } from "@/lib/api/errors";
 import { useAuthStore } from "@/state/auth-store";
+import { SettingsRow } from "@/features/settings-panel/SettingsRow";
 import { PreferencesPanel } from "@/features/user-preferences/PreferencesPanel";
 import {
   getRuntimeSettings,

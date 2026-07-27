@@ -1,4 +1,4 @@
-import { AppShell } from "@/components/layout/AppShell";
+import { AppShell } from "@/features/shell";
 import { SettingsPanel } from "@/features/settings-panel/SettingsPanel";
 
 export const dynamic = "force-dynamic";

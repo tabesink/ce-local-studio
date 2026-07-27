@@ -36,7 +36,7 @@ describe("F-009 foundation", () => {
     ];
     const actualRoutes = walk(join(src, "app"))
       .filter((file) => file.endsWith("page.tsx"))
-      .map((file) => relative(root, file))
+      .map((file) => relative(root, file).split("\\").join("/"))
       .sort();
     assert.deepEqual(actualRoutes, expectedRoutes);
   });

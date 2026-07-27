@@ -1,39 +1,35 @@
 import type { ReactNode } from "react";
-import { cx } from "@/lib/cx";
-
-/* Local Studio status grammar — ported from
-   .reference-LS-frontend/templates/nextjs-feature-demos/_shared/ui (StatusDot, StatusPill).
-   Status always pairs a dot/badge with text; never color alone. */
+import { cx } from "./cx";
 
 export type UiTone = "default" | "good" | "warning" | "danger" | "info";
 export type StatusPillVariant = "dot" | "badge";
 
 const dotClasses: Record<UiTone, string> = {
-  default: "bg-[var(--ui-muted)]",
-  good: "bg-[var(--ui-success)]",
-  warning: "bg-[var(--ui-warning)]",
-  danger: "bg-[var(--ui-danger)]",
-  info: "bg-[var(--ui-info)]",
+  default: "bg-(--ui-muted)",
+  good: "bg-(--ui-success)",
+  warning: "bg-(--ui-warning)",
+  danger: "bg-(--ui-danger)",
+  info: "bg-(--ui-info)",
 };
 
 const textClasses: Record<UiTone, string> = {
-  default: "text-[var(--ui-muted)]",
-  good: "text-[var(--ui-success)]",
-  warning: "text-[var(--ui-warning)]",
-  danger: "text-[var(--ui-danger)]",
-  info: "text-[var(--ui-info)]",
+  default: "text-(--ui-muted)",
+  good: "text-(--ui-success)",
+  warning: "text-(--ui-warning)",
+  danger: "text-(--ui-danger)",
+  info: "text-(--ui-info)",
 };
 
 const badgeClasses: Record<UiTone, string> = {
-  default: "bg-[var(--ui-surface)] text-[var(--ui-muted)]",
-  good: "bg-[color-mix(in_srgb,var(--ui-success)_10%,transparent)] text-[var(--ui-success)]",
-  warning: "bg-[color-mix(in_srgb,var(--ui-warning)_10%,transparent)] text-[var(--ui-warning)]",
-  danger: "bg-[color-mix(in_srgb,var(--ui-danger)_10%,transparent)] text-[var(--ui-danger)]",
-  info: "bg-[color-mix(in_srgb,var(--ui-info)_10%,transparent)] text-[var(--ui-info)]",
+  default: "bg-(--ui-surface) text-(--ui-muted)",
+  good: "bg-(--ui-success)/10 text-(--ui-success)",
+  warning: "bg-(--ui-warning)/10 text-(--ui-warning)",
+  danger: "bg-(--ui-danger)/10 text-(--ui-danger)",
+  info: "bg-(--ui-info)/10 text-(--ui-info)",
 };
 
 export function StatusDot({ tone = "default", className }: { tone?: UiTone; className?: string }) {
-  return <span aria-hidden className={cx("h-[5px] w-[5px] rounded-full", dotClasses[tone], className)} />;
+  return <span className={cx("h-[5px] w-[5px] rounded-full", dotClasses[tone], className)} />;
 }
 
 export function StatusPill({

@@ -1,9 +1,10 @@
-/* App-facing UI barrel — agent/feature import path: `@/components/ui`.
-   Inventory SoT: re-exports the shared Local Studio kit from `@/_shared/ui`,
-   plus CE-only surfaces below. `@/_shared/ui` remains an implementation detail;
-   CE-only modules must import helpers from `@/_shared/ui` directly (never this
-   barrel) to avoid circular dependencies. Thin parallel files in this folder
-   (e.g. `Button.tsx`) are legacy deep-import targets, not the inventory SoT. */
+/* Legacy alias barrel (P9-01 U4).
+   Product-neutral starters (Button, Input, StatusPill) live in `@/ui`.
+   Residual mega-kit symbols reach consumers via `@/_shared/ui` re-exports
+   until FE-01; `_shared` itself re-exports the `@/ui` starters (no second bodies).
+   CE-only AppLogo / ErrorBox / PageState remain physical modules in this folder.
+   New work must import starters from `@/ui` (or Settings/shell feature homes);
+   do not add competing implementations here. */
 
 export * from "@/_shared/ui";
 

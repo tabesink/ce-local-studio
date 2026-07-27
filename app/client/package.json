@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "generate:api": "openapi-typescript ../contracts/openapi.json -o src/lib/api/generated/openapi.ts",
     "generate:sse": "openapi-typescript ../contracts/sse-events.openapi.json -o src/lib/api/generated/sse.ts",
-    "test": "node --experimental-strip-types --test tests/*.mjs",
+    "test": "node --experimental-strip-types --test tests/*.mjs tests/structure/**/*.test.ts && vitest run",
+    "test:parity": "vitest run",
     "test:foundation": "node --test tests/foundation.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed"
@@ -27,11 +28,17 @@
   "devDependencies": {
     "@playwright/test": "^1.52.0",
     "@tailwindcss/postcss": "4.1.18",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "20.19.27",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "^6.0.4",
+    "jsdom": "^29.1.1",
     "openapi-typescript": "7.13.0",
     "tailwindcss": "4.1.18",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "^4.1.10"
   }
 }

@@ -4,9 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { AppLogo } from "@/components/ui/AppLogo";
-import { Button } from "@/components/ui/Button";
 import { ErrorBox } from "@/components/ui/ErrorBox";
-import { Input } from "@/components/ui/Input";
+import { Button, Input } from "@/ui";
 import { isApiError } from "@/lib/api/errors";
 import { useAuthStore } from "@/state/auth-store";
 

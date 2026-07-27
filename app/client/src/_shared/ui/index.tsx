@@ -2,7 +2,10 @@
 
 /* Shared Local Studio UI primitives — ported one-to-one from
    .references/local-studio/frontend/src/ui/*. Components read tokens only;
-   no hardcoded colors, radii, or row heights. */
+   no hardcoded colors, radii, or row heights.
+
+   Button / Input / StatusPill / StatusDot live in `@/ui` (P9-01 U2).
+   This barrel re-exports those symbols and keeps residual mega-kit bodies. */
 
 import {
   createContext,
@@ -10,9 +13,7 @@ import {
   useContext,
   useId,
   useState,
-  type ButtonHTMLAttributes,
   type CSSProperties,
-  type InputHTMLAttributes,
   type Key,
   type ReactNode,
   type SelectHTMLAttributes,
@@ -30,10 +31,26 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
+import {
+  Button,
+  StatusPill,
+  type UiTone,
+} from "@/ui";
+import { cx } from "@/ui/cx";
 
-export function cx(...parts: Array<string | false | null | undefined>): string {
-  return parts.filter(Boolean).join(" ");
-}
+export { cx } from "@/ui/cx";
+export {
+  Button,
+  type ButtonProps,
+  type ButtonSize,
+  type ButtonVariant,
+  Input,
+  type InputProps,
+  StatusDot,
+  StatusPill,
+  type StatusPillVariant,
+  type UiTone,
+} from "@/ui";
 
 /* ────────────────────────────── page ────────────────────────────── */
 
@@ -167,77 +184,6 @@ export function RefreshIconButton({
 
 /* ────────────────────────────── button ────────────────────────────── */
 
-export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost" | "icon";
-export type ButtonSize = "sm" | "md" | "lg";
-
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: ButtonVariant;
-  size?: ButtonSize;
-  loading?: boolean;
-  icon?: ReactNode;
-}
-
-const buttonVariantClasses: Record<ButtonVariant, string> = {
-  primary:
-    "bg-(--ui-fg)/90 text-(--ui-bg) hover:bg-(--ui-fg) disabled:opacity-50 disabled:cursor-not-allowed",
-  secondary:
-    "border border-(--ui-border)/40 text-(--ui-muted) hover:bg-(--ui-fg)/[0.06] hover:text-(--ui-fg) disabled:opacity-50",
-  danger:
-    "text-(--ui-danger) hover:bg-(--ui-danger)/15 disabled:opacity-50 disabled:cursor-not-allowed",
-  ghost: "text-(--ui-muted) hover:bg-(--ui-fg)/[0.06] hover:text-(--ui-fg) disabled:opacity-50",
-  icon: "hover:bg-(--ui-surface) text-(--ui-muted) hover:text-(--ui-fg) rounded-lg disabled:opacity-50",
-};
-
-const buttonSizeClasses: Record<ButtonSize, string> = {
-  sm: "px-3 py-1.5 text-xs",
-  md: "px-4 py-2 text-sm",
-  lg: "px-5 py-2.5 text-sm",
-};
-
-const buttonIconSizeClasses: Record<ButtonSize, string> = {
-  sm: "p-1",
-  md: "p-1.5",
-  lg: "p-2",
-};
-
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  {
-    variant = "primary",
-    size = "md",
-    loading = false,
-    icon,
-    children,
-    className = "",
-    disabled,
-    type = "button",
-    ...props
-  },
-  ref,
-) {
-  const isIcon = variant === "icon";
-  const base =
-    "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors";
-  return (
-    <button
-      ref={ref}
-      type={type}
-      disabled={disabled || loading}
-      className={`${base} ${buttonVariantClasses[variant]} ${isIcon ? buttonIconSizeClasses[size] : buttonSizeClasses[size]} ${className}`}
-      {...props}
-    >
-      {loading ? (
-        <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-        </svg>
-      ) : (
-        icon
-      )}
-      {children}
-    </button>
-  );
-});
-
 /* Compact h-7 control used across settings-like rows. */
 export function SettingsButton({
   children,
@@ -360,78 +306,6 @@ export function ToggleSwitch({
         )}
       />
     </button>
-  );
-}
-
-/* ────────────────────────────── status ────────────────────────────── */
-
-export type UiTone = "default" | "good" | "warning" | "danger" | "info";
-export type StatusPillVariant = "dot" | "badge";
-
-const dotClasses: Record<UiTone, string> = {
-  default: "bg-(--ui-muted)",
-  good: "bg-(--ui-success)",
-  warning: "bg-(--ui-warning)",
-  danger: "bg-(--ui-danger)",
-  info: "bg-(--ui-info)",
-};
-
-const textClasses: Record<UiTone, string> = {
-  default: "text-(--ui-muted)",
-  good: "text-(--ui-success)",
-  warning: "text-(--ui-warning)",
-  danger: "text-(--ui-danger)",
-  info: "text-(--ui-info)",
-};
-
-const badgeClasses: Record<UiTone, string> = {
-  default: "bg-(--ui-surface) text-(--ui-muted)",
-  good: "bg-(--ui-success)/10 text-(--ui-success)",
-  warning: "bg-(--ui-warning)/10 text-(--ui-warning)",
-  danger: "bg-(--ui-danger)/10 text-(--ui-danger)",
-  info: "bg-(--ui-info)/10 text-(--ui-info)",
-};
-
-export function StatusDot({ tone = "default", className }: { tone?: UiTone; className?: string }) {
-  return <span className={cx("h-[5px] w-[5px] rounded-full", dotClasses[tone], className)} />;
-}
-
-export function StatusPill({
-  tone = "default",
-  variant = "dot",
-  children,
-  className,
-}: {
-  tone?: UiTone;
-  variant?: StatusPillVariant;
-  children: ReactNode;
-  className?: string;
-}) {
-  if (variant === "badge") {
-    return (
-      <span
-        className={cx(
-          "inline-flex h-5 items-center rounded-[var(--rad-xs)] px-1.5 text-[length:var(--fs-xs)] font-medium",
-          badgeClasses[tone],
-          className,
-        )}
-      >
-        {children}
-      </span>
-    );
-  }
-
-  return (
-    <span
-      className={cx(
-        "inline-flex items-center gap-1.5 text-[length:var(--fs-sm)] font-normal",
-        textClasses[tone],
-        className,
-      )}
-    >
-      <StatusDot tone={tone} />
-      {children}
-    </span>
   );
 }
 
@@ -870,10 +744,6 @@ export function SettingsGroup({
   );
 }
 
-export function SettingsRow(props: Parameters<typeof ListRow>[0]) {
-  return <ListRow {...props} />;
-}
-
 export function SettingsValue({
   children,
   mono = false,
@@ -913,7 +783,7 @@ export function SettingsFactRows({ rows }: { rows: SettingsFactRow[] }) {
   return (
     <>
       {rows.map((row) => (
-        <SettingsRow
+        <ListRow
           key={row.key ?? row.label}
           variant={row.variant}
           label={row.label}
@@ -931,7 +801,7 @@ export function SettingsFactRows({ rows }: { rows: SettingsFactRow[] }) {
           actions={row.actions}
         >
           {row.children}
-        </SettingsRow>
+        </ListRow>
       ))}
     </>
   );
@@ -1050,44 +920,6 @@ export function SettingsTextarea({
 }
 
 /* ────────────────────────────── forms ────────────────────────────── */
-
-export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
-  label?: string;
-  error?: string;
-  icon?: ReactNode;
-}
-
-export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { label, error, icon, className = "", id, ...props },
-  ref,
-) {
-  const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, "-") : undefined);
-
-  return (
-    <div>
-      {label && (
-        <label
-          htmlFor={inputId}
-          className="mb-2 block text-xs font-medium uppercase tracking-wider text-(--ui-muted)"
-        >
-          {label}
-        </label>
-      )}
-      <div className="relative">
-        {icon && (
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-(--ui-muted)">{icon}</div>
-        )}
-        <input
-          ref={ref}
-          id={inputId}
-          className={`h-8 w-full rounded-md border border-(--ui-separator) bg-(--ui-bg) px-2.5 text-[length:var(--fs-base)] text-(--ui-fg) transition-all placeholder:text-(--ui-muted)/50 focus:border-(--ui-info)/50 focus:outline-none focus:ring-1 focus:ring-(--ui-info)/20 ${icon ? "pl-9" : ""} ${error ? "border-(--ui-danger)" : ""} ${className}`}
-          {...props}
-        />
-      </div>
-      {error && <p className="mt-1.5 text-xs text-(--ui-danger)">{error}</p>}
-    </div>
-  );
-});
 
 export interface SelectOption {
   value: string;
