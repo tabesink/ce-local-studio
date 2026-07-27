@@ -744,10 +744,6 @@ export function SettingsGroup({
   );
 }
 
-export function SettingsRow(props: Parameters<typeof ListRow>[0]) {
-  return <ListRow {...props} />;
-}
-
 export function SettingsValue({
   children,
   mono = false,
@@ -787,7 +783,7 @@ export function SettingsFactRows({ rows }: { rows: SettingsFactRow[] }) {
   return (
     <>
       {rows.map((row) => (
-        <SettingsRow
+        <ListRow
           key={row.key ?? row.label}
           variant={row.variant}
           label={row.label}
@@ -805,7 +801,7 @@ export function SettingsFactRows({ rows }: { rows: SettingsFactRow[] }) {
           actions={row.actions}
         >
           {row.children}
-        </SettingsRow>
+        </ListRow>
       ))}
     </>
   );

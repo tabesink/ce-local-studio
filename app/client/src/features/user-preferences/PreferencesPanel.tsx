@@ -7,10 +7,10 @@ import {
   Select,
   SettingsButton,
   SettingsGroup,
-  SettingsRow,
   SettingsValue,
   StatusPill,
 } from "@/_shared/ui";
+import { SettingsRow } from "@/features/settings-panel/SettingsRow";
 import { useAppearance } from "@/features/user-preferences/AppearanceProvider";
 import type {
   DensityId,

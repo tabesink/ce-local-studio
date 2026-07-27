@@ -1,4 +1,4 @@
-import { AppShell } from "@/components/layout/AppShell";
+import { AppShell } from "@/features/shell";
 import { ChatShell } from "@/features/chat-shell/ChatShell";
 
 export const dynamic = "force-dynamic";
