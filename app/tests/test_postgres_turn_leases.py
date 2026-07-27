@@ -8,7 +8,7 @@ from datetime import timedelta
 import os
 from pathlib import Path
 import re
-from threading import Barrier
+from threading import Barrier, Event
 from typing import Any, Iterable
 from uuid import uuid4
 
@@ -33,6 +33,7 @@ from context_engine.models import (
     ConversationTurnEvent,
     User,
 )
+from context_engine.services.audit import AuditContext
 from context_engine.services.chat_turns import (
     ConversationTurnWorker,
     SynthesisStreamAdapter,
@@ -40,6 +41,7 @@ from context_engine.services.chat_turns import (
     start_or_replay_turn,
 )
 from context_engine.services.readiness import SUPPORTED_ALEMBIC_HEAD
+from context_engine.services.runtime_config import SecretCrypto, rotate_provider_credential, seed_runtime_config
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 ADMIN_URL_ENV = "CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL"
@@ -155,6 +157,19 @@ def _seed_owner_conversation(engine: Engine) -> tuple[str, str, str]:
     return owner_id, conversation_ref, auth_session_id
 
 
+def _seed_synthesis_runtime(db: Session, settings: Settings, owner: User) -> None:
+    """Workers still resolve TrustedRuntimeResolver even with injected adapters."""
+    seed_runtime_config(db)
+    rotate_provider_credential(
+        db,
+        "openai",
+        "sk-test-openai-p704",
+        SecretCrypto.from_settings(settings),
+        expected_version=1,
+        audit_context=AuditContext(actor_user=owner, request_id="req-p704-runtime"),
+    )
+
+
 def test_p7_04_supported_alembic_head_includes_turn_leases() -> None:
     assert HEAD_REVISION == SUPPORTED_ALEMBIC_HEAD
 
@@ -263,6 +278,7 @@ def test_c01_cancel_vs_worker_keeps_single_terminal_on_postgresql_16() -> None:
                 owner = db.get(User, owner_id)
                 auth_session = db.get(AuthSession, auth_session_id)
                 assert owner is not None and auth_session is not None
+                _seed_synthesis_runtime(db, settings, owner)
                 start = start_or_replay_turn(
                     db,
                     settings=settings,
@@ -276,12 +292,15 @@ def test_c01_cancel_vs_worker_keeps_single_terminal_on_postgresql_16() -> None:
                 turn_id = start.turn.id
                 turn_public_ref = start.turn.public_ref
 
-            gate = Barrier(2)
+            first_delta_ready = Event()
+            cancel_committed = Event()
 
             class GatedSynthesis(SynthesisStreamAdapter):
                 def stream_direct(self, **_kwargs: Any) -> Iterable[str]:
                     yield "Hello "
-                    gate.wait(timeout=15)
+                    first_delta_ready.set()
+                    assert cancel_committed.wait(timeout=15)
+                    # Resume after cancel sealed; fence must stop further deltas.
                     yield "world"
 
                 def stream_grounded(self, **_kwargs: Any) -> Iterable[str]:
@@ -295,7 +314,7 @@ def test_c01_cancel_vs_worker_keeps_single_terminal_on_postgresql_16() -> None:
                     ).run_once(db)
 
             def run_cancel() -> None:
-                gate.wait(timeout=15)
+                assert first_delta_ready.wait(timeout=15)
                 with Session(engine) as db:
                     owner = db.get(User, owner_id)
                     auth_session = db.get(AuthSession, auth_session_id)
@@ -308,12 +327,17 @@ def test_c01_cancel_vs_worker_keeps_single_terminal_on_postgresql_16() -> None:
                         conversation_id=conversation_ref,
                         turn_id=turn_public_ref,
                     )
+                cancel_committed.set()
 
             with ThreadPoolExecutor(max_workers=2) as executor:
                 worker_future = executor.submit(run_worker)
                 cancel_future = executor.submit(run_cancel)
-                cancel_future.result(timeout=20)
-                worker_future.result(timeout=20)
+                worker_exc = worker_future.exception(timeout=20)
+                cancel_exc = cancel_future.exception(timeout=20)
+                if worker_exc is not None:
+                    raise worker_exc
+                if cancel_exc is not None:
+                    raise cancel_exc
 
             with Session(engine) as db:
                 turn = db.get(ConversationTurn, turn_id)
@@ -423,6 +447,7 @@ def test_c01_disconnect_without_cancel_allows_completion_on_postgresql_16() -> N
                 owner = db.get(User, owner_id)
                 auth_session = db.get(AuthSession, auth_session_id)
                 assert owner is not None and auth_session is not None
+                _seed_synthesis_runtime(db, settings, owner)
                 start = start_or_replay_turn(
                     db,
                     settings=settings,

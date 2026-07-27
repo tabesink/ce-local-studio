@@ -64,6 +64,10 @@ Covers identical attach once, fingerprint conflict, cancel-vs-worker single
 terminal, answer-delta reclaim fail-closed, and disconnect-without-cancel
 completion. Skips unless the disposable-database opt-in is set.
 
+Local run (2026-07-27) against `127.0.0.1:5438` disposable PostgreSQL 16:
+`6 passed` after seeding TrustedRuntimeResolver credentials in worker races
+and sealing cancel while the worker is blocked between answer deltas.
+
 ### Contract generation
 
 ```text
