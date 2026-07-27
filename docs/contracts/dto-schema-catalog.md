@@ -184,10 +184,13 @@ type TurnDto = {
   completedAt: UtcTimestamp | null;
 };
 
-type ConversationDetailDto = ConversationSummaryDto & { turns: TurnDto[] };
+type ConversationDetailResponseDto = {
+  conversation: ConversationSummaryDto;
+  turns: TurnDto[];
+};
 ```
 
-`EvidenceItemDto`, document metadata, and location anchors are exactly those in `document-and-evidence-contract.md`. `AcceptedRefDto.id` is the persisted accepted-ref public ref, never its private row ID. A redacted turn has `assistantAnswer:null`, `evidence:[]`, and `acceptedRefs:[]`.
+`ConversationSummaryDto.id` and `TurnDto.id` are dedicated persisted public refs, never private row primary keys. `EvidenceItemDto`, document metadata, and location anchors are exactly those in `document-and-evidence-contract.md`. `AcceptedRefDto.id` is the persisted accepted-ref public ref, never its private row ID. A redacted turn has `assistantAnswer:null`, `evidence:[]`, and `acceptedRefs:[]`.
 
 The standalone retrieval route uses a distinct stateless projection:
 

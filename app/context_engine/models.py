@@ -186,6 +186,9 @@ AUDIT_EVENT_SOURCE_DELETE_FAILED = "source.delete_failed"
 AUDIT_EVENT_SOURCE_INDEX_RETRY_QUEUED = "source.index_retry_queued"
 AUDIT_EVENT_SOURCE_INDEX_CANCELLED = "source.index_cancelled"
 AUDIT_EVENT_CHAT_TURN_REDACTED = "chat.turn_redacted"
+AUDIT_EVENT_CONVERSATION_CREATED = "conversation.created"
+AUDIT_EVENT_CONVERSATION_RENAMED = "conversation.renamed"
+AUDIT_EVENT_CONVERSATION_DELETED = "conversation.deleted"
 AUDIT_EVENT_SECURITY_ADMIN_ROUTE_DENIED = "security.admin_route_denied"
 AUDIT_EVENT_USER_DISABLED = "user.disabled"
 AUDIT_EVENT_USER_ENABLED = "user.enabled"
@@ -211,6 +214,9 @@ AUDIT_EVENT_NAMES = (
     AUDIT_EVENT_SOURCE_INDEX_RETRY_QUEUED,
     AUDIT_EVENT_SOURCE_INDEX_CANCELLED,
     AUDIT_EVENT_CHAT_TURN_REDACTED,
+    AUDIT_EVENT_CONVERSATION_CREATED,
+    AUDIT_EVENT_CONVERSATION_RENAMED,
+    AUDIT_EVENT_CONVERSATION_DELETED,
     AUDIT_EVENT_SECURITY_ADMIN_ROUTE_DENIED,
     AUDIT_EVENT_USER_DISABLED,
     AUDIT_EVENT_USER_ENABLED,
@@ -620,15 +626,26 @@ class SourceImage(Base):
 
 class Conversation(Base):
     __tablename__ = "conversations"
-    __table_args__ = (Index("ix_conversations_owner_updated", "owner_user_id", text("updated_at DESC")),)
+    __table_args__ = (
+        CheckConstraint("version >= 1", name="ck_conversations_version_positive"),
+        Index("uq_conversations_public_ref", "public_ref", unique=True),
+        Index("ix_conversations_owner_created", "owner_user_id", text("created_at DESC"), text("id DESC")),
+        Index("ix_conversations_owner_updated", "owner_user_id", text("updated_at DESC")),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    public_ref: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default=lambda: f"conv_{uuid.uuid4().hex}",
+    )
     owner_user_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
     title: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now, onupdate=utc_now)
 
@@ -663,6 +680,7 @@ class ConversationTurn(Base):
             name="ck_conversation_turns_route_domain",
         ),
         Index("ix_conversation_turns_conversation_created", "conversation_id", text("created_at DESC")),
+        Index("uq_conversation_turns_public_ref", "public_ref", unique=True),
         Index("uq_conversation_turns_client_request", "conversation_id", "client_request_id", unique=True),
         Index(
             "uq_conversation_turns_one_running",
@@ -674,6 +692,11 @@ class ConversationTurn(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    public_ref: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default=lambda: f"turn_{uuid.uuid4().hex}",
+    )
     conversation_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("conversations.id", ondelete="CASCADE"),

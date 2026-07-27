@@ -753,20 +753,22 @@ export interface components {
             /** Token */
             token: string;
         };
-        /** ConversationDetailDto */
-        ConversationDetailDto: {
-            /** Createdat */
-            createdAt: string;
-            /** Id */
-            id: string;
-            /** Title */
-            title: string | null;
+        /** ConversationDetailResponseDto */
+        ConversationDetailResponseDto: {
+            conversation: components["schemas"]["ConversationSummaryDto"];
             /** Turns */
             turns: components["schemas"]["TurnDto"][];
-            /** Updatedat */
-            updatedAt: string;
-            /** Version */
-            version: number;
+        };
+        /** ConversationListResponse */
+        ConversationListResponse: {
+            /** Conversations */
+            conversations: components["schemas"]["ConversationSummaryDto"][];
+            /** Nextcursor */
+            nextCursor: string | null;
+        };
+        /** ConversationMutationResponse */
+        ConversationMutationResponse: {
+            conversation: components["schemas"]["ConversationSummaryDto"];
         };
         /** ConversationSummaryDto */
         ConversationSummaryDto: {
@@ -1239,6 +1241,10 @@ export interface components {
             /** Retryable */
             retryable: boolean;
         };
+        /** TurnMutationResponse */
+        TurnMutationResponse: {
+            turn: components["schemas"]["TurnDto"];
+        };
         /** TurnStreamRequest */
         TurnStreamRequest: {
             /** Clientrequestid */
@@ -1359,8 +1365,8 @@ export interface operations {
     admin_delete_domain_api_v1_admin_domains__domainId__delete: {
         parameters: {
             query?: never;
-            header?: {
-                "If-Match"?: string | null;
+            header: {
+                "If-Match": string;
             };
             path: {
                 domainId: string;
@@ -1526,8 +1532,8 @@ export interface operations {
     admin_delete_source_api_v1_admin_domains__domainId__sources__sourceId__delete: {
         parameters: {
             query?: never;
-            header?: {
-                "If-Match"?: string | null;
+            header: {
+                "If-Match": string;
             };
             path: {
                 domainId: string;
@@ -1560,8 +1566,8 @@ export interface operations {
     admin_cancel_source_api_v1_admin_domains__domainId__sources__sourceId__cancel_post: {
         parameters: {
             query?: never;
-            header?: {
-                "If-Match"?: string | null;
+            header: {
+                "If-Match": string;
             };
             path: {
                 domainId: string;
@@ -1867,8 +1873,8 @@ export interface operations {
     admin_update_runtime_settings_api_v1_admin_runtime_settings_patch: {
         parameters: {
             query?: never;
-            header?: {
-                "If-Match"?: string | null;
+            header: {
+                "If-Match": string;
             };
             path?: never;
             cookie?: never;
@@ -1964,8 +1970,8 @@ export interface operations {
     admin_update_model_profile_api_v1_admin_runtime_settings_model_profiles__id__patch: {
         parameters: {
             query?: never;
-            header?: {
-                "If-Match"?: string | null;
+            header: {
+                "If-Match": string;
             };
             path: {
                 id: string;
@@ -2001,8 +2007,8 @@ export interface operations {
     admin_rotate_provider_credential_api_v1_admin_runtime_settings_providers__kind__put: {
         parameters: {
             query?: never;
-            header?: {
-                "If-Match"?: string | null;
+            header: {
+                "If-Match": string;
             };
             path: {
                 kind: string;
@@ -2189,7 +2195,10 @@ export interface operations {
     };
     get_conversations_api_v1_conversations_get: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2202,9 +2211,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ConversationListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2228,9 +2244,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ConversationMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2261,9 +2275,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ConversationDetailResponseDto"];
                 };
             };
             /** @description Validation Error */
@@ -2280,7 +2292,9 @@ export interface operations {
     remove_conversation_api_v1_conversations__conversationId__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "If-Match": string;
+            };
             path: {
                 conversationId: string;
             };
@@ -2309,7 +2323,9 @@ export interface operations {
     patch_conversation_api_v1_conversations__conversationId__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "If-Match": string;
+            };
             path: {
                 conversationId: string;
             };
@@ -2327,9 +2343,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ConversationMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2395,9 +2409,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["TurnMutationResponse"];
                 };
             };
             /** @description Validation Error */

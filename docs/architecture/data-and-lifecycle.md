@@ -50,6 +50,8 @@ Deleting any cited source or the selected domain redacts the whole derived turn.
 
 PostgreSQL is authoritative for identity, authorization, lifecycle, operation intent, private linkage and durable product state. Governed object storage owns source bytes and durable derived objects referenced by PostgreSQL metadata. Per-domain runtime directories and LightRAG state are private rebuildable derivatives, never ownership or backup authority. Repositories persist within a service-supplied scope and never decide authorization.
 
+Conversation CRUD uses dedicated cryptographically random `conv_`/`turn_` public refs and stable `(created_at,id)` keyset order; private primary keys never cross HTTP, SSE, composer, or newly persisted safe-event projections. Append-only legacy accepted events remain byte-for-byte intact and the authorized replay projector substitutes current public refs before emission. Migration-first rollout retains database-side public-ref defaults so the previous application remains insert-compatible through deploy and rollback. Rename and delete lock the owner-scoped conversation row, revalidate the current enabled session/user inside the committing transaction, compare the persisted positive version, and commit the protected mutation with `conversation.created`, `conversation.renamed`, or `conversation.deleted` audit intent. Conversation creation does not accept durable `Idempotency-Key` semantics until the separately approved shared create-idempotency record contract exists.
+
 ## Privacy classes and allowed sinks
 
 | Class | Examples | Browser/API | Product database/object storage | logs, metrics, audit and traces |

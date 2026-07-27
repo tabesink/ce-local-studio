@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import func, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only, selectinload
 
 from context_engine.config import Settings
 from context_engine.db import utc_now
@@ -49,10 +49,11 @@ from context_engine.models import (
     Domain,
     SourceBlock,
     SourceDocument,
+    AuthSession,
     User,
 )
 from context_engine.services.audit import AuditContext, AuditService
-from context_engine.services.auth import iso_utc
+from context_engine.services.auth import MutationAuthenticationError, iso_utc, revalidate_mutation_actor
 from context_engine.services.chat_intent import requires_domain
 from context_engine.services.composer_refs import (
     ComposerRefError,
@@ -61,7 +62,8 @@ from context_engine.services.composer_refs import (
     persist_accepted_composer_refs,
     validate_composer_ref_tokens,
 )
-from context_engine.services.conversations import get_owned_conversation
+from context_engine.services.conversations import get_owned_conversation, lock_owned_conversation
+from context_engine.services.domains import controller_from_settings, domain_available
 from context_engine.services.evidence import (
     EvidenceRetrievalError,
     InternalMappedEvidence,
@@ -69,11 +71,13 @@ from context_engine.services.evidence import (
     ScopedRetrievalPort,
     resolve_available_domain,
     retrieve_internal_scoped_evidence,
+    safe_section_label,
 )
 from context_engine.services.prompt_assembly import (
     PromptAssemblyContext,
     PromptAssemblyService,
 )
+from context_engine.services.public_refs import generate_unique_public_ref
 from context_engine.services.runtime_config import (
     RuntimeConfigError,
     SecretCrypto,
@@ -81,6 +85,7 @@ from context_engine.services.runtime_config import (
     TrustedRuntimeResolver,
 )
 from context_engine.services.structured_logging import safe_log
+from context_engine.services.sources import sanitize_original_filename
 from context_engine.services.tracing import TraceMetadata, tracer_from_settings
 
 logger = logging.getLogger(__name__)
@@ -271,12 +276,80 @@ def _running_turn(db: Session, conversation_id: str) -> ConversationTurn | None:
     )
 
 
+def _lock_conversation_for_turn_insert(
+    db: Session,
+    *,
+    owner: User,
+    conversation: Conversation,
+) -> Conversation:
+    return lock_owned_conversation(
+        db,
+        owner=owner,
+        conversation_id=conversation.public_ref,
+    )
+
+
 def _existing_request_turn(db: Session, *, conversation_id: str, client_request_id: str) -> ConversationTurn | None:
     return db.scalar(
         select(ConversationTurn).where(
             ConversationTurn.conversation_id == conversation_id,
             ConversationTurn.client_request_id == client_request_id,
         )
+    )
+
+
+def _matching_existing_turn(
+    db: Session,
+    *,
+    conversation_id: str,
+    client_request_id: str,
+    user_message: str,
+    domain_id: str | None,
+    route: str,
+    composer_ref_fingerprint: str | None = None,
+) -> ConversationTurn | None:
+    existing = _existing_request_turn(
+        db,
+        conversation_id=conversation_id,
+        client_request_id=client_request_id,
+    )
+    if existing is None:
+        return None
+    if (
+        existing.user_message != user_message
+        or existing.domain_id != domain_id
+        or existing.route != route
+        or (
+            composer_ref_fingerprint is not None
+            and existing.composer_ref_fingerprint != composer_ref_fingerprint
+        )
+    ):
+        raise ChatTurnError(409, "client_request_conflict", "Client request conflicts with an existing turn.")
+    return existing
+
+
+def _turn_start_replay(
+    existing: ConversationTurn,
+    *,
+    request_id: str | None,
+) -> TurnStartResult:
+    safe_log(
+        logger,
+        "chat.turn_replayed",
+        request_id=request_id,
+        trace_id=existing.trace_id,
+        domain_id=existing.domain_id,
+        conversation_turn_id=existing.id,
+        client_request_id=existing.client_request_id,
+        outcome=existing.status,
+        replay=True,
+    )
+    return TurnStartResult(
+        turn=existing,
+        replay=True,
+        synthesis=None,
+        prior_user_questions=(),
+        request_id=request_id,
     )
 
 
@@ -290,7 +363,7 @@ def get_owned_turn(
     conversation = get_owned_conversation(db, owner=owner, conversation_id=conversation_id)
     turn = db.scalar(
         select(ConversationTurn).where(
-            ConversationTurn.id == turn_id,
+            ConversationTurn.public_ref == turn_id,
             ConversationTurn.conversation_id == conversation.id,
         )
     )
@@ -341,6 +414,7 @@ def start_or_replay_turn(
     *,
     settings: Settings,
     owner: User,
+    auth_session: AuthSession,
     conversation_id: str,
     client_request_id: str,
     message: str,
@@ -361,33 +435,17 @@ def start_or_replay_turn(
     except ComposerRefError as exc:
         raise ChatTurnError(exc.status_code, exc.code, exc.message) from exc
 
-    existing = _existing_request_turn(
+    existing = _matching_existing_turn(
         db,
         conversation_id=conversation.id,
         client_request_id=normalized_request_id,
+        user_message=normalized_message,
+        domain_id=effective_domain_id,
+        route=route,
+        composer_ref_fingerprint=composer_ref_request_fingerprint,
     )
     if existing is not None:
-        if (
-            existing.user_message != normalized_message
-            or existing.domain_id != effective_domain_id
-            or existing.route != route
-            or existing.composer_ref_fingerprint != composer_ref_request_fingerprint
-        ):
-            raise ChatTurnError(409, "client_request_conflict", "Client request conflicts with an existing turn.")
-        if existing.status == TURN_STATUS_RUNNING:
-            raise ChatTurnError(409, "conversation_turn_in_progress", "A conversation turn is already running.")
-        safe_log(
-            logger,
-            "chat.turn_replayed",
-            request_id=request_id,
-            trace_id=existing.trace_id,
-            domain_id=existing.domain_id,
-            conversation_turn_id=existing.id,
-            client_request_id=existing.client_request_id,
-            outcome=existing.status,
-            replay=True,
-        )
-        return TurnStartResult(turn=existing, replay=True, synthesis=None, prior_user_questions=(), request_id=request_id)
+        return _turn_start_replay(existing, request_id=request_id)
 
     if _running_turn(db, conversation.id) is not None:
         raise ChatTurnError(409, "conversation_turn_in_progress", "A conversation turn is already running.")
@@ -414,8 +472,40 @@ def start_or_replay_turn(
     synthesis = _resolve_synthesis(db, settings)
     prior_questions = _prior_user_questions(db, conversation.id)
 
+    try:
+        owner = revalidate_mutation_actor(
+            db,
+            settings=settings,
+            owner=owner,
+            auth_session=auth_session,
+        )
+    except MutationAuthenticationError:
+        raise ChatTurnError(401, "unauthenticated", "Authentication required.") from None
+    conversation = _lock_conversation_for_turn_insert(
+        db,
+        owner=owner,
+        conversation=conversation,
+    )
+    existing = _matching_existing_turn(
+        db,
+        conversation_id=conversation.id,
+        client_request_id=normalized_request_id,
+        user_message=normalized_message,
+        domain_id=effective_domain_id,
+        route=route,
+        composer_ref_fingerprint=composer_ref_request_fingerprint,
+    )
+    if existing is not None:
+        return _turn_start_replay(existing, request_id=request_id)
+    if _running_turn(db, conversation.id) is not None:
+        raise ChatTurnError(409, "conversation_turn_in_progress", "A conversation turn is already running.")
     now = utc_now()
     turn = ConversationTurn(
+        public_ref=generate_unique_public_ref(
+            db,
+            prefix="turn",
+            column=ConversationTurn.public_ref,
+        ),
         conversation_id=conversation.id,
         client_request_id=normalized_request_id,
         domain_id=effective_domain_id,
@@ -429,6 +519,7 @@ def start_or_replay_turn(
         updated_at=now,
     )
     conversation.updated_at = now
+    conversation.version += 1
     db.add(turn)
     db.commit()
     db.refresh(turn)
@@ -441,7 +532,7 @@ def start_or_replay_turn(
         turn=turn,
         event_type=TURN_EVENT_ACCEPTED,
         payload={
-            "conversationId": conversation.id,
+            "conversationId": conversation.public_ref,
             "clientRequestId": turn.client_request_id,
             "replay": False,
         },
@@ -495,23 +586,44 @@ def claim_turn(
     normalized_message = normalize_turn_message(message)
     _validate_effective_route(route=route, domain_id=domain_id)
 
-    existing = _existing_request_turn(
+    existing = _matching_existing_turn(
         db,
         conversation_id=conversation.id,
         client_request_id=normalized_request_id,
+        user_message=normalized_message,
+        domain_id=domain_id,
+        route=route,
     )
     if existing is not None:
-        if existing.user_message != normalized_message or existing.domain_id != domain_id or existing.route != route:
-            raise ChatTurnError(409, "client_request_conflict", "Client request conflicts with an existing turn.")
-        if existing.status == TURN_STATUS_RUNNING:
-            raise ChatTurnError(409, "conversation_turn_in_progress", "A conversation turn is already running.")
         return TurnClaimResult(turn=existing, replay=True)
 
     if _running_turn(db, conversation.id) is not None:
         raise ChatTurnError(409, "conversation_turn_in_progress", "A conversation turn is already running.")
 
+    conversation = _lock_conversation_for_turn_insert(
+        db,
+        owner=owner,
+        conversation=conversation,
+    )
+    existing = _matching_existing_turn(
+        db,
+        conversation_id=conversation.id,
+        client_request_id=normalized_request_id,
+        user_message=normalized_message,
+        domain_id=domain_id,
+        route=route,
+    )
+    if existing is not None:
+        return TurnClaimResult(turn=existing, replay=True)
+    if _running_turn(db, conversation.id) is not None:
+        raise ChatTurnError(409, "conversation_turn_in_progress", "A conversation turn is already running.")
     now = utc_now()
     turn = ConversationTurn(
+        public_ref=generate_unique_public_ref(
+            db,
+            prefix="turn",
+            column=ConversationTurn.public_ref,
+        ),
         conversation_id=conversation.id,
         client_request_id=normalized_request_id,
         domain_id=domain_id,
@@ -524,6 +636,7 @@ def claim_turn(
         updated_at=now,
     )
     conversation.updated_at = now
+    conversation.version += 1
     db.add(turn)
     db.commit()
     db.refresh(turn)
@@ -572,7 +685,7 @@ def safe_turn_summary(turn: ConversationTurn) -> dict[str, Any]:
             "message": turn.safe_error_message,
         }
     return {
-        "id": turn.id,
+        "id": turn.public_ref,
         "clientRequestId": turn.client_request_id,
         "domainId": turn.domain_id,
         "route": turn.route,
@@ -617,13 +730,222 @@ def safe_turn_summary(turn: ConversationTurn) -> dict[str, Any]:
     }
 
 
-def conversation_turn_summaries(db: Session, conversation: Conversation) -> list[dict[str, Any]]:
-    turns = db.scalars(
-        select(ConversationTurn)
-        .where(ConversationTurn.conversation_id == conversation.id)
-        .order_by(ConversationTurn.created_at, ConversationTurn.id)
+def _turn_evidence_items(
+    turn: ConversationTurn,
+    *,
+    sources: dict[str, SourceDocument],
+    blocks: dict[str, SourceBlock],
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for ref in _public_evidence_refs(turn):
+        source = sources.get(ref.source_document_id)
+        block = blocks.get(ref.source_block_id)
+        if (
+            source is None
+            or block is None
+            or block.source_document_id != source.id
+            or block.page_start is None
+            or ref.citation_label is None
+            or ref.source_label is None
+            or ref.excerpt is None
+        ):
+            continue
+        section_label = safe_section_label(block.section_path)
+        items.append(
+            {
+                "id": ref.public_ref,
+                "citationLabel": ref.citation_label,
+                "sourceLabel": ref.source_label,
+                "excerpt": ref.excerpt,
+                "kind": block.kind,
+                "documentRef": source.public_ref,
+                "documentLabel": sanitize_original_filename(source.original_filename),
+                "anchor": {
+                    "pageNumber": block.page_start,
+                    "region": None,
+                    "sectionLabel": section_label,
+                    "fallback": "section" if section_label else "page",
+                },
+            }
+        )
+    return items
+
+
+def _turn_accepted_refs(turn: ConversationTurn) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": ref.public_ref,
+            "kind": ref.ref_kind,
+            "order": ref.ref_order,
+            "label": ref.safe_label,
+            "description": ref.safe_description,
+        }
+        for ref in _public_composer_refs(turn)
+        if ref.safe_label is not None
+    ]
+
+
+def _turn_safe_error(turn: ConversationTurn) -> dict[str, Any] | None:
+    if not turn.safe_error_code or not turn.safe_error_message:
+        return None
+    return {
+        "code": turn.safe_error_code,
+        "message": turn.safe_error_message,
+        "retryable": False,
+    }
+
+
+def _turn_domain(
+    turn: ConversationTurn,
+    domains: dict[str, Domain],
+    domain_eligibility: dict[str, bool],
+) -> dict[str, Any] | None:
+    domain = domains.get(turn.domain_id) if turn.domain_id else None
+    if domain is None:
+        return None
+    return {
+        "id": domain.id,
+        "displayName": domain.display_name,
+        "state": domain.state,
+        "queryEligible": domain_eligibility.get(domain.id, False),
+    }
+
+
+def _project_turn_dto(
+    turn: ConversationTurn,
+    *,
+    sources: dict[str, SourceDocument],
+    blocks: dict[str, SourceBlock],
+    domains: dict[str, Domain],
+    domain_eligibility: dict[str, bool],
+) -> dict[str, Any]:
+    redacted = turn.status == TURN_STATUS_REDACTED
+    return {
+        "id": turn.public_ref,
+        "clientRequestId": turn.client_request_id,
+        "route": turn.route,
+        "status": turn.status,
+        "domain": _turn_domain(turn, domains, domain_eligibility),
+        "userMessage": turn.user_message,
+        "assistantAnswer": _public_assistant_answer(turn),
+        "evidence": [] if redacted else _turn_evidence_items(turn, sources=sources, blocks=blocks),
+        "acceptedRefs": [] if redacted else _turn_accepted_refs(turn),
+        "error": None if redacted else _turn_safe_error(turn),
+        "createdAt": iso_utc(turn.created_at),
+        "completedAt": _optional_iso(turn.completed_at),
+    }
+
+
+def _turn_projection_lookups(
+    db: Session,
+    settings: Settings,
+    turns: list[ConversationTurn],
+) -> tuple[
+    dict[str, SourceDocument],
+    dict[str, SourceBlock],
+    dict[str, Domain],
+    dict[str, bool],
+]:
+    active_turns = [turn for turn in turns if turn.status != TURN_STATUS_REDACTED]
+    source_ids = {
+        ref.source_document_id
+        for turn in active_turns
+        for ref in _public_evidence_refs(turn)
+    }
+    block_ids = {
+        ref.source_block_id
+        for turn in active_turns
+        for ref in _public_evidence_refs(turn)
+    }
+    domain_ids = {turn.domain_id for turn in turns if turn.domain_id is not None}
+    source_rows = (
+        db.scalars(
+            select(SourceDocument)
+            .options(
+                load_only(
+                    SourceDocument.id,
+                    SourceDocument.public_ref,
+                    SourceDocument.original_filename,
+                )
+            )
+            .where(SourceDocument.id.in_(source_ids))
+        )
+        if source_ids
+        else ()
     )
-    return [safe_turn_summary(turn) for turn in turns]
+    block_rows = (
+        db.scalars(
+            select(SourceBlock)
+            .options(
+                load_only(
+                    SourceBlock.id,
+                    SourceBlock.kind,
+                    SourceBlock.page_start,
+                    SourceBlock.section_path,
+                )
+            )
+            .where(SourceBlock.id.in_(block_ids))
+        )
+        if block_ids
+        else ()
+    )
+    domain_rows = (
+        db.scalars(
+            select(Domain)
+            .options(load_only(Domain.id, Domain.display_name, Domain.state))
+            .where(Domain.id.in_(domain_ids))
+        )
+        if domain_ids
+        else ()
+    )
+    domains = {row.id: row for row in domain_rows}
+    controller = controller_from_settings(settings)
+    return (
+        {row.id: row for row in source_rows},
+        {row.id: row for row in block_rows},
+        domains,
+        {domain_id: domain_available(db, domain, controller) for domain_id, domain in domains.items()},
+    )
+
+
+def safe_turn_dto(db: Session, settings: Settings, turn: ConversationTurn) -> dict[str, Any]:
+    sources, blocks, domains, domain_eligibility = _turn_projection_lookups(db, settings, [turn])
+    return _project_turn_dto(
+        turn,
+        sources=sources,
+        blocks=blocks,
+        domains=domains,
+        domain_eligibility=domain_eligibility,
+    )
+
+
+def conversation_turn_summaries(
+    db: Session,
+    settings: Settings,
+    conversation: Conversation,
+) -> list[dict[str, Any]]:
+    turns = list(
+        db.scalars(
+            select(ConversationTurn)
+            .options(
+                selectinload(ConversationTurn.evidence_refs),
+                selectinload(ConversationTurn.composer_refs),
+            )
+            .where(ConversationTurn.conversation_id == conversation.id)
+            .order_by(ConversationTurn.created_at, ConversationTurn.id)
+        )
+    )
+    sources, blocks, domains, domain_eligibility = _turn_projection_lookups(db, settings, turns)
+    return [
+        _project_turn_dto(
+            turn,
+            sources=sources,
+            blocks=blocks,
+            domains=domains,
+            domain_eligibility=domain_eligibility,
+        )
+        for turn in turns
+    ]
 
 
 def encode_sse_event(event: TurnStreamEvent) -> str:
@@ -640,14 +962,20 @@ def encode_sse_event(event: TurnStreamEvent) -> str:
     return f"id: {event.event_id}\nevent: {event.event_type}\ndata: {data}\n\n"
 
 
-def _event_from_row(row: ConversationTurnEvent) -> TurnStreamEvent:
+def _event_from_row(row: ConversationTurnEvent, turn: ConversationTurn) -> TurnStreamEvent:
+    payload = json.loads(row.payload_json)
+    if (
+        row.event_type == TURN_EVENT_ACCEPTED
+        and payload.get("conversationId") == turn.conversation_id
+    ):
+        payload = {**payload, "conversationId": turn.conversation.public_ref}
     return TurnStreamEvent(
         event_id=row.id,
-        turn_id=row.turn_id,
+        turn_id=turn.public_ref,
         sequence=row.sequence,
         event_type=row.event_type,
         occurred_at=row.occurred_at,
-        payload=json.loads(row.payload_json),
+        payload=payload,
     )
 
 
@@ -680,7 +1008,7 @@ def _persist_event(
     )
     db.add(row)
     db.flush()
-    event = _event_from_row(row)
+    event = _event_from_row(row, turn)
     if commit:
         db.commit()
     return event
@@ -696,7 +1024,7 @@ def _stored_events(db: Session, turn: ConversationTurn, *, after: int = 0) -> It
         .order_by(ConversationTurnEvent.sequence)
     )
     for row in rows:
-        yield _event_from_row(row)
+        yield _event_from_row(row, turn)
 
 
 def _latest_event(db: Session, turn: ConversationTurn) -> TurnStreamEvent:
@@ -708,7 +1036,7 @@ def _latest_event(db: Session, turn: ConversationTurn) -> TurnStreamEvent:
     )
     if row is None:
         raise RuntimeError("Turn terminal event was not persisted.")
-    return _event_from_row(row)
+    return _event_from_row(row, turn)
 
 
 def _completed_payload(turn: ConversationTurn, *, replay: bool) -> dict[str, Any]:
@@ -772,10 +1100,23 @@ def _public_evidence_refs_for_adapter(turn: ConversationTurn) -> tuple[PublicEvi
     )
 
 
-def _set_conversation_updated(db: Session, turn: ConversationTurn, now) -> None:
-    conversation = db.get(Conversation, turn.conversation_id)
-    if conversation is not None:
-        conversation.updated_at = now
+def _lock_conversation_for_detail_change(
+    db: Session,
+    turn: ConversationTurn,
+) -> Conversation | None:
+    return db.scalar(
+        select(Conversation)
+        .where(Conversation.id == turn.conversation_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
+
+
+def _mark_conversation_changed(conversation: Conversation | None, now) -> None:
+    if conversation is None:
+        return
+    conversation.updated_at = now
+    conversation.version += 1
 
 
 def _refresh_turn(db: Session, turn: ConversationTurn) -> ConversationTurn:
@@ -789,6 +1130,7 @@ def _persist_evidence_refs(
     turn: ConversationTurn,
     evidence: list[InternalMappedEvidence],
 ) -> ConversationTurn:
+    conversation = _lock_conversation_for_detail_change(db, turn)
     for index, item in enumerate(evidence, start=1):
         db.add(
             ConversationTurnEvidenceRef(
@@ -804,7 +1146,7 @@ def _persist_evidence_refs(
     now = utc_now()
     turn.retrieval_operation_count = max(turn.retrieval_operation_count, 1)
     turn.updated_at = now
-    _set_conversation_updated(db, turn, now)
+    _mark_conversation_changed(conversation, now)
     db.commit()
     return _refresh_turn(db, turn)
 
@@ -815,6 +1157,7 @@ def _finalize_turn_if_running(db: Session, turn: ConversationTurn, values: dict[
     A concurrent redaction (source/domain delete) may already have moved the turn
     to `redacted`; in that case the late stream result must not overwrite it.
     """
+    conversation = _lock_conversation_for_detail_change(db, turn)
     result = db.execute(
         update(ConversationTurn)
         .where(ConversationTurn.id == turn.id, ConversationTurn.status == TURN_STATUS_RUNNING)
@@ -825,6 +1168,7 @@ def _finalize_turn_if_running(db: Session, turn: ConversationTurn, values: dict[
         db.rollback()
         db.refresh(turn)
         return False
+    _mark_conversation_changed(conversation, values["updated_at"])
     return True
 
 
@@ -858,7 +1202,6 @@ def _complete_turn(
         return turn
     db.flush()
     db.refresh(turn)
-    _set_conversation_updated(db, turn, now)
     _persist_event(
         db,
         turn=turn,
@@ -896,7 +1239,6 @@ def _fail_turn(db: Session, *, turn: ConversationTurn, code: str, message: str, 
         return turn
     db.flush()
     db.refresh(turn)
-    _set_conversation_updated(db, turn, now)
     _persist_event(
         db,
         turn=turn,
@@ -967,7 +1309,6 @@ def _cancel_running_turn(db: Session, turn: ConversationTurn) -> None:
         return
     db.flush()
     db.refresh(current)
-    _set_conversation_updated(db, current, now)
     _persist_event(
         db,
         turn=current,
@@ -1217,6 +1558,7 @@ def stream_turn_events(
     *,
     settings: Settings,
     owner: User,
+    auth_session: AuthSession,
     conversation_id: str,
     client_request_id: str,
     message: str,
@@ -1230,6 +1572,7 @@ def stream_turn_events(
         db,
         settings=settings,
         owner=owner,
+        auth_session=auth_session,
         conversation_id=conversation_id,
         client_request_id=client_request_id,
         message=message,
@@ -1253,17 +1596,28 @@ def stream_turn_events_by_turn(
     if after < 0:
         raise _validation_error()
     turn = get_owned_turn(db, owner=owner, conversation_id=conversation_id, turn_id=turn_id)
-    yield from _stored_events(db, turn, after=after)
+    return _stored_events(db, turn, after=after)
 
 
 
 def cancel_turn(
     db: Session,
     *,
+    settings: Settings,
     owner: User,
+    auth_session: AuthSession,
     conversation_id: str,
     turn_id: str,
 ) -> ConversationTurn:
+    try:
+        owner = revalidate_mutation_actor(
+            db,
+            settings=settings,
+            owner=owner,
+            auth_session=auth_session,
+        )
+    except MutationAuthenticationError:
+        raise ChatTurnError(401, "unauthenticated", "Authentication required.") from None
     turn = get_owned_turn(db, owner=owner, conversation_id=conversation_id, turn_id=turn_id)
     _cancel_running_turn(db, turn=turn)
     return _refresh_turn(db, turn)
@@ -1303,6 +1657,7 @@ def _redact_turns(
     for turn in turns:
         if turn.status == TURN_STATUS_REDACTED:
             continue
+        conversation = _lock_conversation_for_detail_change(db, turn)
         turn.status = TURN_STATUS_REDACTED
         turn.stop_reason = TURN_STOP_REASON_REDACTED
         turn.assistant_answer = None
@@ -1310,7 +1665,7 @@ def _redact_turns(
         turn.safe_error_message = None
         turn.completed_at = turn.completed_at or now
         turn.updated_at = now
-        _set_conversation_updated(db, turn, now)
+        _mark_conversation_changed(conversation, now)
         for ref in turn.evidence_refs:
             ref.redacted_at = ref.redacted_at or now
             ref.citation_label = None
@@ -1324,7 +1679,7 @@ def _redact_turns(
             AUDIT_EVENT_CHAT_TURN_REDACTED,
             context=audit_context,
             target_kind="conversation_turn",
-            target_id=turn.id,
+            target_id=turn.public_ref,
             trace_id=turn.trace_id,
             metadata={"turnStatus": TURN_STATUS_REDACTED, "stopReason": TURN_STOP_REASON_REDACTED},
         )

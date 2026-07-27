@@ -22,7 +22,7 @@ EXPECTED_COMPONENTS = {
     "AdminSourceDto",
     "AllowedAction",
     "ComposerRefDto",
-    "ConversationDetailDto",
+    "ConversationDetailResponseDto",
     "ConversationSummaryDto",
     "CurrentUserDto",
     "DocumentSummaryDto",

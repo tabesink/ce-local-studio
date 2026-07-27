@@ -364,32 +364,11 @@
       "title": "ComposerRefDto",
       "type": "object"
     },
-    "ConversationDetailDto": {
+    "ConversationDetailResponseDto": {
       "additionalProperties": false,
       "properties": {
-        "createdAt": {
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
-          "title": "Createdat",
-          "type": "string"
-        },
-        "id": {
-          "maxLength": 128,
-          "minLength": 8,
-          "pattern": "^[A-Za-z0-9_-]+$",
-          "title": "Id",
-          "type": "string"
-        },
-        "title": {
-          "anyOf": [
-            {
-              "maxLength": 120,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Title"
+        "conversation": {
+          "$ref": "#/$defs/ConversationSummaryDto"
         },
         "turns": {
           "items": {
@@ -397,27 +376,13 @@
           },
           "title": "Turns",
           "type": "array"
-        },
-        "updatedAt": {
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
-          "title": "Updatedat",
-          "type": "string"
-        },
-        "version": {
-          "exclusiveMinimum": 0,
-          "title": "Version",
-          "type": "integer"
         }
       },
       "required": [
-        "id",
-        "title",
-        "createdAt",
-        "updatedAt",
-        "version",
+        "conversation",
         "turns"
       ],
-      "title": "ConversationDetailDto",
+      "title": "ConversationDetailResponseDto",
       "type": "object"
     },
     "ConversationSummaryDto": {

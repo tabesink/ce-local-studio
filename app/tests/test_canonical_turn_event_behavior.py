@@ -100,6 +100,8 @@ def test_m06_events_are_ordered_durable_and_replayed_after_applied_cursor(tmp_pa
             stop_reason=TURN_STOP_REASON_DIRECT_LLM,
             assistant_answer="Answer.",
         )
+        db.refresh(turn.conversation)
+        assert turn.conversation.version == 2
 
         events = list(_stored_events(db, turn))
         assert [event.sequence for event in events] == [1, 2, 3, 4]
@@ -148,6 +150,8 @@ def test_terminal_state_and_event_roll_back_together(tmp_path: Path, monkeypatch
         persisted = db.get(ConversationTurn, turn.id)
         assert persisted is not None
         assert persisted.status == TURN_STATUS_RUNNING
+        db.refresh(persisted.conversation)
+        assert persisted.conversation.version == 1
         assert [event.event_type for event in _stored_events(db, persisted)] == [
             TURN_EVENT_ACCEPTED,
             TURN_EVENT_ROUTE_SELECTED,
@@ -162,8 +166,10 @@ def test_c01_cancel_persists_cancelled_state_and_one_terminal_event(tmp_path: Pa
         _prefix(db, turn)
         _cancel_running_turn(db, turn)
         db.refresh(turn)
+        db.refresh(turn.conversation)
 
         events = list(_stored_events(db, turn))
+        assert turn.conversation.version == 2
         assert turn.status == TURN_STATUS_CANCELLED
         assert turn.stop_reason == "cancelled"
         assert turn.safe_error_code == "turn_cancelled"
@@ -202,9 +208,11 @@ def test_m11_redaction_sanitizes_ledger_without_changing_existing_sequences(tmp_
 
         assert _redact_turns(db, [turn]) == 1
         db.refresh(turn)
+        db.refresh(turn.conversation)
         events = list(_stored_events(db, turn))
 
         assert turn.status == TURN_STATUS_REDACTED
+        assert turn.conversation.version == 3
         assert turn.assistant_answer is None
         assert [event.sequence for event in events] == [1, 2, 3, 4, 5, 6]
         assert [event.event_type for event in events] == [

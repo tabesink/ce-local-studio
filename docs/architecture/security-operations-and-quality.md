@@ -14,6 +14,7 @@ The browser is untrusted. It may submit opaque IDs/tokens and user content, but 
 - Retrieval provenance validation prevents raw or cross-domain LightRAG results from becoming Evidence.
 - CSP/same-origin proxy behavior should accompany the frontend deployment.
 - Destructive operations are fenced and audited; protected mutations roll back when audit persistence fails.
+- Conversation create, rename, and delete use the closed internal audit events `conversation.created`, `conversation.renamed`, and `conversation.deleted`; audit metadata excludes titles and conversation content.
 
 ## Phase 1 operational-safety baseline
 

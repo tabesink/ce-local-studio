@@ -345,7 +345,7 @@ def safe_evidence_item(block: SourceBlock, source: SourceDocument) -> EvidenceIt
     )
 
 
-def _safe_section_label(section_path: str | None) -> str | None:
+def safe_section_label(section_path: str | None) -> str | None:
     if not section_path:
         return None
     label = " ".join(section_path.split())[:160].rstrip()
@@ -362,7 +362,7 @@ def _evidence_anchor(
         page_number = next(iter(image_pages))
     if page_number is None:
         return None
-    section_label = _safe_section_label(block.section_path)
+    section_label = safe_section_label(block.section_path)
     anchor: dict[str, object] = {
         "pageNumber": page_number,
         "fallback": "section" if section_label else "page",

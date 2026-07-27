@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 import context_engine.services.chat_turns as chat_turns_module
 from context_engine.api.contract_app import CANONICAL_API_PREFIX
@@ -14,6 +17,7 @@ from context_engine.app import create_app
 from context_engine.config import Settings
 from context_engine.db import Base, utc_now
 from context_engine.models import (
+    AuthSession,
     Conversation,
     ConversationTurn,
     TURN_EVENT_ACCEPTED,
@@ -43,27 +47,47 @@ def _parse_frames(text: str) -> list[dict[str, object]]:
     return frames
 
 
-def _http_context(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    settings = Settings(database_url=f"sqlite+pysqlite:///{tmp_path / 'chat-http.db'}", testing=True)
+def _remove_test_database(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except PermissionError:
+        # Windows can retain a streaming-response handle until process exit.
+        pass
+
+
+def _http_context(monkeypatch: pytest.MonkeyPatch):
+    database_path = Path(f".data/ce-chat-http-{uuid4().hex}.db").resolve()
+    settings = Settings(database_url=f"sqlite+pysqlite:///{database_path}", testing=True)
     app = create_app(settings)
+    app.state.test_database_path = database_path
     Base.metadata.create_all(app.state.engine)
     db = app.state.session_factory()
     owner = User(username="http-member@example.test", password_hash="synthetic-password-hash")
     conversation = Conversation(owner=owner, title="HTTP SSE proof")
-    db.add(conversation)
+    now = utc_now()
+    auth_session = AuthSession(
+        user=owner,
+        token_hash="a" * 64,
+        expires_at=now + timedelta(hours=1),
+        created_at=now,
+        last_used_at=now,
+    )
+    db.add_all([conversation, auth_session])
     db.commit()
     db.refresh(owner)
     db.refresh(conversation)
     owner_id = owner.id
-    conversation_id = conversation.id
+    auth_session_id = auth_session.id
+    conversation_id = conversation.public_ref
     db.close()
 
     identity_db = app.state.session_factory()
     identity = identity_db.get(User, owner_id)
-    assert identity is not None
-    app.dependency_overrides[require_current_session] = lambda: CurrentSession(  # type: ignore[arg-type]
+    identity_auth_session = identity_db.get(AuthSession, auth_session_id)
+    assert identity is not None and identity_auth_session is not None
+    app.dependency_overrides[require_current_session] = lambda: CurrentSession(
         user=identity,
-        auth_session=None,
+        auth_session=identity_auth_session,
     )
     app.state.synthesis_stream_adapter = DeterministicSynthesis()
     monkeypatch.setattr(
@@ -75,10 +99,9 @@ def _http_context(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def test_m06_live_and_cursor_replay_use_canonical_sse_envelopes(
-    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    app, identity_db, conversation_id = _http_context(tmp_path, monkeypatch)
+    app, identity_db, conversation_id = _http_context(monkeypatch)
     try:
         with TestClient(app) as client:
             live = client.post(
@@ -117,18 +140,23 @@ def test_m06_live_and_cursor_replay_use_canonical_sse_envelopes(
             ]
     finally:
         identity_db.close()
+        app.state.engine.dispose()
+        _remove_test_database(app.state.test_database_path)
 
 
 def test_c01_cancel_http_state_and_replay_terminal_are_consistent(
-    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    app, identity_db, conversation_id = _http_context(tmp_path, monkeypatch)
+    app, identity_db, conversation_id = _http_context(monkeypatch)
     seed = app.state.session_factory()
     try:
         now = utc_now()
+        conversation = seed.scalar(
+            select(Conversation).where(Conversation.public_ref == conversation_id)
+        )
+        assert conversation is not None
         turn = ConversationTurn(
-            conversation_id=conversation_id,
+            conversation_id=conversation.id,
             client_request_id="http-cancel-request-001",
             route=TURN_ROUTE_DIRECT_LLM,
             status=TURN_STATUS_RUNNING,
@@ -144,7 +172,11 @@ def test_c01_cancel_http_state_and_replay_terminal_are_consistent(
             seed,
             turn=turn,
             event_type=TURN_EVENT_ACCEPTED,
-            payload={"conversationId": conversation_id, "clientRequestId": turn.client_request_id, "replay": False},
+            payload={
+                "conversationId": conversation.id,
+                "clientRequestId": turn.client_request_id,
+                "replay": False,
+            },
             commit=False,
         )
         _persist_event(
@@ -155,7 +187,7 @@ def test_c01_cancel_http_state_and_replay_terminal_are_consistent(
             commit=False,
         )
         seed.commit()
-        turn_id = turn.id
+        turn_id = turn.public_ref
 
         with TestClient(app) as client:
             cancelled = client.post(
@@ -163,7 +195,7 @@ def test_c01_cancel_http_state_and_replay_terminal_are_consistent(
             )
             assert cancelled.status_code == 202
             assert cancelled.json()["turn"]["status"] == "cancelled"
-            assert cancelled.json()["turn"]["stopReason"] == "cancelled"
+            assert cancelled.json()["turn"]["id"] == turn_id
 
             replay = client.get(
                 f"{CANONICAL_API_PREFIX}/conversations/{conversation_id}/turns/{turn_id}/events",
@@ -181,3 +213,5 @@ def test_c01_cancel_http_state_and_replay_terminal_are_consistent(
     finally:
         seed.close()
         identity_db.close()
+        app.state.engine.dispose()
+        _remove_test_database(app.state.test_database_path)
