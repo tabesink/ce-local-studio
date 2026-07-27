@@ -19,10 +19,10 @@ from context_engine.api.routes import live, ready
 from context_engine.app import create_app
 from context_engine.config import Settings
 from context_engine.db import Base
-from context_engine.models import DOMAIN_STATE_STOPPED, ROLE_ADMINISTRATOR, Domain
+from context_engine.models import DOMAIN_STATE_STOPPED, ROLE_ADMINISTRATOR, Domain, ProviderConfig
 from context_engine.services.auth import create_user
 from context_engine.services.readiness import SUPPORTED_ALEMBIC_HEAD, ReadinessError, check_readiness
-from context_engine.services.runtime_config import seed_runtime_config
+from context_engine.services.runtime_config import is_provider_configured, seed_runtime_config
 
 
 class HealthyDatabase:
@@ -145,7 +145,7 @@ def test_readiness_bootstrap_incomplete_without_enabled_administrator() -> None:
     assert exc_info.value.reason == "bootstrap_incomplete"
 
 
-def test_ready_stays_ok_with_stopped_domain_present(tmp_path: Path) -> None:
+def test_ready_stays_ok_with_stopped_domain_and_unready_provider(tmp_path: Path) -> None:
     database_path = tmp_path / "health-domain.db"
     settings = Settings(database_url=f"sqlite+pysqlite:///{database_path}", testing=True)
     app = create_app(settings)
@@ -160,6 +160,11 @@ def test_ready_stays_ok_with_stopped_domain_present(tmp_path: Path) -> None:
         )
         seed_runtime_config(db)
         create_user(db, "ready-admin@example.test", "Password123!", role=ROLE_ADMINISTRATOR)
+        openai = db.get(ProviderConfig, "openai")
+        assert openai is not None
+        openai.credential_ciphertext = None
+        openai.credential_updated_at = None
+        assert not is_provider_configured(openai)
         db.add(
             Domain(
                 id="domain-stopped-ready",

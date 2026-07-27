@@ -17,15 +17,17 @@ Inventory: `docs/_scratch/p8-03-operational-safety-inventory.md`
   and P10-02 / P12 / configured-username residuals.
 - Health re-proof extended `test_health_contract.py`: live stays OK when ready
   fails; schema edges share safe `503`; ready stays OK with a stopped domain
-  present; no diagnostic leakage in failure bodies.
+  **and** unready OpenAI provider (no credentials); no diagnostic leakage.
 - Combined cross-sink privacy scan
   (`tests/test_cross_sink_privacy_scan.py`) plants once and asserts absence
   across audit rows, JsonLogFormatter JSON, metric dumps, and health
-  live/ready success + safe `503` bodies/headers.
+  live/ready success + safe `503` bodies/headers; requires a planted
+  `worker_operation` metric sample before the metrics privacy assert.
 - Focused resilience matrix (`tests/test_resilience_load_shed.py`) executes
   Content-Length `413 content_rejected` gate + oversize upload rejection;
   evidence selection also executed capacity `503` mapping, login-throttle
-  `429`+Retry-After (PostgreSQL), and turn-lease reclaim (PostgreSQL).
+  `429`+Retry-After (PostgreSQL), and domain-delete / index-claim /
+  turn-lease reclaim suites (PostgreSQL).
 
 ## Commands
 
@@ -53,10 +55,12 @@ $env:CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL='postgresql+psycopg://context_engine
 python -m pytest \
   tests/test_postgres_ingress_security.py::test_p1_05_csrf_origin_peer_rotation_logout_and_throttle_on_postgresql_16 \
   tests/test_postgres_turn_leases.py::test_ae1_expired_lease_reclaim_fails_closed_after_answer_delta_on_postgresql_16 \
+  tests/test_postgres_domain_leases.py::test_p3_03_leases_fences_supersede_and_delete_worker_on_postgresql_16 \
+  tests/test_postgres_source_index_claim.py::test_p5_01_index_schema_and_claim_loop_on_postgresql_16 \
   tests/test_postgres_foundation.py::test_p1_04_readiness_requires_exact_schema_and_bootstrap_on_postgresql_16 -q
 ```
 
-Result: 3 passed.
+Result: 5 passed (throttle + turn/domain/index lease + P1-04 readiness).
 
 Changed-file Ruff: `tests/test_health_contract.py`,
 `tests/test_cross_sink_privacy_scan.py`,

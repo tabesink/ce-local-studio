@@ -161,12 +161,12 @@ P8-03 closure evidence (2026-07-27):
 live/ready surfaces, the four-sink privacy union, resilience cite matrix,
 `DisabledTracingPort` retain-absence, and as-built bootstrap semantics
 (any enabled administrator; configured-username residual). Health re-proof
-extends live-under-failure, schema-edge safe `503`, and ready-with-stopped-domain.
-`test_cross_sink_privacy_scan.py` plants once across audit + JSON logs +
-metrics + health. Focused resilience executes `413 content_rejected`,
-login-throttle `429`+Retry-After, capacity `503`, and turn-lease reclaim
-(PostgreSQL 16). Results: 17 focused unit tests + 3 opted-in PostgreSQL
-tests passing. `docs/_scratch/p8-03-operational-safety-evidence.md` records
+extends live-under-failure, schema-edge safe `503`, and ready with stopped
+domain plus unready provider. `test_cross_sink_privacy_scan.py` plants once
+across audit + JSON logs + metrics + health. Focused resilience executes
+`413 content_rejected`, login-throttle `429`+Retry-After, capacity `503`,
+and domain/index/turn lease reclaim (PostgreSQL 16). Results: focused unit
+suite green + opted-in PostgreSQL throttle/lease/readiness green. `docs/_scratch/p8-03-operational-safety-evidence.md` records
 commands and residuals (P10-02 object-store ready / DRIFT-15, concurrent-stream
 429, SIGTERM/stream-drain / P12, Phase 2 read). DRIFT-20 / DRIFT-29
 cross-sink/health halves closed; P8 phase exit complete.

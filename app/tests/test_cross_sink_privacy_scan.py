@@ -321,4 +321,7 @@ def test_cross_sink_privacy_scan_after_planted_mutations(tmp_path: Path) -> None
     log_blob = output.getvalue()
     assert log_blob.strip(), "expected real logger capture during mutation window"
     _assert_log_blob_private(log_blob)
+    assert any(sample.name == "worker_operation" for sample in snapshot_metrics()), (
+        "expected planted worker_operation metric sample before privacy assert"
+    )
     _assert_metrics_private()
