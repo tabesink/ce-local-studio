@@ -3,21 +3,15 @@
 import { Suspense, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowUp, AtSign, ChevronDown, History, PanelRightClose, PanelRightOpen, Plus, RotateCcw, Square, X } from "lucide-react";
-import { cx, SegmentedControl, StatusPill } from "@/_shared/ui";
+import { cx } from "@/lib/cx";
+import { StatusPill } from "@/ui";
 import { EvidencePanel } from "@/features/chat-shell/EvidencePanel";
 import { useChatShell } from "@/features/chat-shell/use-chat-shell";
-import type { ComposerRefKind } from "@/features/chat-shell/api";
 import type { AssistantBlock, ChatMessage } from "@/features/chat-shell/types";
 
-const composerKinds: Array<{ id: ComposerRefKind; label: string }> = [
-  { id: "source", label: "Sources" },
-  { id: "evidence", label: "Evidence" },
-  { id: "template", label: "Templates" },
-];
-
 /* LS chat-shell layout over CE conversations: pane header, block timeline,
-   lifted composer with governed composer-ref chips, safe status bar, and the
-   turn-scoped Evidence Panel aside (F-009 context-panel-tabs v1).
+   composer with domain selector, gated references stub (P11 owns discover),
+   safe status bar, and the turn-scoped Evidence/Refs/Source inspector.
    No model picker, attachments, queue, or abort: no CE contracts. */
 export function ChatShell() {
   return (
@@ -177,24 +171,6 @@ function ChatShellInner() {
         className="shrink-0 bg-[var(--agent-bg)] px-4 pb-2 pt-2.5 sm:px-6"
       >
         <div className="relative mx-auto w-full max-w-[var(--composer-w)] rounded-[var(--composer-radius)] border border-[var(--border)]/60 bg-[var(--composer)] shadow-[var(--composer-shadow)]">
-          {chat.pickerOpen ? <RefPicker chat={chat} /> : null}
-          {chat.selectedRefs.length > 0 ? (
-            <div className="flex flex-wrap gap-1 border-b border-[var(--border)]/40 px-3 py-2">
-              {chat.selectedRefs.map((ref) => (
-                <button
-                  key={ref.refToken}
-                  type="button"
-                  onClick={() => chat.removeRef(ref.refToken)}
-                  title="Remove reference"
-                  className="inline-flex items-center gap-1.5 rounded-md bg-[var(--hover)] px-2 py-1 font-mono text-[length:var(--fs-xs)] text-[var(--dim)] transition-colors hover:text-[var(--fg)]"
-                >
-                  <AtSign className="h-3 w-3" />
-                  {ref.label}
-                  <X className="h-3 w-3" />
-                </button>
-              ))}
-            </div>
-          ) : null}
           <textarea
             value={chat.input}
             onChange={(event) => chat.updateInput(event.target.value)}
@@ -204,18 +180,19 @@ function ChatShellInner() {
                 void chat.submit();
               }
             }}
-            placeholder="Ask anything — @ to reference sources, evidence, or templates"
+            placeholder="Ask anything — choose a domain for grounded answers"
             className="min-h-24 w-full resize-none bg-transparent px-4 py-3 text-[length:var(--fs-base)] leading-6 text-[var(--fg)] outline-none placeholder:text-[var(--dim)]/60"
           />
           <div className="flex items-center justify-between px-2.5 pb-2.5">
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => chat.setPickerOpen(!chat.pickerOpen)}
-                aria-label="Add reference"
-                title="Add reference"
-                aria-expanded={chat.pickerOpen}
-                className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--dim)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--fg)]"
+                data-testid="ref-picker"
+                aria-label="References unavailable"
+                title="References discovery is unavailable until governed composer refs ship"
+                aria-disabled="true"
+                disabled
+                className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--dim)] opacity-45"
               >
                 <AtSign className="h-4 w-4" />
               </button>
@@ -242,7 +219,6 @@ function ChatShellInner() {
               : "direct chat"}
           </span>
           <span className="flex shrink-0 items-center gap-3">
-            <span>{chat.selectedRefs.length ? `${chat.selectedRefs.length} refs` : ""}</span>
             <span
               data-testid="chat-streaming"
               data-streaming={chat.streaming ? "true" : "false"}
@@ -257,10 +233,11 @@ function ChatShellInner() {
       </form>
       </div>
 
-      {/* Turn-scoped Evidence Panel — fed by turn SSE/history only */}
+      {/* Turn-scoped inspector — fed by turn SSE/history only */}
       <EvidencePanel
         open={chat.panelOpen}
         rows={chat.panelEvidence}
+        acceptedRefs={chat.panelAcceptedRefs}
         selectedEvidenceId={chat.selectedEvidenceId}
         onSelectEvidence={chat.selectEvidence}
         onClose={() => chat.setPanelOpen(false)}
@@ -316,6 +293,7 @@ function DomainPicker({ chat }: { chat: ChatState }) {
         value={chat.domainId}
         onChange={(event) => chat.setDomainId(event.target.value)}
         aria-label="Knowledge Domain"
+        data-testid="domain-selector"
         className="h-8 max-w-44 rounded-md border border-transparent bg-transparent px-2 text-[length:var(--fs-sm)] text-[var(--dim)] outline-none transition-colors hover:bg-[var(--hover)] hover:text-[var(--fg)] focus:border-[var(--ui-border)]"
       >
         <option value="">Direct chat</option>
@@ -326,53 +304,6 @@ function DomainPicker({ chat }: { chat: ChatState }) {
         ))}
       </select>
     </label>
-  );
-}
-
-function RefPicker({ chat }: { chat: ChatState }) {
-  return (
-    <div className="absolute bottom-full left-0 z-50 mb-2 w-full max-w-md rounded-lg border border-[var(--border)] bg-[var(--color-popover)] p-2 shadow-[var(--composer-shadow)]">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <SegmentedControl size="sm" items={composerKinds} value={chat.composerKind} onChange={chat.setComposerKind} />
-        <button
-          type="button"
-          onClick={() => chat.setPickerOpen(false)}
-          aria-label="Close reference picker"
-          className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--dim)] hover:bg-[var(--hover)] hover:text-[var(--fg)]"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      <input
-        value={chat.composerQuery}
-        onChange={(event) => chat.setComposerQuery(event.target.value)}
-        placeholder="Filter references"
-        className="mb-2 h-7 w-full rounded-md border border-[var(--ui-separator)] bg-[var(--ui-bg)] px-2 text-[length:var(--fs-sm)] text-[var(--fg)] outline-none placeholder:text-[var(--dim)]/60"
-      />
-      <div className="max-h-48 space-y-0.5 overflow-y-auto">
-        {chat.discovering ? (
-          <div className="px-2 py-1.5 text-[length:var(--fs-sm)] text-[var(--dim)]">Searching.</div>
-        ) : chat.discoveredRefs.length === 0 ? (
-          <div className="px-2 py-1.5 text-[length:var(--fs-sm)] text-[var(--dim)]">
-            {chat.conversation ? "No references found." : "Start a conversation to discover references."}
-          </div>
-        ) : (
-          chat.discoveredRefs.map((ref) => (
-            <button
-              key={ref.refToken}
-              type="button"
-              disabled={Boolean(ref.disabledReason)}
-              onClick={() => chat.addRef(ref)}
-              title={ref.disabledReason ?? ref.description ?? undefined}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[length:var(--fs-sm)] text-[var(--dim)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--fg)] disabled:opacity-45"
-            >
-              <span className="font-mono text-[length:var(--fs-xs)] uppercase text-[var(--dim)]/70">{ref.kind}</span>
-              <span className="min-w-0 flex-1 truncate">{ref.label}</span>
-            </button>
-          ))
-        )}
-      </div>
-    </div>
   );
 }
 

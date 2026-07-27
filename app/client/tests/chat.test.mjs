@@ -51,12 +51,15 @@ describe("F-012 chat via LS chat-shell", () => {
     assert.deepEqual(offenders, []);
   });
 
-  it("translates EVT-001 SSE events into LS timeline blocks", () => {
+  it("feeds live and replay streams through the canonical lib/stream reducer", () => {
     const hook = read("src/features/chat-shell/use-chat-shell.ts");
-    const applicationPath = hook.match(
-      /const applyTurnStreamEvent = useCallback\(\(event: TurnStreamEvent\) => \{[\s\S]*?\n  \}, \[\]\);/,
-    )?.[0];
-    assert.ok(applicationPath, "chat streams must use one canonical event application callback");
+    assert.match(hook, /reduceTurnStreamEvent/);
+    assert.match(hook, /from "@\/lib\/stream"/);
+    assert.equal(hook.includes("applyTurnStreamEvent"), false, "hook must not embed a parallel applyTurnStreamEvent path");
+    assert.equal(hook.includes("discoverComposerRefs"), false, "KTD1: zero discoverComposerRefs in hook");
+    assert.equal(hook.includes("mentionQuery"), false, "hook must not own interactive @ mention discovery");
+
+    const reducer = read("src/lib/stream/reducer.ts");
     for (const event of [
       '"turn.accepted"',
       '"route.selected"',
@@ -69,8 +72,9 @@ describe("F-012 chat via LS chat-shell", () => {
       '"turn.cancelled"',
       '"turn.redacted"',
     ]) {
-      assert.match(applicationPath, new RegExp(`event\.type === ${event}`));
+      assert.match(reducer, new RegExp(`case ${event}`));
     }
+
     const protocol = read("src/lib/stream/turn-consumer.ts");
     assert.match(protocol, /schemaVersion\.split\("\."\)\[0\] !== "1"/);
     assert.match(protocol, /receivedSequence/);
@@ -87,46 +91,62 @@ describe("F-012 chat via LS chat-shell", () => {
     assert.match(parser, /ended mid-frame/);
     const parserReexport = read("src/lib/api/sse-parser.ts");
     assert.match(parserReexport, /@\/lib\/stream\/sse-parser/);
+
+    assert.match(hook, /onEvent: handleStreamEvent/);
+    assert.match(hook, /streamConversationTurn\([\s\S]*?onEvent: handleStreamEvent/);
     assert.match(
       hook,
-      /const handleLiveStreamEvent = useCallback\([\s\S]*?=> applyTurnStreamEvent\(event\),/,
-      "live streaming must feed the canonical event application callback",
-    );
-    assert.match(hook, /streamConversationTurn\([\s\S]*?onEvent: handleLiveStreamEvent/);
-    assert.match(
-      hook,
-      /streamConversationTurnEvents\(\{[\s\S]*?onEvent: applyTurnStreamEvent/,
-      "durable replay must feed the same canonical event application callback",
+      /streamConversationTurnEvents\(\{[\s\S]*?onEvent: handleStreamEvent/,
+      "durable replay must feed the same canonical stream handler",
     );
     assert.equal(hook.includes("handleReplayEvent"), false, "replay must not use an error-only event handler");
     assert.match(hook, /streamTransportState/);
-    assert.match(hook, /setInput\(\(current\) => current \|\| message\)/);
+    assert.match(hook, /composerRefTokens: \[\]/);
+    assert.match(hook, /isCursorExpiredError/);
+    assert.match(hook, /getTerminalSnapshotFromError/);
+    assert.match(hook, /domain_required/);
+    assert.match(hook, /idempotency_conflict/);
+
     const component = read("src/features/chat-shell/ChatShell.tsx");
     assert.match(component, /acceptedRefs/);
     assert.match(component, /Evidence/);
-    assert.match(component, /SegmentedControl/);
+    assert.match(component, /data-testid="ref-picker"/);
+    assert.match(component, /aria-disabled/);
   });
 
   it("does not port uncontracted Local Studio agent controls", () => {
     const combined = ["src/features/chat-shell/ChatShell.tsx", "src/features/chat-shell/use-chat-shell.ts"]
       .map(read)
       .join("\n");
-    for (const forbidden of ["abort(", "modelId", "browserToolEnabled", "cwd", "terminal"]) {
+    for (const forbidden of [
+      "abort(",
+      "modelId",
+      "browserToolEnabled",
+      "cwd",
+      "terminalTool",
+      "enableTerminal",
+      "PiTerminal",
+    ]) {
       assert.equal(combined.includes(forbidden), false, forbidden);
     }
   });
 
-  it("renders evidence in the turn-scoped Evidence Panel, not as timeline blocks", () => {
+  it("renders evidence in the turn-scoped inspector, not as timeline blocks", () => {
     const panel = read("src/features/chat-shell/EvidencePanel.tsx");
     assert.match(panel, /citationLabel/);
     assert.match(panel, /sourceLabel/);
     assert.match(panel, /excerpt/);
     assert.match(panel, /onSelectEvidence/);
+    assert.match(panel, /inspector-tab-evidence/);
+    assert.match(panel, /inspector-tab-refs/);
+    assert.match(panel, /inspector-tab-source/);
+    assert.match(panel, /role="complementary"/);
     assert.equal(/\bfetch\s*\(/.test(panel), false, "Evidence Panel must not fetch");
 
     const component = read("src/features/chat-shell/ChatShell.tsx");
     assert.match(component, /<EvidencePanel/);
     assert.match(component, /panelEvidence/);
+    assert.match(component, /panelAcceptedRefs/);
 
     const types = read("src/features/chat-shell/types.ts");
     assert.equal(types.includes('kind: "evidence"'), false, "evidence is not a timeline block kind");
@@ -138,6 +158,7 @@ describe("F-012 chat via LS chat-shell", () => {
     assert.match(hook, /selectTurn/);
     assert.match(hook, /panelEvidence/);
     assert.match(hook, /setPanelOpen\(true\)/);
+    assert.match(hook, /inspectorFenceRef|bumpInspectorFence/);
     // No private source identifiers or session-ledger port in panel state.
     for (const forbidden of ["sourceBlockId", "documentId", "chunkId", "sessionContextLedger", "pinned"]) {
       assert.equal(hook.includes(forbidden), false, forbidden);
@@ -148,44 +169,56 @@ describe("F-012 chat via LS chat-shell", () => {
     }
   });
 
-  it("owns composer picker state in the hook and submits opaque ref tokens only", () => {
+  it("gates interactive composer-ref discovery and submits empty opaque tokens", () => {
     const hook = read("src/features/chat-shell/use-chat-shell.ts");
-    assert.match(hook, /mentionQuery/);
-    assert.match(hook, /lastIndexOf\("@"/);
-    assert.match(hook, /composerRefTokens: refs\.map\(\(ref\) => ref\.refToken\)/);
+    assert.equal(hook.includes("discoverComposerRefs"), false);
+    assert.equal(hook.includes("mentionQuery"), false);
+    assert.match(hook, /composerRefTokens: \[\]/);
     assert.equal(hook.includes("template.body"), false);
     assert.equal(hook.includes("sourceText"), false);
+
+    const component = read("src/features/chat-shell/ChatShell.tsx");
+    assert.match(component, /data-testid="ref-picker"/);
+    assert.match(component, /References discovery is unavailable|References unavailable/);
   });
 
-  it("keeps document navigation unavailable until governed opaque routes exist", () => {
-    const api = read("src/features/chat-shell/api.ts");
-    const hook = read("src/features/chat-shell/use-chat-shell.ts");
-    const component = read("src/features/chat-shell/ChatShell.tsx");
-    const panel = read("src/features/chat-shell/EvidencePanel.tsx");
+  it("builds opaque Library deep links and keeps privacy sentinels out of hrefs", () => {
+    const deepLink = read("src/features/chat-shell/documentsDeepLink.ts");
+    assert.match(deepLink, /buildDocumentsDeepLinkHref/);
+    assert.match(deepLink, /\/documents\?/);
+    assert.match(deepLink, /document/);
+    assert.match(deepLink, /evidence/);
+    assert.match(deepLink, /page/);
+    assert.match(deepLink, /LIBRARY_SURFACE_AVAILABLE/);
 
-    for (const source of [api, hook, component, panel]) {
+    const panel = read("src/features/chat-shell/EvidencePanel.tsx");
+    assert.match(panel, /documentsDeepLink/);
+    assert.match(panel, /open-in-library/);
+    assert.match(panel, /document-navigation-unavailable/);
+
+    const sources = [
+      read("src/features/chat-shell/api.ts"),
+      read("src/features/chat-shell/use-chat-shell.ts"),
+      read("src/features/chat-shell/ChatShell.tsx"),
+      panel,
+      deepLink,
+    ];
+    for (const source of sources) {
       for (const forbidden of [
         "resolveEvidenceSourceRef",
         "/evidence-refs/",
-        "openEvidenceInLibrary",
-        "buildLibraryDeepLinkHref",
-        "onOpenInLibrary",
-        "open-in-library",
+        "s3://",
+        "objectUrl",
+        "sourceBlockId",
       ]) {
         assert.equal(source.includes(forbidden), false, forbidden);
       }
     }
-
-    assert.match(panel, /evidence-selected-detail/);
-    assert.match(panel, /document-navigation-unavailable/);
-    assert.match(panel, /Document navigation is unavailable/);
-    assert.match(panel, /governed evidence-location/);
-    assert.equal(/\bfetch\s*\(/.test(panel), false, "Evidence Panel must not fetch");
   });
 
   it("bootstraps /chat return params by loading conversation and selecting the jump-from turn", () => {
     const hook = read("src/features/chat-shell/use-chat-shell.ts");
-    assert.match(hook, /loadConversation = useCallback\(async \(conversationId: string, options\?: \{ turnId\?/);
+    assert.match(hook, /loadConversation = useCallback\(\s*async \(conversationId: string, options\?: \{ turnId\?/);
     assert.match(hook, /setSelectedTurnId\(restoreTurn\.id\)/);
     assert.match(hook, /setPanelOpen\(restoreTurn\.evidence\.length > 0\)/);
 
@@ -194,5 +227,14 @@ describe("F-012 chat via LS chat-shell", () => {
     assert.match(component, /conversationId/);
     assert.match(component, /turnId/);
     assert.match(component, /loadConversation\(conversationId, \{ turnId \}\)/);
+  });
+
+  it("migrates covered chat-shell kit imports to @/ui", () => {
+    const component = read("src/features/chat-shell/ChatShell.tsx");
+    const panel = read("src/features/chat-shell/EvidencePanel.tsx");
+    assert.match(component, /from "@\/ui"/);
+    assert.match(panel, /from "@\/ui"/);
+    assert.equal(component.includes("@/_shared/ui"), false);
+    assert.equal(panel.includes("@/_shared/ui"), false);
   });
 });

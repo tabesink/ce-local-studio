@@ -11,7 +11,11 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
-    include: ["tests/parity/react/**/*.test.tsx"],
+    include: [
+      "tests/parity/react/**/*.test.tsx",
+      "tests/chat-inspector.test.tsx",
+      "tests/documentsDeepLink.test.ts",
+    ],
     setupFiles: ["tests/parity/react/setup.ts"],
   },
 });
