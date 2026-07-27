@@ -6,13 +6,24 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
+from datetime import timedelta
+
 from context_engine.db import Base, utc_now
 from context_engine.models import (
+    COMPOSER_REF_KIND_EVIDENCE,
+    COMPOSER_REF_KIND_SOURCE,
+    DOMAIN_STATE_DELETING,
+    DOMAIN_STATE_STOPPED,
+    ROLE_ADMINISTRATOR,
+    ComposerRefToken,
     Conversation,
     ConversationTurn,
     ConversationTurnComposerRef,
     ConversationTurnEvidenceRef,
     ConversationTurnEvent,
+    Domain,
+    ModelProfile,
+    ProviderConfig,
     SourceDocument,
     TURN_EVENT_ANSWER_DELTA,
     TURN_EVENT_REDACTED,
@@ -28,6 +39,7 @@ from context_engine.services.chat_turns import (
     _persist_event,
     redact_turns_for_domain,
 )
+from context_engine.services.domains import enqueue_delete_domain
 
 
 def _session(tmp_path: Path) -> Session:
@@ -238,6 +250,124 @@ def test_redact_turns_for_domain_selects_evidence_and_composer_linked_turns(tmp_
         assert composer_only.status == TURN_STATUS_REDACTED
         assert unrelated.status == TURN_STATUS_COMPLETED
         assert unrelated.assistant_answer == "Other domain answer."
+    finally:
+        db.close()
+
+
+def _seed_domain(db: Session, *, domain_id: str = "domain-a") -> tuple[User, Domain, SourceDocument]:
+    admin = User(
+        username="admin-redact@example.test",
+        password_hash="synthetic-password-hash",
+        role=ROLE_ADMINISTRATOR,
+    )
+    provider = ProviderConfig(
+        provider_kind="openai",
+        display_name="OpenAI",
+        requires_credentials=True,
+    )
+    profile = ModelProfile(
+        id="embed-profile",
+        name="Embedding",
+        profile_kind="embedding",
+        provider_kind="openai",
+        model_name="text-embedding-3-small",
+        vector_dimensions=1536,
+    )
+    domain = Domain(
+        id=domain_id,
+        display_name="Manuals",
+        state=DOMAIN_STATE_STOPPED,
+        embedding_profile_id=profile.id,
+    )
+    source = SourceDocument(
+        id="source-a",
+        public_ref="document-source-a",
+        domain_id=domain.id,
+        original_filename="manual.pdf",
+        content_type="application/pdf",
+        original_sha256="b" * 64,
+        original_size_bytes=128,
+        original_object_key="source/source-a",
+        state="prepared",
+        parser_kind="docling",
+    )
+    db.add_all([admin, provider, profile, domain, source])
+    db.flush()
+    return admin, domain, source
+
+
+def test_enqueue_delete_domain_redacts_and_expires_tokens_in_fence(tmp_path: Path) -> None:
+    db = _session(tmp_path)
+    try:
+        admin, domain, source = _seed_domain(db)
+        _, conversation = _owner_conversation(db)
+        turn = _turn(
+            db,
+            conversation,
+            client_request_id="domain-enqueue",
+            route=TURN_ROUTE_DOMAIN_RAG,
+            domain_id=domain.id,
+            assistant_answer="Must redact at enqueue.",
+        )
+        evidence_turn = _turn(
+            db,
+            conversation,
+            client_request_id="evidence-enqueue",
+            route=TURN_ROUTE_DIRECT_LLM,
+            assistant_answer="Evidence linked.",
+        )
+        evidence_ref = ConversationTurnEvidenceRef(
+            turn_id=evidence_turn.id,
+            evidence_order=1,
+            citation_label="E1",
+            source_label="manual.pdf",
+            excerpt="Sensitive excerpt.",
+            source_document_id=source.id,
+            source_block_id="block-a",
+        )
+        db.add(evidence_ref)
+        db.flush()
+        future = utc_now() + timedelta(hours=1)
+        source_token = ComposerRefToken(
+            token_hash="c" * 64,
+            owner_user_id=admin.id,
+            ref_kind=COMPOSER_REF_KIND_SOURCE,
+            target_id=source.id,
+            domain_id=domain.id,
+            expires_at=future,
+        )
+        evidence_token = ComposerRefToken(
+            token_hash="d" * 64,
+            owner_user_id=admin.id,
+            ref_kind=COMPOSER_REF_KIND_EVIDENCE,
+            target_id=evidence_ref.id,
+            domain_id=domain.id,
+            expires_at=future,
+        )
+        db.add_all([source_token, evidence_token])
+        db.commit()
+        domain_version = domain.version
+
+        operation = enqueue_delete_domain(
+            db,
+            domain_id=domain.id,
+            requested_by_user=admin,
+            expected_version=domain_version,
+            audit_context=None,
+        )
+        db.refresh(domain)
+        db.refresh(turn)
+        db.refresh(evidence_turn)
+        db.refresh(source_token)
+        db.refresh(evidence_token)
+
+        assert operation.status == "queued"
+        assert domain.state == DOMAIN_STATE_DELETING
+        assert turn.status == TURN_STATUS_REDACTED
+        assert turn.assistant_answer is None
+        assert evidence_turn.status == TURN_STATUS_REDACTED
+        assert source_token.expires_at <= utc_now()
+        assert evidence_token.expires_at <= utc_now()
     finally:
         db.close()
 

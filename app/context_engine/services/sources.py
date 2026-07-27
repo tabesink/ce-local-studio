@@ -39,6 +39,7 @@ from context_engine.models import (
     AUDIT_EVENT_SOURCE_PREPARATION_CANCELLED,
     AUDIT_EVENT_SOURCE_PREPARATION_RETRIED,
     AUDIT_EVENT_SOURCE_UPLOADED,
+    COMPOSER_REF_KIND_EVIDENCE,
     COMPOSER_REF_KIND_SOURCE,
     DOMAIN_STATE_DELETING,
     PARSER_REDUCTO,
@@ -66,6 +67,7 @@ from context_engine.models import (
     SOURCE_STATE_PENDING,
     SOURCE_STATE_PREPARED,
     ComposerRefToken,
+    ConversationTurnEvidenceRef,
     Domain,
     ProviderConfig,
     SourceBlock,
@@ -666,6 +668,23 @@ def _expire_composer_tokens_for_source(db: Session, source_id: str, now) -> None
             )
         )
     )
+    evidence_ids = list(
+        db.scalars(
+            select(ConversationTurnEvidenceRef.id).where(
+                ConversationTurnEvidenceRef.source_document_id == source_id
+            )
+        )
+    )
+    if evidence_ids:
+        tokens.extend(
+            db.scalars(
+                select(ComposerRefToken).where(
+                    ComposerRefToken.ref_kind == COMPOSER_REF_KIND_EVIDENCE,
+                    ComposerRefToken.target_id.in_(evidence_ids),
+                    ComposerRefToken.expires_at > now,
+                )
+            )
+        )
     for token in tokens:
         token.expires_at = now
 

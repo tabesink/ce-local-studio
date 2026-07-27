@@ -558,6 +558,9 @@ def enqueue_delete_domain(
     now = utc_now()
 
     def mutate() -> DomainOperation:
+        from context_engine.services.chat_turns import redact_turns_for_domain
+        from context_engine.services.sources import _expire_composer_tokens_for_source
+
         cancelled = _cancel_active_lifecycle_operation(
             db,
             domain.id,
@@ -569,6 +572,9 @@ def enqueue_delete_domain(
         domain.control_generation += 1
         domain.version += 1
         domain.updated_at = now
+        redact_turns_for_domain(db, domain.id, audit_context=audit_context, commit=False)
+        for source_id in db.scalars(select(SourceDocument.id).where(SourceDocument.domain_id == domain.id)):
+            _expire_composer_tokens_for_source(db, source_id, now)
         operation = _operation(
             domain=domain,
             operation_type=DOMAIN_OPERATION_DELETE,
