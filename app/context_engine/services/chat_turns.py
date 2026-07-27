@@ -62,6 +62,7 @@ from context_engine.models import (
 from context_engine.services.audit import AuditContext, AuditService
 from context_engine.services.auth import MutationAuthenticationError, iso_utc, revalidate_mutation_actor
 from context_engine.services.chat_intent import requires_domain
+from context_engine.services.metrics import safe_increment
 from context_engine.services.composer_refs import (
     ComposerRefError,
     ValidatedComposerRef,
@@ -1358,6 +1359,14 @@ def _finalize_turn_if_running(
     return True
 
 
+def _chat_route_kind(turn: ConversationTurn) -> str:
+    if turn.route == TURN_ROUTE_DIRECT_LLM:
+        return "direct_llm"
+    if turn.route == TURN_ROUTE_DOMAIN_RAG:
+        return "domain_rag"
+    return "unknown"
+
+
 def _complete_turn(
     db: Session,
     *,
@@ -1368,6 +1377,7 @@ def _complete_turn(
     retrieval_operation_count: int | None = None,
     repair_attempt_count: int | None = None,
     execution_generation: int | None = None,
+    request_id: str | None = None,
 ) -> ConversationTurn:
     now = utc_now()
     values: dict[str, Any] = {
@@ -1403,12 +1413,18 @@ def _complete_turn(
     safe_log(
         logger,
         "chat.turn_persisted",
+        request_id=request_id,
         trace_id=turn.trace_id,
         domain_id=turn.domain_id,
         conversation_turn_id=turn.id,
         client_request_id=turn.client_request_id,
         outcome=turn.stop_reason,
         replay=False,
+    )
+    safe_increment(
+        "chat_turn_terminal",
+        chat_route_kind=_chat_route_kind(turn),
+        outcome="succeeded",
     )
     return turn
 
@@ -1421,6 +1437,7 @@ def _fail_turn(
     message: str,
     stop_reason: str,
     execution_generation: int | None = None,
+    request_id: str | None = None,
 ) -> ConversationTurn:
     now = utc_now()
     values: dict[str, Any] = {
@@ -1450,12 +1467,19 @@ def _fail_turn(
     safe_log(
         logger,
         "chat.turn_failed",
+        request_id=request_id,
         trace_id=turn.trace_id,
         domain_id=turn.domain_id,
         conversation_turn_id=turn.id,
         client_request_id=turn.client_request_id,
         safe_error_code=code,
         outcome="failed",
+    )
+    safe_increment(
+        "chat_turn_terminal",
+        chat_route_kind=_chat_route_kind(turn),
+        outcome="failed",
+        safe_error_code=code,
     )
     return turn
 
@@ -1606,6 +1630,7 @@ class TurnOrchestrator:
                 message=SAFE_PROVIDER_FAILURE_MESSAGE,
                 stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
                 execution_generation=generation,
+                request_id=start.request_id,
             )
             _record_turn_trace(settings, turn, request_id=start.request_id)
             yield _latest_event(db, turn)
@@ -1622,6 +1647,7 @@ class TurnOrchestrator:
                 message=SAFE_PROVIDER_FAILURE_MESSAGE,
                 stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
                 execution_generation=generation,
+                request_id=start.request_id,
             )
             _record_turn_trace(settings, turn, request_id=start.request_id)
             yield _latest_event(db, turn)
@@ -1635,6 +1661,7 @@ class TurnOrchestrator:
             retrieval_operation_count=0,
             repair_attempt_count=0,
             execution_generation=generation,
+            request_id=start.request_id,
         )
         _record_turn_trace(settings, turn, request_id=start.request_id)
         yield _latest_event(db, turn)
@@ -1676,6 +1703,7 @@ class TurnOrchestrator:
                 message=exc.message,
                 stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
                 execution_generation=generation,
+                request_id=start.request_id,
             )
             _record_turn_trace(settings, turn, request_id=start.request_id)
             yield _latest_event(db, turn)
@@ -1700,6 +1728,7 @@ class TurnOrchestrator:
                 retrieval_operation_count=1,
                 repair_attempt_count=0,
                 execution_generation=generation,
+                request_id=start.request_id,
             )
             _record_turn_trace(settings, turn, request_id=start.request_id)
             yield _latest_event(db, turn)
@@ -1760,6 +1789,7 @@ class TurnOrchestrator:
                     message=SAFE_PROVIDER_FAILURE_MESSAGE,
                     stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
                     execution_generation=generation,
+                    request_id=start.request_id,
                 )
             else:
                 turn = _complete_turn(
@@ -1771,6 +1801,7 @@ class TurnOrchestrator:
                     retrieval_operation_count=1,
                     repair_attempt_count=0,
                     execution_generation=generation,
+                    request_id=start.request_id,
                 )
             _record_turn_trace(
                 settings,
@@ -1794,6 +1825,7 @@ class TurnOrchestrator:
                     message=SAFE_PROVIDER_FAILURE_MESSAGE,
                     stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
                     execution_generation=generation,
+                    request_id=start.request_id,
                 )
             else:
                 turn = _complete_turn(
@@ -1805,6 +1837,7 @@ class TurnOrchestrator:
                     retrieval_operation_count=1,
                     repair_attempt_count=0,
                     execution_generation=generation,
+                    request_id=start.request_id,
                 )
             _record_turn_trace(
                 settings,
@@ -1824,6 +1857,7 @@ class TurnOrchestrator:
             retrieval_operation_count=1,
             repair_attempt_count=0,
             execution_generation=generation,
+            request_id=start.request_id,
         )
         _record_turn_trace(
             settings,

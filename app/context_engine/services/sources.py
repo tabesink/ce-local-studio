@@ -85,6 +85,7 @@ from context_engine.services.source_upload import (
     validate_upload_bytes,
 )
 from context_engine.services.structured_logging import safe_log
+from context_engine.services.metrics import safe_increment
 
 logger = logging.getLogger(__name__)
 
@@ -889,6 +890,12 @@ def _fail_operation(db: Session, operation: SourcePreparationOperation, code: st
         safe_error_code=code,
         outcome="failed",
     )
+    safe_increment(
+        "worker_operation",
+        operation_type="source_preparation",
+        outcome="failed",
+        safe_error_code=code,
+    )
 
 
 def _resolve_parser_credential(db: Session, settings: Settings, parser_kind: str) -> str | None:
@@ -1205,6 +1212,11 @@ class SourcePreparationWorker:
             operation_id=operation.id,
             outcome="succeeded",
         )
+        safe_increment(
+            "worker_operation",
+            operation_type="source_preparation",
+            outcome="succeeded",
+        )
         return operation
 
 
@@ -1335,6 +1347,12 @@ class SourceDeleteWorker:
             safe_error_code=code,
             outcome="failed",
         )
+        safe_increment(
+            "worker_operation",
+            operation_type="source_delete",
+            outcome="failed",
+            safe_error_code=code,
+        )
 
     def _finish_missing_source(self, db: Session, operation: SourcePreparationOperation) -> None:
         now = utc_now()
@@ -1399,6 +1417,11 @@ class SourceDeleteWorker:
             domain_id=operation.domain_id,
             source_id=operation.source_document_id,
             operation_id=operation.id,
+            outcome="succeeded",
+        )
+        safe_increment(
+            "worker_operation",
+            operation_type="source_delete",
             outcome="succeeded",
         )
         return operation

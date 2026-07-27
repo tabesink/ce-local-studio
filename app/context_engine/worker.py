@@ -15,6 +15,7 @@ from context_engine.services.indexing import SourceIndexWorker
 from context_engine.services.runtime_config import validate_config_encryption_key
 from context_engine.services.sources import SourceDeleteWorker, SourcePreparationWorker
 from context_engine.services.structured_logging import configure_json_logging, safe_log
+from context_engine.services.metrics import safe_increment
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,12 @@ def run_loop(
                 safe_error_code="worker_error",
                 outcome="failed",
             )
+            safe_increment(
+                "worker_operation",
+                operation_type="stack_worker",
+                outcome="failed",
+                safe_error_code="worker_error",
+            )
             did_work = False
         finally:
             close = getattr(db, "close", None)
@@ -108,6 +115,12 @@ def run_loop(
                     "stack_worker.heartbeat_failed",
                     safe_error_code="heartbeat_write_failed",
                     outcome="failed",
+                )
+                safe_increment(
+                    "worker_operation",
+                    operation_type="stack_worker",
+                    outcome="failed",
+                    safe_error_code="heartbeat_write_failed",
                 )
         if not did_work:
             sleep_fn(idle_seconds)

@@ -153,8 +153,21 @@ system-wide cross-sink privacy with P8, and browser navigation with P9.
 | P7-04 | DONE | P7-03 | sealed versioned SSE live/resume/replay pipeline, terminal persistence, idempotent attach/replay, and grounded-refusal/evidence-only terminal projections |
 | P7-05 | DONE | P7-04 | source/domain delete redaction hooks and public omission tests |
 | P8-01 | DONE | P1-06,P7 | transactional audit-write allowlist coverage, denial events and privacy/adversarial audit tests |
-| P8-02 | NOT_STARTED | P8-01 | safe JSON logs, request/trace correlation and bounded-cardinality service metrics |
+| P8-02 | DONE | P8-01 | safe JSON logs, request/trace correlation and bounded-cardinality service metrics |
 | P8-03 | NOT_STARTED | P8-02 | liveness/readiness, privacy scans and resilience/load evidence with no observability read API or UI |
+
+P8-02 closure evidence (2026-07-27):
+`docs/_scratch/p8-02-telemetry-inventory.md` freezes every production
+`safe_log` disposition and the closed metric name/label catalog (option b:
+chat terminals join via `trace_id`; optional `request_id` when available —
+no turn-row schema migration). Process-local `metrics.py` rejects
+identity-bearing label keys/values; HTTP/chat/worker emitters land beside
+existing allowlisted logs; `DisabledTracingPort` stays disabled. Adversarial
+privacy scans cover formatted JSON logs and metric dumps. Results were 15
+focused unit tests passing; observability-scope / no-scrape absence remains
+green. `docs/_scratch/p8-02-telemetry-evidence.md` records commands and
+residuals (P8-03 health/cross-sink, Phase 2 read, P12 ingress). DRIFT-20 /
+DRIFT-29 log/metric halves advanced; cross-sink/health stay P8-03.
 
 P8-01 closure evidence (2026-07-27):
 `docs/_scratch/p8-01-audit-inventory.md` dispositions every closed audit

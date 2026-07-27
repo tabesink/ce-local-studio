@@ -47,6 +47,7 @@ from context_engine.services.lightrag_runtime import (
     ensure_vendored_lightrag_import_path,
 )
 from context_engine.services.structured_logging import safe_log
+from context_engine.services.metrics import safe_increment
 
 logger = logging.getLogger(__name__)
 
@@ -1316,6 +1317,11 @@ class SourceIndexWorker:
             domain_id=source.domain_id,
             source_id=source.id,
             index_request_id=source.index_request_id,
+            outcome="succeeded",
+        )
+        safe_increment(
+            "worker_operation",
+            operation_type="source_index",
             outcome="succeeded",
         )
         return source

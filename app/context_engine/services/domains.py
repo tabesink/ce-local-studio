@@ -56,6 +56,7 @@ from context_engine.models import (
 from context_engine.services.audit import AuditContext, AuditService, commit_protected_mutation
 from context_engine.services.auth import iso_utc
 from context_engine.services.structured_logging import safe_log
+from context_engine.services.metrics import safe_increment
 
 logger = logging.getLogger(__name__)
 
@@ -1166,6 +1167,11 @@ class DomainDeleteWorker:
             request_id=operation.request_id,
             domain_id=operation.domain_id,
             operation_id=operation.id,
+            outcome="succeeded",
+        )
+        safe_increment(
+            "worker_operation",
+            operation_type="domain_delete",
             outcome="succeeded",
         )
         return operation
