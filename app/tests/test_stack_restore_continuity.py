@@ -247,3 +247,7 @@ def test_continuity_cli_happy_fixture(tmp_path: Path) -> None:
     path = tmp_path / "ok-continuity.json"
     path.write_text(json.dumps(fixture), encoding="utf-8")
     assert continuity_main(["--fixture-json", str(path)]) == 0
+
+
+def test_continuity_cli_requires_fixture_or_database() -> None:
+    assert continuity_main([]) == 2

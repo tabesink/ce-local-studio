@@ -432,6 +432,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(list(argv) if argv is not None else None)
     plan = build_seed_plan()
 
+    database_url = (
+        (args.database_url or "").strip()
+        or os.environ.get("CONTEXT_ENGINE_DATABASE_URL", "").strip()
+        or os.environ.get("DATABASE_URL", "").strip()
+    )
+    if args.fixture_json is None and not database_url:
+        return _closed_fail("fixture_or_database_required")
+
     turn_projection: dict[str, Any] = {
         "public_ref": TURN_REDACTED_PUBLIC_REF,
         "status": "redacted",
@@ -471,11 +479,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         tombstone_state = fixture.get("tombstone_state", tombstone_state)
         tombstone_error = fixture.get("tombstone_content_error", tombstone_error)
 
-    database_url = (
-        (args.database_url or "").strip()
-        or os.environ.get("CONTEXT_ENGINE_DATABASE_URL", "").strip()
-        or os.environ.get("DATABASE_URL", "").strip()
-    )
     if database_url and args.fixture_json is None:
         try:
             from sqlalchemy import create_engine, select
@@ -514,24 +517,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ).scalar_one_or_none()
                 if prepared is not None and prepared.preview_object_key:
                     preview_seeded = True
-                    if args.fetch_preview:
-                        preview_key = prepared.preview_object_key
-                        preview_bytes = _fetch_preview_via_store(preview_key)
-                        range_bytes = preview_bytes[0:4]
+                    # Restored-store bytes only — never substitute local seed plan content.
+                    preview_key = prepared.preview_object_key
+                    preview_bytes = _fetch_preview_via_store(preview_key)
+                    range_bytes = preview_bytes[0:4]
         except Exception:
             return _closed_fail("database_continuity_load_failed")
 
-    if preview_seeded and preview_bytes is None and not args.fixture_json:
-        # Matrix without --fetch-preview still proves seeded metadata path via plan bytes.
-        preview_bytes = next(
-            (put.content for put in plan.object_puts if put.key == plan.prepared_source.preview_object_key),
-            None,
-        )
-        if preview_bytes is None and plan.prepared_source.preview_reuses_original:
-            preview_bytes = next(
-                (put.content for put in plan.object_puts if put.key == plan.prepared_source.original_object_key),
-                None,
-            )
+    if preview_seeded and preview_bytes is None:
+        return _closed_fail("preview_bytes_required")
 
     results = run_continuity_checks(
         turn_projection=turn_projection,

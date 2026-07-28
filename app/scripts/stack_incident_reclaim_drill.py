@@ -522,10 +522,17 @@ def main(argv: list[str] | None = None) -> int:
             extra_flags=[],
         )
 
-    # missing_object
+    # missing_object — delete via product store (not a no-op) unless dry-run.
+    def _delete_via_product_store(key: str) -> None:
+        from context_engine.adapters.object_storage import object_store_from_settings
+        from context_engine.config import Settings
+
+        store = object_store_from_settings(Settings())
+        store.delete(key)
+
     return run_missing_object(
         object_key=args.object_key or "",
-        delete_object=None if args.dry_run else (lambda _key: None),
+        delete_object=None if args.dry_run else _delete_via_product_store,
         content_status=args.content_status,
         content_body=args.content_body,
         eligibility_restored=bool(args.eligibility_restored),

@@ -292,13 +292,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--census-from-json", type=Path, help="Offline census fixture for --from-json")
     parser.add_argument(
         "--store-kind",
-        default=os.environ.get("CE_OBJECT_STORE_KIND", "filesystem"),
-        help="filesystem|s3|minio recorded in manifest",
+        default=os.environ.get("CE_OBJECT_STORE_KIND", "s3"),
+        help="filesystem|s3|minio recorded in manifest (default: CE_OBJECT_STORE_KIND or s3)",
     )
     parser.add_argument(
         "--require-s3",
-        action="store_true",
-        help="Refuse filesystem-only store kind (AE2 green gate)",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Refuse filesystem-only store kind for AE2 green (default: on; use --no-require-s3 for offline)",
+    )
+    parser.add_argument(
+        "--require-etag",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Hard-fail capture when HeadObject ETag is missing (default: on for s3/minio)",
     )
     parser.add_argument(
         "--skip-fence",
@@ -435,6 +442,17 @@ def main(argv: list[str] | None = None) -> int:
         )
     except Exception:
         return _closed_fail()
+
+    require_etag = bool(args.require_etag) and store_kind in {"s3", "minio"}
+    if require_etag:
+        missing_etags = [
+            str(row.get("key") or "")
+            for row in entries
+            if not row.get("etag")
+        ]
+        if missing_etags:
+            print("etag_missing_at_capture:" + ",".join(missing_etags), file=sys.stderr)
+            return 1
 
     # pg_dump hook (optional for offline unit paths — AE2 requires a dump)
     pg_digest: str | None = None

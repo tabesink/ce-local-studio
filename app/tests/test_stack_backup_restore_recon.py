@@ -194,6 +194,14 @@ def test_refuse_live_project_volumes() -> None:
         )
         == []
     )
+    assert refuse_live_project_volumes([], [], refuse_live_project=True) == [
+        "live_volume_lists_required"
+    ]
+    assert refuse_live_project_volumes(
+        ["proj_drill_stack-minio-data"],
+        [],
+        refuse_live_project=True,
+    ) == ["live_volume_lists_required"]
 
 
 def test_metadata_only_not_enough(tmp_path: Path) -> None:

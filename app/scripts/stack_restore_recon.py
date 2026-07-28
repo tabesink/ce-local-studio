@@ -59,11 +59,17 @@ def refuse_live_project_volumes(
     *,
     refuse_live_project: bool,
 ) -> list[str]:
-    """Refuse overlapping resolved volume names with the live Compose project."""
+    """Refuse overlapping resolved volume names with the live Compose project.
+
+    When refuse is on, both volume lists must be non-empty (fail closed) so an
+    empty opt-in cannot silently skip the gate before PutObject.
+    """
     if not refuse_live_project:
         return []
     target = {str(v).strip() for v in target_resolved_volumes if str(v).strip()}
     live = {str(v).strip() for v in live_resolved_volumes if str(v).strip()}
+    if not target or not live:
+        return ["live_volume_lists_required"]
     overlap = sorted(target & live)
     return [f"live_volume_overlap:{name}" for name in overlap]
 
@@ -252,8 +258,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--refuse-live-project",
-        action="store_true",
-        help="Fail if --target-volumes overlaps --live-volumes",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Refuse PutObject when target volumes overlap live project (default: on)",
     )
     parser.add_argument(
         "--target-volumes",
@@ -316,10 +323,12 @@ def main(argv: list[str] | None = None) -> int:
             print(reason, file=sys.stderr)
         return 1
 
+    # Skip-put (verify-only) may omit volume lists; PutObject path always refuses by default.
+    refuse_volumes = bool(args.refuse_live_project) and not bool(args.skip_put)
     volume_failures = refuse_live_project_volumes(
         [part.strip() for part in str(args.target_volumes).split(",") if part.strip()],
         [part.strip() for part in str(args.live_volumes).split(",") if part.strip()],
-        refuse_live_project=bool(args.refuse_live_project),
+        refuse_live_project=refuse_volumes,
     )
     if volume_failures:
         for reason in volume_failures:
