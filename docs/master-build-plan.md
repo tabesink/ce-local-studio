@@ -361,7 +361,7 @@ CSRF, and mid-turn lease heartbeat.
 | Task | Status | Depends on | Deliverable |
 | --- | --- | --- | --- |
 | P12-01 | DONE | P0-P11 | Path 1 unsupported populated-legacy upgrade: fresh-install + catalog preflight/refusal + startup catalog match on PostgreSQL 16 — evidence `docs/_scratch/p12-01-populated-compatibility-evidence.md`; Path 2 contraction and P12-04 backup drills remain |
-| P12-02 | NOT_STARTED | P0-P11 | full backend/frontend/adapter/Docker suite and contract snapshot convergence |
+| P12-02 | DONE | P0-P11 | full backend/frontend/adapter/Docker suite and contract snapshot convergence — evidence `docs/_scratch/p12-02-suite-contract-convergence-evidence.md`; CI `verify-postgresql` + default `scripts/verify.sh` green; Playwright/live Compose smoke remain P12-07 / P10 evidence-owned |
 | P12-03 | NOT_STARTED | P8-P11 | authz, secret/content leakage, deletion/redaction and adversarial retrieval review |
 | P12-04 | NOT_STARTED | P12-01 | backup/restore, image rollback, failed-worker recovery and incident drills |
 | P12-05 | NOT_STARTED | P7,P9,P12-02 | deployed-ingress incremental SSE, reconnect/replay, graceful shutdown and stream-drain proof |
