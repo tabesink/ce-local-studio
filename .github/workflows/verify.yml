@@ -23,3 +23,36 @@ jobs:
           version: '0.8.9'
       - name: Run root verification
         run: bash scripts/verify.sh
+
+  # Disposable PostgreSQL 16 proofs (opt-in env). Parallel with root-verification;
+  # both are required merge gates. Live Compose smoke and Playwright stay out.
+  verify-postgresql:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: context_engine
+          POSTGRES_PASSWORD: context_engine
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U context_engine -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: '0.8.9'
+      - name: Run disposable PostgreSQL suite
+        working-directory: app
+        env:
+          CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS: '1'
+          CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL: postgresql+psycopg://context_engine:context_engine@127.0.0.1:5432/postgres
+        run: uv run --frozen --python 3.12 --extra test pytest -m postgresql
