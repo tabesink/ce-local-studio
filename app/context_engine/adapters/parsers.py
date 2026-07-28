@@ -53,6 +53,14 @@ class PreparedWarning:
 
 
 @dataclass(frozen=True)
+class PreparedRegion:
+    x: float
+    y: float
+    width: float
+    height: float
+
+
+@dataclass(frozen=True)
 class PreparedBlock:
     source_order: int
     kind: str
@@ -61,6 +69,7 @@ class PreparedBlock:
     page_start: int | None = None
     page_end: int | None = None
     section_path: list[str] = field(default_factory=list)
+    region: PreparedRegion | None = None
 
 
 @dataclass(frozen=True)
@@ -121,6 +130,104 @@ def _page_from_native(value: Any) -> int | None:
     return None
 
 
+def _as_float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _normalized_region(x: float, y: float, width: float, height: float) -> PreparedRegion | None:
+    if not (
+        0.0 <= x <= 1.0
+        and 0.0 <= y <= 1.0
+        and width > 0.0
+        and height > 0.0
+        and width <= 1.0
+        and height <= 1.0
+        and x + width <= 1.0 + 1e-9
+        and y + height <= 1.0 + 1e-9
+    ):
+        return None
+    return PreparedRegion(x=x, y=y, width=width, height=height)
+
+
+def _region_from_bbox_dict(bbox: dict[str, Any], *, page_width: float | None, page_height: float | None) -> PreparedRegion | None:
+    x = _as_float(bbox.get("x"))
+    y = _as_float(bbox.get("y"))
+    width = _as_float(bbox.get("width"))
+    height = _as_float(bbox.get("height"))
+    if x is not None and y is not None and width is not None and height is not None:
+        return _normalized_region(x, y, width, height)
+
+    left = _as_float(bbox.get("l") if "l" in bbox else bbox.get("x0"))
+    top = _as_float(bbox.get("t") if "t" in bbox else bbox.get("y0"))
+    right = _as_float(bbox.get("r") if "r" in bbox else bbox.get("x1"))
+    bottom = _as_float(bbox.get("b") if "b" in bbox else bbox.get("y1"))
+    if left is None or top is None or right is None or bottom is None:
+        return None
+    if right <= left or bottom <= top:
+        return None
+
+    pw = page_width if page_width and page_width > 0 else None
+    ph = page_height if page_height and page_height > 0 else None
+    if pw is None and ph is None and max(left, top, right, bottom) <= 1.0:
+        return _normalized_region(left, top, right - left, bottom - top)
+    if pw is None or ph is None:
+        return None
+    return _normalized_region(left / pw, top / ph, (right - left) / pw, (bottom - top) / ph)
+
+
+def _find_bbox_dict(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        bbox = value.get("bbox")
+        if isinstance(bbox, dict):
+            return bbox
+        if any(key in value for key in ("x", "y", "width", "height", "l", "t", "r", "b", "x0", "y0", "x1", "y1")):
+            return value
+        for nested_key in ("prov", "bounding_box", "box"):
+            nested = value.get(nested_key)
+            found = _find_bbox_dict(nested)
+            if found is not None:
+                return found
+    if isinstance(value, list):
+        for item in value:
+            found = _find_bbox_dict(item)
+            if found is not None:
+                return found
+    return None
+
+
+def _page_dimensions(value: Any) -> tuple[float | None, float | None]:
+    if isinstance(value, dict):
+        width = _as_float(value.get("page_width") or value.get("pageWidth"))
+        height = _as_float(value.get("page_height") or value.get("pageHeight"))
+        if width is not None or height is not None:
+            return width, height
+        for nested_key in ("prov", "page"):
+            nested = value.get(nested_key)
+            pw, ph = _page_dimensions(nested)
+            if pw is not None or ph is not None:
+                return pw, ph
+    if isinstance(value, list):
+        for item in value:
+            pw, ph = _page_dimensions(item)
+            if pw is not None or ph is not None:
+                return pw, ph
+    return None, None
+
+
+def _region_from_native(value: Any) -> PreparedRegion | None:
+    bbox = _find_bbox_dict(value)
+    if bbox is None:
+        return None
+    page_width, page_height = _page_dimensions(value)
+    if page_width is None and page_height is None:
+        page_width, page_height = _page_dimensions(bbox)
+    return _region_from_bbox_dict(bbox, page_width=page_width, page_height=page_height)
+
+
 def _heading_markdown(text: str, level: int) -> str:
     text = text.lstrip("# ").strip()
     prefix = "#" * max(1, min(level, 6))
@@ -152,6 +259,7 @@ def normalize_reducto_parse_response(source_document_id: str, parser_kind: str, 
             native_type = _safe_text(native.get("type") or native.get("label")).lower()
             content = _safe_text(native.get("content") or native.get("text") or native.get("caption"))
             page = _page_from_native(native)
+            region = _region_from_native(native)
             heading_level: int | None = None
             kind = SOURCE_BLOCK_KIND_TEXT
             if native_type in {"title"}:
@@ -179,6 +287,7 @@ def normalize_reducto_parse_response(source_document_id: str, parser_kind: str, 
                     page_start=page,
                     page_end=page,
                     section_path=list(section_path),
+                    region=region,
                 )
             )
             image_bytes = native.get("image_bytes")
@@ -236,6 +345,7 @@ def normalize_docling_document(source_document_id: str, parser_kind: str, payloa
         label = _safe_text(item.get("label") or item.get("type") or item.get("name")).lower()
         text = _safe_text(item.get("text") or item.get("content") or item.get("caption"))
         page = _page_from_native(item.get("prov") or item)
+        region = _region_from_native(item.get("prov") or item)
         heading_level: int | None = None
         kind = SOURCE_BLOCK_KIND_TEXT
         if "title" in label:
@@ -263,6 +373,7 @@ def normalize_docling_document(source_document_id: str, parser_kind: str, payloa
                 page_start=page,
                 page_end=page,
                 section_path=list(section_path),
+                region=region,
             )
         )
         image_bytes = item.get("image_bytes")
@@ -498,7 +609,11 @@ def validate_prepared_source(prepared: PreparedSource) -> None:
             raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
         if block.page_start is not None and block.page_end is not None and block.page_end < block.page_start:
             raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
-        as_dict = block.__dict__
+        if block.region is not None:
+            region = block.region
+            if _normalized_region(region.x, region.y, region.width, region.height) is None:
+                raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
+        as_dict = {key: value for key, value in block.__dict__.items() if key != "region"}
         if _FORBIDDEN_PREPARED_KEYS.intersection(as_dict):
             raise ParserAdapterError("source_preparation_invalid", "Prepared source did not pass validation.", 422)
     for image in prepared.images:
@@ -525,6 +640,18 @@ def dump_prepared_source_for_privacy_scan(prepared: PreparedSource) -> str:
                     "pageStart": block.page_start,
                     "pageEnd": block.page_end,
                     "sectionPath": block.section_path,
+                    **(
+                        {
+                            "region": {
+                                "x": block.region.x,
+                                "y": block.region.y,
+                                "width": block.region.width,
+                                "height": block.region.height,
+                            }
+                        }
+                        if block.region is not None
+                        else {}
+                    ),
                 }
                 for block in prepared.blocks
             ],

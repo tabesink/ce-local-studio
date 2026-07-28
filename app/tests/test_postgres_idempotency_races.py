@@ -36,7 +36,7 @@ from context_engine.services.readiness import SUPPORTED_ALEMBIC_HEAD
 APP_ROOT = Path(__file__).resolve().parents[1]
 ADMIN_URL_ENV = "CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL"
 OPT_IN_ENV = "CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS"
-HEAD_REVISION = "a2c7e9f14b80"
+HEAD_REVISION = "c9e4b2d17a60"
 DATABASE_NAME_PATTERN = __import__("re").compile(r"^ce_p107_[a-z_]+_[0-9a-f]{32}$")
 
 pytestmark = pytest.mark.postgresql

@@ -15,7 +15,8 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 TURN_LEASE_REVISION = "e9f2a1b83c70"
 PRIOR_REVISION = "c7d91e5a2f04"
 COMPOSER_CONSUMED_REVISION = "f1a8c3d04e92"
-CURRENT_HEAD_REVISION = "a2c7e9f14b80"
+HTTP_IDEMPOTENCY_REVISION = "a2c7e9f14b80"
+CURRENT_HEAD_REVISION = "c9e4b2d17a60"
 
 
 def test_turn_lease_migration_revises_conversation_ownership_head() -> None:
@@ -27,7 +28,8 @@ def test_turn_lease_migration_revises_conversation_ownership_head() -> None:
     assert revision.down_revision == PRIOR_REVISION
     assert CURRENT_HEAD_REVISION in scripts.get_heads()
     assert scripts.get_revision(COMPOSER_CONSUMED_REVISION).down_revision == TURN_LEASE_REVISION
-    assert scripts.get_revision(CURRENT_HEAD_REVISION).down_revision == COMPOSER_CONSUMED_REVISION
+    assert scripts.get_revision(HTTP_IDEMPOTENCY_REVISION).down_revision == COMPOSER_CONSUMED_REVISION
+    assert scripts.get_revision(CURRENT_HEAD_REVISION).down_revision == HTTP_IDEMPOTENCY_REVISION
 
 
 def test_conversation_turn_exposes_private_lease_fields() -> None:

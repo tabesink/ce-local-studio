@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from hashlib import sha256
@@ -22,6 +23,9 @@ from context_engine.models import (
     DOMAIN_STATE_STOPPED,
     EMPTY_COMPOSER_REF_FINGERPRINT,
     ROLE_MEMBER,
+    SOURCE_BLOCK_KIND_FIGURE,
+    SOURCE_BLOCK_KIND_TABLE,
+    SOURCE_BLOCK_KIND_TEXT,
     SOURCE_STATE_PREPARED,
     TURN_ROUTE_DIRECT_LLM,
     TURN_ROUTE_DOMAIN_RAG,
@@ -35,6 +39,7 @@ from context_engine.models import (
     Domain,
     ModelProfile,
     ProviderConfig,
+    SourceBlock,
     SourceDocument,
     User,
 )
@@ -68,6 +73,12 @@ TURN_REDACTED_ID = "a1111111-1111-4111-8111-turn00000002"
 TURN_REDACTED_PUBLIC_REF = "turn_mina_redacted"
 EVIDENCE_FIGURE_ID = "a1111111-1111-4111-8111-ev0000000001"
 EVIDENCE_FIGURE_PUBLIC_REF = "ev_mina_figure_valve"
+BLOCK_VALVE_FIGURE_ID = "block_valve_figure"
+BLOCK_TORQUE_TABLE_ID = "block_torque_table"
+BLOCK_LOCKOUT_TEXT_ID = "block_lockout_text"
+BLOCK_PAGE_ONLY_ID = "block_page_only_figure"
+FIGURE_REGION = (0.12, 0.24, 0.66, 0.41)
+TABLE_REGION = (0.10, 0.30, 0.80, 0.34)
 
 ACCEPTED_SOURCE_PUBLIC_REF = "accepted_mina_source_01"
 ACCEPTED_EVIDENCE_PUBLIC_REF = "accepted_mina_evidence_01"
@@ -425,6 +436,84 @@ def _upsert_source(db: Session) -> None:
     source.state = SOURCE_STATE_PREPARED
 
 
+def _upsert_source_blocks(db: Session) -> None:
+    fixtures = (
+        (
+            BLOCK_VALVE_FIGURE_ID,
+            1,
+            SOURCE_BLOCK_KIND_FIGURE,
+            "Figure 4 places the relief valve downstream of the pump.",
+            18,
+            ["4.2 Relief valve"],
+            FIGURE_REGION,
+        ),
+        (
+            BLOCK_TORQUE_TABLE_ID,
+            2,
+            SOURCE_BLOCK_KIND_TABLE,
+            "M12 fasteners use the listed 80 N·m service torque.",
+            12,
+            [],
+            TABLE_REGION,
+        ),
+        (
+            BLOCK_LOCKOUT_TEXT_ID,
+            3,
+            SOURCE_BLOCK_KIND_TEXT,
+            "Isolate electrical power before opening the service panel.",
+            7,
+            ["2.1 Lockout"],
+            None,
+        ),
+        (
+            BLOCK_PAGE_ONLY_ID,
+            4,
+            SOURCE_BLOCK_KIND_FIGURE,
+            "The inspection diagram is shown on this page.",
+            20,
+            [],
+            None,
+        ),
+    )
+    for block_id, order, kind, markdown, page, section_path, region in fixtures:
+        block = db.get(SourceBlock, block_id)
+        region_x = region_y = region_width = region_height = None
+        if region is not None:
+            region_x, region_y, region_width, region_height = region
+        if block is None:
+            db.add(
+                SourceBlock(
+                    id=block_id,
+                    source_document_id=SOURCE_PUMP_ID,
+                    domain_id=DOMAIN_MANUALS_ID,
+                    source_order=order,
+                    kind=kind,
+                    canonical_markdown=markdown,
+                    page_start=page,
+                    page_end=page,
+                    section_path=json.dumps(section_path) if section_path else None,
+                    region_x=region_x,
+                    region_y=region_y,
+                    region_width=region_width,
+                    region_height=region_height,
+                    created_at=SEED_CLOCK,
+                )
+            )
+            continue
+        block.source_document_id = SOURCE_PUMP_ID
+        block.domain_id = DOMAIN_MANUALS_ID
+        block.source_order = order
+        block.kind = kind
+        block.canonical_markdown = markdown
+        block.page_start = page
+        block.page_end = page
+        block.section_path = json.dumps(section_path) if section_path else None
+        block.region_x = region_x
+        block.region_y = region_y
+        block.region_width = region_width
+        block.region_height = region_height
+
+
 def _upsert_conversation_graph(db: Session) -> None:
     conversation = db.get(Conversation, CONV_MINA_ID)
     if conversation is None:
@@ -508,7 +597,7 @@ def _upsert_conversation_graph(db: Session) -> None:
                 turn_id=TURN_FIGURE_ID,
                 evidence_order=1,
                 source_document_id=SOURCE_PUMP_ID,
-                source_block_id="block_valve_figure",
+                source_block_id=BLOCK_VALVE_FIGURE_ID,
                 citation_label="1",
                 source_label="Pump manual",
                 excerpt="Figure 4 places the relief valve downstream of the pump.",
@@ -624,6 +713,8 @@ def seed_composer_ref_fixtures(
     )
     db.flush()
     _upsert_source(db)
+    db.flush()
+    _upsert_source_blocks(db)
     db.flush()
     _upsert_conversation_graph(db)
     db.flush()

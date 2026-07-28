@@ -7,6 +7,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -573,6 +574,22 @@ class SourceBlock(Base):
         CheckConstraint("page_start is null or page_start >= 1", name="ck_source_blocks_page_start_positive"),
         CheckConstraint("page_end is null or page_end >= 1", name="ck_source_blocks_page_end_positive"),
         CheckConstraint("page_start is null or page_end is null or page_end >= page_start", name="ck_source_blocks_page_range"),
+        CheckConstraint(
+            "("
+            "(region_x is null and region_y is null and region_width is null and region_height is null) "
+            "or ("
+            "region_x is not null and region_y is not null "
+            "and region_width is not null and region_height is not null "
+            "and region_x >= 0 and region_x <= 1 "
+            "and region_y >= 0 and region_y <= 1 "
+            "and region_width > 0 and region_width <= 1 "
+            "and region_height > 0 and region_height <= 1 "
+            "and region_x + region_width <= 1 "
+            "and region_y + region_height <= 1"
+            ")"
+            ")",
+            name="ck_source_blocks_region_normalized",
+        ),
         Index("uq_source_blocks_source_order", "source_document_id", "source_order", unique=True),
         Index("ix_source_blocks_domain_source", "domain_id", "source_document_id"),
     )
@@ -595,6 +612,10 @@ class SourceBlock(Base):
     page_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
     page_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
     section_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    region_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    region_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    region_width: Mapped[float | None] = mapped_column(Float, nullable=True)
+    region_height: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now)
 
     source_document: Mapped[SourceDocument] = relationship(back_populates="blocks")

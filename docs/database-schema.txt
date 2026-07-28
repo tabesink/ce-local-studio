@@ -125,7 +125,10 @@ source_blocks
   domain_id FK domains.id CASCADE; source_order integer CHECK >=1
   kind CHECK IN ('text','table','figure'); canonical_markdown text NOT NULL
   heading_level NULL CHECK >=1; page_start/page_end NULL CHECK valid positive range
-  section_path text NULL; created_at
+  section_path text NULL
+  region_x/region_y/region_width/region_height NULL float
+  CHECK all-null OR all-not-null with each in [0,1], width/height > 0, x+width<=1, y+height<=1
+  (ck_source_blocks_region_normalized); created_at
   UNIQUE(source_document_id, source_order); INDEX(domain_id, source_document_id)
 
 source_images

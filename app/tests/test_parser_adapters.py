@@ -11,6 +11,7 @@ from context_engine.adapters.parsers import (
     ParserRequest,
     PreparedBlock,
     PreparedImage,
+    PreparedRegion,
     PreparedSource,
     ReductoDocumentParser,
     dump_prepared_source_for_privacy_scan,
@@ -181,6 +182,86 @@ def test_validate_prepared_source_rejects_hash_mismatch() -> None:
                 content_hash="0" * 64,
                 mime_type="image/png",
                 bytes_data=b"not-matching",
+            )
+        ],
+    )
+    with pytest.raises(ParserAdapterError) as invalid:
+        validate_prepared_source(prepared)
+    assert invalid.value.code == "source_preparation_invalid"
+
+
+def test_normalize_docling_and_reducto_capture_normalized_region() -> None:
+    docling = normalize_docling_document(
+        "src-region-docling",
+        PARSER_DOCLING,
+        {
+            "body": {"children": [{"$ref": "#/pictures/0"}]},
+            "pictures": [
+                {
+                    "self_ref": "#/pictures/0",
+                    "label": "picture",
+                    "alt_text": "Valve",
+                    "prov": {
+                        "page": 18,
+                        "bbox": {"x": 0.12, "y": 0.24, "width": 0.66, "height": 0.41},
+                    },
+                }
+            ],
+        },
+    )
+    assert docling.blocks[0].region == PreparedRegion(0.12, 0.24, 0.66, 0.41)
+    validate_prepared_source(docling)
+
+    reducto = normalize_reducto_parse_response(
+        "src-region-reducto",
+        PARSER_REDUCTO,
+        {
+            "result": {
+                "type": "full",
+                "chunks": [
+                    {
+                        "blocks": [
+                            {
+                                "type": "Table",
+                                "content": "Torque table",
+                                "page": 12,
+                                "bbox": {"x": 0.10, "y": 0.30, "width": 0.80, "height": 0.34},
+                            }
+                        ]
+                    }
+                ],
+            }
+        },
+    )
+    assert reducto.blocks[0].region == PreparedRegion(0.10, 0.30, 0.80, 0.34)
+    scanned = dump_prepared_source_for_privacy_scan(reducto)
+    assert '"x": 0.1' in scanned or '"x": 0.10' in scanned
+    assert "bbox" not in scanned
+
+
+def test_normalize_missing_bbox_leaves_region_null() -> None:
+    prepared = normalize_docling_document(
+        "src-region-null",
+        PARSER_DOCLING,
+        {
+            "body": {"children": [{"$ref": "#/texts/0"}]},
+            "texts": [{"self_ref": "#/texts/0", "label": "text", "text": "No region", "prov": {"page": 7}}],
+        },
+    )
+    assert prepared.blocks[0].region is None
+    validate_prepared_source(prepared)
+
+
+def test_validate_prepared_source_rejects_out_of_range_region() -> None:
+    prepared = PreparedSource(
+        source_document_id="src-region-bad",
+        parser_kind=PARSER_DOCLING,
+        blocks=[
+            PreparedBlock(
+                source_order=1,
+                kind=SOURCE_BLOCK_KIND_TEXT,
+                canonical_markdown="Bad region",
+                region=PreparedRegion(0.9, 0.9, 0.5, 0.5),
             )
         ],
     )

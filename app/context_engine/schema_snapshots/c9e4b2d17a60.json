@@ -1,0 +1,2816 @@
+{
+  "alembic_head": "c9e4b2d17a60",
+  "inventory": {
+    "alembic_revision": "c9e4b2d17a60",
+    "columns": [
+      [
+        "public",
+        "alembic_version",
+        "version_num",
+        "character varying(32)"
+      ],
+      [
+        "public",
+        "audit_events",
+        "actor_kind",
+        "character varying(32)"
+      ],
+      [
+        "public",
+        "audit_events",
+        "actor_user_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "audit_events",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "audit_events",
+        "event_name",
+        "character varying(80)"
+      ],
+      [
+        "public",
+        "audit_events",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "audit_events",
+        "metadata_json",
+        "text"
+      ],
+      [
+        "public",
+        "audit_events",
+        "outcome",
+        "character varying(16)"
+      ],
+      [
+        "public",
+        "audit_events",
+        "request_id",
+        "character varying(80)"
+      ],
+      [
+        "public",
+        "audit_events",
+        "safe_error_code",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "audit_events",
+        "target_id",
+        "character varying(128)"
+      ],
+      [
+        "public",
+        "audit_events",
+        "target_kind",
+        "character varying(40)"
+      ],
+      [
+        "public",
+        "audit_events",
+        "trace_id",
+        "character varying(80)"
+      ],
+      [
+        "public",
+        "auth_sessions",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "auth_sessions",
+        "expires_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "auth_sessions",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "auth_sessions",
+        "last_used_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "auth_sessions",
+        "revoked_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "auth_sessions",
+        "token_hash",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "auth_sessions",
+        "user_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "consumed_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "domain_id",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "expires_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "owner_user_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "ref_kind",
+        "character varying(16)"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "safe_description",
+        "character varying(500)"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "safe_label",
+        "character varying(255)"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "target_id",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "token_hash",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "domain_id",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "evidence_ref_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "prompt_template_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "public_ref",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "redacted_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "ref_kind",
+        "character varying(16)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "ref_order",
+        "integer"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "safe_description",
+        "character varying(500)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "safe_label",
+        "character varying(255)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "source_block_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "source_document_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "turn_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "conversation_turn_events",
+        "event_type",
+        "character varying(32)"
+      ],
+      [
+        "public",
+        "conversation_turn_events",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "conversation_turn_events",
+        "occurred_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "conversation_turn_events",
+        "payload_digest",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "conversation_turn_events",
+        "payload_json",
+        "text"
+      ],
+      [
+        "public",
+        "conversation_turn_events",
+        "schema_version",
+        "character varying(16)"
+      ],
+      [
+        "public",
+        "conversation_turn_events",
+        "sequence",
+        "integer"
+      ],
+      [
+        "public",
+        "conversation_turn_events",
+        "turn_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "citation_label",
+        "character varying(16)"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "evidence_order",
+        "integer"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "excerpt",
+        "text"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "public_ref",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "redacted_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "source_block_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "source_document_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "source_label",
+        "character varying(255)"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "turn_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "assistant_answer",
+        "text"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "claimable_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "client_request_id",
+        "character varying(80)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "completed_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "composer_ref_fingerprint",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "conversation_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "domain_id",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "events_retained_after",
+        "integer"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "execution_generation",
+        "integer"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "lease_expires_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "lease_owner",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "plan_step_count",
+        "integer"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "public_ref",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "repair_attempt_count",
+        "integer"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "retrieval_operation_count",
+        "integer"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "route",
+        "character varying(16)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "safe_error_code",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "safe_error_message",
+        "character varying(500)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "started_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "status",
+        "character varying(16)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "stop_reason",
+        "character varying(32)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "trace_id",
+        "character varying(80)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "updated_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "user_message",
+        "text"
+      ],
+      [
+        "public",
+        "conversations",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "conversations",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "conversations",
+        "owner_user_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "conversations",
+        "public_ref",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "conversations",
+        "title",
+        "character varying(120)"
+      ],
+      [
+        "public",
+        "conversations",
+        "updated_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "conversations",
+        "version",
+        "integer"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "control_generation_at_start",
+        "integer"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "domain_id",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "error_code",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "error_message",
+        "character varying(500)"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "finished_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "lease_expires_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "lease_owner",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "message",
+        "character varying(500)"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "operation_type",
+        "character varying(16)"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "request_id",
+        "character varying(80)"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "requested_by_user_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "started_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "status",
+        "character varying(16)"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "updated_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "version",
+        "integer"
+      ],
+      [
+        "public",
+        "domains",
+        "control_generation",
+        "integer"
+      ],
+      [
+        "public",
+        "domains",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "domains",
+        "display_name",
+        "character varying(120)"
+      ],
+      [
+        "public",
+        "domains",
+        "embedding_profile_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "domains",
+        "id",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "domains",
+        "runtime_instance_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "domains",
+        "state",
+        "character varying(16)"
+      ],
+      [
+        "public",
+        "domains",
+        "updated_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "domains",
+        "version",
+        "integer"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "completed_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "fingerprint",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "http_status",
+        "integer"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "key_hash",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "principal_user_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "response_kind",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "response_refs_json",
+        "text"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "route_class",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "state",
+        "character varying(16)"
+      ],
+      [
+        "public",
+        "login_throttle_buckets",
+        "blocked_until",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "login_throttle_buckets",
+        "client_bucket_hash",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "login_throttle_buckets",
+        "failure_count",
+        "integer"
+      ],
+      [
+        "public",
+        "login_throttle_buckets",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "login_throttle_buckets",
+        "updated_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "login_throttle_buckets",
+        "username_hash",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "login_throttle_buckets",
+        "window_started_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "model_name",
+        "character varying(200)"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "name",
+        "character varying(120)"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "profile_kind",
+        "character varying(32)"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "provider_kind",
+        "character varying(32)"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "updated_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "vector_dimensions",
+        "integer"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "version",
+        "integer"
+      ],
+      [
+        "public",
+        "prompt_templates",
+        "body",
+        "text"
+      ],
+      [
+        "public",
+        "prompt_templates",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "prompt_templates",
+        "description",
+        "character varying(500)"
+      ],
+      [
+        "public",
+        "prompt_templates",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "prompt_templates",
+        "name",
+        "character varying(120)"
+      ],
+      [
+        "public",
+        "prompt_templates",
+        "state",
+        "character varying(16)"
+      ],
+      [
+        "public",
+        "prompt_templates",
+        "updated_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "provider_configs",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "provider_configs",
+        "credential_ciphertext",
+        "text"
+      ],
+      [
+        "public",
+        "provider_configs",
+        "credential_updated_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "provider_configs",
+        "display_name",
+        "character varying(80)"
+      ],
+      [
+        "public",
+        "provider_configs",
+        "provider_kind",
+        "character varying(32)"
+      ],
+      [
+        "public",
+        "provider_configs",
+        "requires_credentials",
+        "boolean"
+      ],
+      [
+        "public",
+        "provider_configs",
+        "updated_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "provider_configs",
+        "version",
+        "integer"
+      ],
+      [
+        "public",
+        "runtime_settings",
+        "active_parser_kind",
+        "character varying(32)"
+      ],
+      [
+        "public",
+        "runtime_settings",
+        "active_synthesis_profile_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "runtime_settings",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "runtime_settings",
+        "id",
+        "integer"
+      ],
+      [
+        "public",
+        "runtime_settings",
+        "updated_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "runtime_settings",
+        "version",
+        "integer"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "canonical_markdown",
+        "text"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "domain_id",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "heading_level",
+        "integer"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "kind",
+        "character varying(16)"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "page_end",
+        "integer"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "page_start",
+        "integer"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "region_height",
+        "double precision"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "region_width",
+        "double precision"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "region_x",
+        "double precision"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "region_y",
+        "double precision"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "section_path",
+        "text"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "source_document_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "source_order",
+        "integer"
+      ],
+      [
+        "public",
+        "source_documents",
+        "content_type",
+        "character varying(160)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "source_documents",
+        "created_by_user_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "domain_id",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "index_accepted_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "source_documents",
+        "index_content_hash",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "index_error_code",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "index_error_message",
+        "character varying(500)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "index_generation",
+        "integer"
+      ],
+      [
+        "public",
+        "source_documents",
+        "index_lease_expires_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "source_documents",
+        "index_lease_owner",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "index_ready_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "source_documents",
+        "index_remote_document_id",
+        "character varying(128)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "index_request_id",
+        "character varying(96)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "index_state",
+        "character varying(16)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "index_updated_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "source_documents",
+        "original_filename",
+        "character varying(255)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "original_object_key",
+        "character varying(128)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "original_sha256",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "original_size_bytes",
+        "integer"
+      ],
+      [
+        "public",
+        "source_documents",
+        "parser_kind",
+        "character varying(32)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "preparation_generation",
+        "integer"
+      ],
+      [
+        "public",
+        "source_documents",
+        "public_ref",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "state",
+        "character varying(16)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "updated_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "source_documents",
+        "version",
+        "integer"
+      ],
+      [
+        "public",
+        "source_images",
+        "alt_text",
+        "character varying(500)"
+      ],
+      [
+        "public",
+        "source_images",
+        "content_hash",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "source_images",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "source_images",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "source_images",
+        "mime_type",
+        "character varying(80)"
+      ],
+      [
+        "public",
+        "source_images",
+        "object_key",
+        "character varying(128)"
+      ],
+      [
+        "public",
+        "source_images",
+        "page_number",
+        "integer"
+      ],
+      [
+        "public",
+        "source_images",
+        "source_block_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "source_images",
+        "source_document_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "domain_id",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "error_code",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "error_message",
+        "character varying(500)"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "finished_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "lease_expires_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "lease_owner",
+        "character varying(64)"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "message",
+        "character varying(500)"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "operation_type",
+        "character varying(16)"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "preparation_generation_at_start",
+        "integer"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "request_id",
+        "character varying(80)"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "requested_by_user_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "source_document_id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "started_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "status",
+        "character varying(16)"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "updated_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "version",
+        "integer"
+      ],
+      [
+        "public",
+        "users",
+        "created_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "users",
+        "id",
+        "character varying(36)"
+      ],
+      [
+        "public",
+        "users",
+        "is_disabled",
+        "boolean"
+      ],
+      [
+        "public",
+        "users",
+        "password_changed_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "users",
+        "password_hash",
+        "text"
+      ],
+      [
+        "public",
+        "users",
+        "role",
+        "character varying(32)"
+      ],
+      [
+        "public",
+        "users",
+        "updated_at",
+        "timestamp without time zone"
+      ],
+      [
+        "public",
+        "users",
+        "username",
+        "character varying(320)"
+      ]
+    ],
+    "constraints": [
+      [
+        "public",
+        "alembic_version",
+        "alembic_version_pkc",
+        "primary"
+      ],
+      [
+        "public",
+        "audit_events",
+        "audit_events_actor_user_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "audit_events",
+        "audit_events_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "audit_events",
+        "ck_audit_events_actor_kind",
+        "check"
+      ],
+      [
+        "public",
+        "audit_events",
+        "ck_audit_events_event_name",
+        "check"
+      ],
+      [
+        "public",
+        "audit_events",
+        "ck_audit_events_outcome",
+        "check"
+      ],
+      [
+        "public",
+        "auth_sessions",
+        "auth_sessions_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "auth_sessions",
+        "auth_sessions_user_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "ck_composer_ref_tokens_hash_size",
+        "check"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "ck_composer_ref_tokens_kind",
+        "check"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "composer_ref_tokens_owner_user_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "composer_ref_tokens_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "ck_conversation_turn_composer_refs_kind",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "ck_conversation_turn_composer_refs_kind_target",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "ck_conversation_turn_composer_refs_order_positive",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "ck_conversation_turn_composer_refs_redacted_fields",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "conversation_turn_composer_refs_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "conversation_turn_composer_refs_turn_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "conversation_turn_events",
+        "ck_conversation_turn_events_digest_size",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turn_events",
+        "ck_conversation_turn_events_schema_version",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turn_events",
+        "ck_conversation_turn_events_sequence_positive",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turn_events",
+        "ck_conversation_turn_events_type",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turn_events",
+        "conversation_turn_events_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "conversation_turn_events",
+        "conversation_turn_events_turn_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "ck_conversation_turn_evidence_refs_order_positive",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "ck_conversation_turn_evidence_refs_redacted_fields",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "conversation_turn_evidence_refs_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "conversation_turn_evidence_refs_turn_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "ck_conversation_turns_events_retained_after_nonnegative",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "ck_conversation_turns_execution_generation_nonnegative",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "ck_conversation_turns_plan_step_count_nonnegative",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "ck_conversation_turns_repair_attempt_count_nonnegative",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "ck_conversation_turns_retrieval_operation_count_nonnegative",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "ck_conversation_turns_route",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "ck_conversation_turns_route_domain",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "ck_conversation_turns_status",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "ck_conversation_turns_stop_reason",
+        "check"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "conversation_turns_conversation_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "conversation_turns_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "conversations",
+        "ck_conversations_version_positive",
+        "check"
+      ],
+      [
+        "public",
+        "conversations",
+        "conversations_owner_user_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "conversations",
+        "conversations_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "ck_domain_operations_status",
+        "check"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "ck_domain_operations_type",
+        "check"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "ck_domain_operations_version_positive",
+        "check"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "domain_operations_domain_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "domain_operations_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "domain_operations_requested_by_user_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "domains",
+        "ck_domains_control_generation_positive",
+        "check"
+      ],
+      [
+        "public",
+        "domains",
+        "ck_domains_state",
+        "check"
+      ],
+      [
+        "public",
+        "domains",
+        "ck_domains_version_positive",
+        "check"
+      ],
+      [
+        "public",
+        "domains",
+        "domains_embedding_profile_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "domains",
+        "domains_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "ck_http_idempotency_fingerprint_size",
+        "check"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "ck_http_idempotency_key_hash_size",
+        "check"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "ck_http_idempotency_route_class",
+        "check"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "ck_http_idempotency_state",
+        "check"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "ck_http_idempotency_state_payload",
+        "check"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "http_idempotency_records_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "http_idempotency_records_principal_user_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "uq_http_idempotency_principal_route_key",
+        "unique"
+      ],
+      [
+        "public",
+        "login_throttle_buckets",
+        "ck_login_throttle_buckets_failure_count",
+        "check"
+      ],
+      [
+        "public",
+        "login_throttle_buckets",
+        "login_throttle_buckets_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "ck_model_profiles_embedding_dimensions_required",
+        "check"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "ck_model_profiles_profile_kind",
+        "check"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "ck_model_profiles_provider_kind",
+        "check"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "ck_model_profiles_synthesis_dimensions_absent",
+        "check"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "ck_model_profiles_vector_dimensions_positive",
+        "check"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "ck_model_profiles_version_positive",
+        "check"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "model_profiles_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "model_profiles_provider_kind_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "prompt_templates",
+        "ck_prompt_templates_body_size",
+        "check"
+      ],
+      [
+        "public",
+        "prompt_templates",
+        "ck_prompt_templates_name_not_blank",
+        "check"
+      ],
+      [
+        "public",
+        "prompt_templates",
+        "ck_prompt_templates_state",
+        "check"
+      ],
+      [
+        "public",
+        "prompt_templates",
+        "prompt_templates_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "provider_configs",
+        "ck_provider_configs_provider_kind",
+        "check"
+      ],
+      [
+        "public",
+        "provider_configs",
+        "ck_provider_configs_version_positive",
+        "check"
+      ],
+      [
+        "public",
+        "provider_configs",
+        "provider_configs_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "runtime_settings",
+        "ck_runtime_settings_active_parser_kind",
+        "check"
+      ],
+      [
+        "public",
+        "runtime_settings",
+        "ck_runtime_settings_singleton",
+        "check"
+      ],
+      [
+        "public",
+        "runtime_settings",
+        "ck_runtime_settings_version_positive",
+        "check"
+      ],
+      [
+        "public",
+        "runtime_settings",
+        "runtime_settings_active_synthesis_profile_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "runtime_settings",
+        "runtime_settings_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "ck_source_blocks_heading_positive",
+        "check"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "ck_source_blocks_kind",
+        "check"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "ck_source_blocks_order_positive",
+        "check"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "ck_source_blocks_page_end_positive",
+        "check"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "ck_source_blocks_page_range",
+        "check"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "ck_source_blocks_page_start_positive",
+        "check"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "ck_source_blocks_region_normalized",
+        "check"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "source_blocks_domain_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "source_blocks_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "source_blocks_source_document_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "source_documents",
+        "ck_source_documents_generation_positive",
+        "check"
+      ],
+      [
+        "public",
+        "source_documents",
+        "ck_source_documents_index_generation_nonnegative",
+        "check"
+      ],
+      [
+        "public",
+        "source_documents",
+        "ck_source_documents_index_state",
+        "check"
+      ],
+      [
+        "public",
+        "source_documents",
+        "ck_source_documents_parser_kind",
+        "check"
+      ],
+      [
+        "public",
+        "source_documents",
+        "ck_source_documents_size_positive",
+        "check"
+      ],
+      [
+        "public",
+        "source_documents",
+        "ck_source_documents_state",
+        "check"
+      ],
+      [
+        "public",
+        "source_documents",
+        "ck_source_documents_version_positive",
+        "check"
+      ],
+      [
+        "public",
+        "source_documents",
+        "source_documents_created_by_user_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "source_documents",
+        "source_documents_domain_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "source_documents",
+        "source_documents_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "source_images",
+        "ck_source_images_page_positive",
+        "check"
+      ],
+      [
+        "public",
+        "source_images",
+        "source_images_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "source_images",
+        "source_images_source_block_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "source_images",
+        "source_images_source_document_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "ck_source_preparation_operations_generation_positive",
+        "check"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "ck_source_preparation_operations_status",
+        "check"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "ck_source_preparation_operations_type",
+        "check"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "ck_source_preparation_operations_version_positive",
+        "check"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "source_preparation_operations_domain_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "source_preparation_operations_pkey",
+        "primary"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "source_preparation_operations_requested_by_user_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "source_preparation_operations_source_document_id_fkey",
+        "foreign"
+      ],
+      [
+        "public",
+        "users",
+        "users_pkey",
+        "primary"
+      ]
+    ],
+    "enums": [],
+    "extensions": [
+      [
+        "plpgsql",
+        "1.0"
+      ]
+    ],
+    "indexes": [
+      [
+        "public",
+        "alembic_version",
+        "alembic_version_pkc",
+        "CREATE UNIQUE INDEX alembic_version_pkc ON public.alembic_version USING btree (version_num)"
+      ],
+      [
+        "public",
+        "audit_events",
+        "audit_events_pkey",
+        "CREATE UNIQUE INDEX audit_events_pkey ON public.audit_events USING btree (id)"
+      ],
+      [
+        "public",
+        "audit_events",
+        "ix_audit_events_actor_created",
+        "CREATE INDEX ix_audit_events_actor_created ON public.audit_events USING btree (actor_user_id, created_at DESC)"
+      ],
+      [
+        "public",
+        "audit_events",
+        "ix_audit_events_created_at",
+        "CREATE INDEX ix_audit_events_created_at ON public.audit_events USING btree (created_at DESC)"
+      ],
+      [
+        "public",
+        "audit_events",
+        "ix_audit_events_event_created",
+        "CREATE INDEX ix_audit_events_event_created ON public.audit_events USING btree (event_name, created_at DESC)"
+      ],
+      [
+        "public",
+        "audit_events",
+        "ix_audit_events_request_id",
+        "CREATE INDEX ix_audit_events_request_id ON public.audit_events USING btree (request_id)"
+      ],
+      [
+        "public",
+        "audit_events",
+        "ix_audit_events_target_created",
+        "CREATE INDEX ix_audit_events_target_created ON public.audit_events USING btree (target_kind, target_id, created_at DESC)"
+      ],
+      [
+        "public",
+        "audit_events",
+        "ix_audit_events_trace_id",
+        "CREATE INDEX ix_audit_events_trace_id ON public.audit_events USING btree (trace_id)"
+      ],
+      [
+        "public",
+        "auth_sessions",
+        "auth_sessions_pkey",
+        "CREATE UNIQUE INDEX auth_sessions_pkey ON public.auth_sessions USING btree (id)"
+      ],
+      [
+        "public",
+        "auth_sessions",
+        "ix_auth_sessions_expires_at",
+        "CREATE INDEX ix_auth_sessions_expires_at ON public.auth_sessions USING btree (expires_at)"
+      ],
+      [
+        "public",
+        "auth_sessions",
+        "ix_auth_sessions_token_hash",
+        "CREATE UNIQUE INDEX ix_auth_sessions_token_hash ON public.auth_sessions USING btree (token_hash)"
+      ],
+      [
+        "public",
+        "auth_sessions",
+        "ix_auth_sessions_user_id",
+        "CREATE INDEX ix_auth_sessions_user_id ON public.auth_sessions USING btree (user_id)"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "composer_ref_tokens_pkey",
+        "CREATE UNIQUE INDEX composer_ref_tokens_pkey ON public.composer_ref_tokens USING btree (id)"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "ix_composer_ref_tokens_owner_expires",
+        "CREATE INDEX ix_composer_ref_tokens_owner_expires ON public.composer_ref_tokens USING btree (owner_user_id, expires_at)"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "ix_composer_ref_tokens_target",
+        "CREATE INDEX ix_composer_ref_tokens_target ON public.composer_ref_tokens USING btree (ref_kind, target_id)"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "uq_composer_ref_tokens_hash",
+        "CREATE UNIQUE INDEX uq_composer_ref_tokens_hash ON public.composer_ref_tokens USING btree (token_hash)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "conversation_turn_composer_refs_pkey",
+        "CREATE UNIQUE INDEX conversation_turn_composer_refs_pkey ON public.conversation_turn_composer_refs USING btree (id)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "ix_conversation_turn_composer_refs_evidence_ref",
+        "CREATE INDEX ix_conversation_turn_composer_refs_evidence_ref ON public.conversation_turn_composer_refs USING btree (evidence_ref_id)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "ix_conversation_turn_composer_refs_source_document",
+        "CREATE INDEX ix_conversation_turn_composer_refs_source_document ON public.conversation_turn_composer_refs USING btree (source_document_id)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "ix_conversation_turn_composer_refs_template",
+        "CREATE INDEX ix_conversation_turn_composer_refs_template ON public.conversation_turn_composer_refs USING btree (prompt_template_id)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "ix_conversation_turn_composer_refs_turn_kind",
+        "CREATE INDEX ix_conversation_turn_composer_refs_turn_kind ON public.conversation_turn_composer_refs USING btree (turn_id, ref_kind)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "uq_conversation_turn_composer_refs_order",
+        "CREATE UNIQUE INDEX uq_conversation_turn_composer_refs_order ON public.conversation_turn_composer_refs USING btree (turn_id, ref_order)"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "uq_conversation_turn_composer_refs_public_ref",
+        "CREATE UNIQUE INDEX uq_conversation_turn_composer_refs_public_ref ON public.conversation_turn_composer_refs USING btree (public_ref)"
+      ],
+      [
+        "public",
+        "conversation_turn_events",
+        "conversation_turn_events_pkey",
+        "CREATE UNIQUE INDEX conversation_turn_events_pkey ON public.conversation_turn_events USING btree (id)"
+      ],
+      [
+        "public",
+        "conversation_turn_events",
+        "uq_conversation_turn_events_sequence",
+        "CREATE UNIQUE INDEX uq_conversation_turn_events_sequence ON public.conversation_turn_events USING btree (turn_id, sequence)"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "conversation_turn_evidence_refs_pkey",
+        "CREATE UNIQUE INDEX conversation_turn_evidence_refs_pkey ON public.conversation_turn_evidence_refs USING btree (id)"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "ix_conversation_turn_evidence_refs_source_document",
+        "CREATE INDEX ix_conversation_turn_evidence_refs_source_document ON public.conversation_turn_evidence_refs USING btree (source_document_id)"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "uq_conversation_turn_evidence_refs_citation_label",
+        "CREATE UNIQUE INDEX uq_conversation_turn_evidence_refs_citation_label ON public.conversation_turn_evidence_refs USING btree (turn_id, citation_label) WHERE (redacted_at IS NULL)"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "uq_conversation_turn_evidence_refs_order",
+        "CREATE UNIQUE INDEX uq_conversation_turn_evidence_refs_order ON public.conversation_turn_evidence_refs USING btree (turn_id, evidence_order)"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "uq_conversation_turn_evidence_refs_public_ref",
+        "CREATE UNIQUE INDEX uq_conversation_turn_evidence_refs_public_ref ON public.conversation_turn_evidence_refs USING btree (public_ref)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "conversation_turns_pkey",
+        "CREATE UNIQUE INDEX conversation_turns_pkey ON public.conversation_turns USING btree (id)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "ix_conversation_turns_claimable_lease",
+        "CREATE INDEX ix_conversation_turns_claimable_lease ON public.conversation_turns USING btree (status, claimable_at, lease_expires_at)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "ix_conversation_turns_conversation_created",
+        "CREATE INDEX ix_conversation_turns_conversation_created ON public.conversation_turns USING btree (conversation_id, created_at DESC)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "ix_conversation_turns_domain_id",
+        "CREATE INDEX ix_conversation_turns_domain_id ON public.conversation_turns USING btree (domain_id)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "ix_conversation_turns_trace_id",
+        "CREATE INDEX ix_conversation_turns_trace_id ON public.conversation_turns USING btree (trace_id)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "uq_conversation_turns_client_request",
+        "CREATE UNIQUE INDEX uq_conversation_turns_client_request ON public.conversation_turns USING btree (conversation_id, client_request_id)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "uq_conversation_turns_one_running",
+        "CREATE UNIQUE INDEX uq_conversation_turns_one_running ON public.conversation_turns USING btree (conversation_id) WHERE ((status)::text = 'running'::text)"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "uq_conversation_turns_public_ref",
+        "CREATE UNIQUE INDEX uq_conversation_turns_public_ref ON public.conversation_turns USING btree (public_ref)"
+      ],
+      [
+        "public",
+        "conversations",
+        "conversations_pkey",
+        "CREATE UNIQUE INDEX conversations_pkey ON public.conversations USING btree (id)"
+      ],
+      [
+        "public",
+        "conversations",
+        "ix_conversations_owner_created",
+        "CREATE INDEX ix_conversations_owner_created ON public.conversations USING btree (owner_user_id, created_at DESC, id DESC)"
+      ],
+      [
+        "public",
+        "conversations",
+        "ix_conversations_owner_updated",
+        "CREATE INDEX ix_conversations_owner_updated ON public.conversations USING btree (owner_user_id, updated_at DESC)"
+      ],
+      [
+        "public",
+        "conversations",
+        "uq_conversations_public_ref",
+        "CREATE UNIQUE INDEX uq_conversations_public_ref ON public.conversations USING btree (public_ref)"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "domain_operations_pkey",
+        "CREATE UNIQUE INDEX domain_operations_pkey ON public.domain_operations USING btree (id)"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "ix_domain_operations_domain_created",
+        "CREATE INDEX ix_domain_operations_domain_created ON public.domain_operations USING btree (domain_id, created_at DESC)"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "ix_domain_operations_request_id",
+        "CREATE INDEX ix_domain_operations_request_id ON public.domain_operations USING btree (request_id)"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "uq_domain_operations_one_active",
+        "CREATE UNIQUE INDEX uq_domain_operations_one_active ON public.domain_operations USING btree (domain_id) WHERE ((status)::text = ANY ((ARRAY['queued'::character varying, 'running'::character varying])::text[]))"
+      ],
+      [
+        "public",
+        "domains",
+        "domains_pkey",
+        "CREATE UNIQUE INDEX domains_pkey ON public.domains USING btree (id)"
+      ],
+      [
+        "public",
+        "domains",
+        "ix_domains_embedding_profile_id",
+        "CREATE INDEX ix_domains_embedding_profile_id ON public.domains USING btree (embedding_profile_id)"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "http_idempotency_records_pkey",
+        "CREATE UNIQUE INDEX http_idempotency_records_pkey ON public.http_idempotency_records USING btree (id)"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "ix_http_idempotency_principal_created",
+        "CREATE INDEX ix_http_idempotency_principal_created ON public.http_idempotency_records USING btree (principal_user_id, created_at DESC)"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "uq_http_idempotency_principal_route_key",
+        "CREATE UNIQUE INDEX uq_http_idempotency_principal_route_key ON public.http_idempotency_records USING btree (principal_user_id, route_class, key_hash)"
+      ],
+      [
+        "public",
+        "login_throttle_buckets",
+        "ix_login_throttle_buckets_blocked_until",
+        "CREATE INDEX ix_login_throttle_buckets_blocked_until ON public.login_throttle_buckets USING btree (blocked_until)"
+      ],
+      [
+        "public",
+        "login_throttle_buckets",
+        "login_throttle_buckets_pkey",
+        "CREATE UNIQUE INDEX login_throttle_buckets_pkey ON public.login_throttle_buckets USING btree (id)"
+      ],
+      [
+        "public",
+        "login_throttle_buckets",
+        "uq_login_throttle_buckets_key",
+        "CREATE UNIQUE INDEX uq_login_throttle_buckets_key ON public.login_throttle_buckets USING btree (client_bucket_hash, username_hash)"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "ix_model_profiles_provider_kind",
+        "CREATE INDEX ix_model_profiles_provider_kind ON public.model_profiles USING btree (provider_kind)"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "model_profiles_pkey",
+        "CREATE UNIQUE INDEX model_profiles_pkey ON public.model_profiles USING btree (id)"
+      ],
+      [
+        "public",
+        "prompt_templates",
+        "prompt_templates_pkey",
+        "CREATE UNIQUE INDEX prompt_templates_pkey ON public.prompt_templates USING btree (id)"
+      ],
+      [
+        "public",
+        "prompt_templates",
+        "uq_prompt_templates_name",
+        "CREATE UNIQUE INDEX uq_prompt_templates_name ON public.prompt_templates USING btree (name)"
+      ],
+      [
+        "public",
+        "provider_configs",
+        "provider_configs_pkey",
+        "CREATE UNIQUE INDEX provider_configs_pkey ON public.provider_configs USING btree (provider_kind)"
+      ],
+      [
+        "public",
+        "runtime_settings",
+        "runtime_settings_pkey",
+        "CREATE UNIQUE INDEX runtime_settings_pkey ON public.runtime_settings USING btree (id)"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "ix_source_blocks_domain_source",
+        "CREATE INDEX ix_source_blocks_domain_source ON public.source_blocks USING btree (domain_id, source_document_id)"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "source_blocks_pkey",
+        "CREATE UNIQUE INDEX source_blocks_pkey ON public.source_blocks USING btree (id)"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "uq_source_blocks_source_order",
+        "CREATE UNIQUE INDEX uq_source_blocks_source_order ON public.source_blocks USING btree (source_document_id, source_order)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "ix_source_documents_domain_created",
+        "CREATE INDEX ix_source_documents_domain_created ON public.source_documents USING btree (domain_id, created_at DESC)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "ix_source_documents_domain_index_state",
+        "CREATE INDEX ix_source_documents_domain_index_state ON public.source_documents USING btree (domain_id, index_state)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "source_documents_pkey",
+        "CREATE UNIQUE INDEX source_documents_pkey ON public.source_documents USING btree (id)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "uq_source_documents_domain_hash",
+        "CREATE UNIQUE INDEX uq_source_documents_domain_hash ON public.source_documents USING btree (domain_id, original_sha256)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "uq_source_documents_original_object_key",
+        "CREATE UNIQUE INDEX uq_source_documents_original_object_key ON public.source_documents USING btree (original_object_key)"
+      ],
+      [
+        "public",
+        "source_documents",
+        "uq_source_documents_public_ref",
+        "CREATE UNIQUE INDEX uq_source_documents_public_ref ON public.source_documents USING btree (public_ref)"
+      ],
+      [
+        "public",
+        "source_images",
+        "ix_source_images_source_block",
+        "CREATE INDEX ix_source_images_source_block ON public.source_images USING btree (source_document_id, source_block_id)"
+      ],
+      [
+        "public",
+        "source_images",
+        "source_images_pkey",
+        "CREATE UNIQUE INDEX source_images_pkey ON public.source_images USING btree (id)"
+      ],
+      [
+        "public",
+        "source_images",
+        "uq_source_images_object_key",
+        "CREATE UNIQUE INDEX uq_source_images_object_key ON public.source_images USING btree (object_key)"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "ix_source_preparation_operations_domain_created",
+        "CREATE INDEX ix_source_preparation_operations_domain_created ON public.source_preparation_operations USING btree (domain_id, created_at DESC)"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "ix_source_preparation_operations_request_id",
+        "CREATE INDEX ix_source_preparation_operations_request_id ON public.source_preparation_operations USING btree (request_id)"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "ix_source_preparation_operations_source_created",
+        "CREATE INDEX ix_source_preparation_operations_source_created ON public.source_preparation_operations USING btree (source_document_id, created_at DESC)"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "source_preparation_operations_pkey",
+        "CREATE UNIQUE INDEX source_preparation_operations_pkey ON public.source_preparation_operations USING btree (id)"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "uq_source_preparation_operations_one_active",
+        "CREATE UNIQUE INDEX uq_source_preparation_operations_one_active ON public.source_preparation_operations USING btree (source_document_id) WHERE ((status)::text = ANY ((ARRAY['queued'::character varying, 'running'::character varying])::text[]))"
+      ],
+      [
+        "public",
+        "users",
+        "ix_users_username",
+        "CREATE UNIQUE INDEX ix_users_username ON public.users USING btree (username)"
+      ],
+      [
+        "public",
+        "users",
+        "users_pkey",
+        "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id)"
+      ]
+    ],
+    "relations": [
+      [
+        "public",
+        "alembic_version",
+        "table"
+      ],
+      [
+        "public",
+        "audit_events",
+        "table"
+      ],
+      [
+        "public",
+        "auth_sessions",
+        "table"
+      ],
+      [
+        "public",
+        "composer_ref_tokens",
+        "table"
+      ],
+      [
+        "public",
+        "conversation_turn_composer_refs",
+        "table"
+      ],
+      [
+        "public",
+        "conversation_turn_events",
+        "table"
+      ],
+      [
+        "public",
+        "conversation_turn_evidence_refs",
+        "table"
+      ],
+      [
+        "public",
+        "conversation_turns",
+        "table"
+      ],
+      [
+        "public",
+        "conversations",
+        "table"
+      ],
+      [
+        "public",
+        "domain_operations",
+        "table"
+      ],
+      [
+        "public",
+        "domains",
+        "table"
+      ],
+      [
+        "public",
+        "http_idempotency_records",
+        "table"
+      ],
+      [
+        "public",
+        "login_throttle_buckets",
+        "table"
+      ],
+      [
+        "public",
+        "model_profiles",
+        "table"
+      ],
+      [
+        "public",
+        "prompt_templates",
+        "table"
+      ],
+      [
+        "public",
+        "provider_configs",
+        "table"
+      ],
+      [
+        "public",
+        "runtime_settings",
+        "table"
+      ],
+      [
+        "public",
+        "runtime_settings_id_seq",
+        "sequence"
+      ],
+      [
+        "public",
+        "source_blocks",
+        "table"
+      ],
+      [
+        "public",
+        "source_documents",
+        "table"
+      ],
+      [
+        "public",
+        "source_images",
+        "table"
+      ],
+      [
+        "public",
+        "source_preparation_operations",
+        "table"
+      ],
+      [
+        "public",
+        "users",
+        "table"
+      ]
+    ],
+    "routines": [
+      [
+        "public",
+        "ce_forbid_audit_events_mutation",
+        ""
+      ]
+    ],
+    "schemas": [
+      "public"
+    ],
+    "triggers": [
+      [
+        "public",
+        "audit_events",
+        "trg_audit_events_forbid_delete"
+      ],
+      [
+        "public",
+        "audit_events",
+        "trg_audit_events_forbid_update"
+      ]
+    ]
+  }
+}

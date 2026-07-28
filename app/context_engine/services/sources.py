@@ -1098,6 +1098,7 @@ def publish_prepared_source(
         db.execute(delete(SourceBlock).where(SourceBlock.source_document_id == source.id))
         blocks_by_order: dict[int, SourceBlock] = {}
         for prepared_block in sorted(prepared.blocks, key=lambda block: block.source_order):
+            region = prepared_block.region
             block = SourceBlock(
                 id=str(uuid.uuid4()),
                 source_document_id=source.id,
@@ -1109,6 +1110,10 @@ def publish_prepared_source(
                 page_start=prepared_block.page_start,
                 page_end=prepared_block.page_end,
                 section_path=json.dumps(prepared_block.section_path),
+                region_x=None if region is None else region.x,
+                region_y=None if region is None else region.y,
+                region_width=None if region is None else region.width,
+                region_height=None if region is None else region.height,
                 created_at=now,
             )
             db.add(block)
