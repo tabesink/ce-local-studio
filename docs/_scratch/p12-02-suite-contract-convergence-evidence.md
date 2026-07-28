@@ -3,7 +3,7 @@
 Date: 2026-07-28  
 Status: DONE (scoped boundary)  
 Plan: `docs/plans/2026-07-28-003-feat-p12-02-suite-contract-convergence-plan.md`  
-Branch tip at evidence write: `feat/p12-02-suite-contract-convergence` @ pre-U4 `3c128bf` (U4 commit updates tip)
+Branch tip at evidence write: `feat/p12-02-suite-contract-convergence` @ `930d6b1`
 
 ## What landed
 
