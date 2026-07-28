@@ -39,7 +39,7 @@ def _request(
 def test_openai_adapter_happy_path_yields_ordered_tokens_without_forbidden_keys() -> None:
     tokens_in = ("Hello ", "world.")
 
-    def transport(_request: SynthesisRequest):
+    def transport(_request: SynthesisRequest, _messages: list[dict[str, str]]):
         return iter(tokens_in)
 
     adapter = OpenAISynthesisAdapter(transport=transport)
@@ -52,7 +52,7 @@ def test_openai_adapter_happy_path_yields_ordered_tokens_without_forbidden_keys(
 
 
 def test_openai_adapter_timeout_maps_to_typed_safe_error() -> None:
-    def boom(_request: SynthesisRequest):
+    def boom(_request: SynthesisRequest, _messages: list[dict[str, str]]):
         raise TimeoutError("provider hung; credential=sk-secret https://api.openai.com/v1")
 
     with pytest.raises(SynthesisAdapterError) as raised:
@@ -67,7 +67,7 @@ def test_openai_adapter_timeout_maps_to_typed_safe_error() -> None:
 def test_openai_adapter_missing_credential_fails_closed() -> None:
     with pytest.raises(SynthesisAdapterError) as raised:
         list(
-            OpenAISynthesisAdapter(transport=lambda _r: iter(("x",))).stream(
+            OpenAISynthesisAdapter(transport=lambda _r, _m: iter(("x",))).stream(
                 _request(credential=None)
             )
         )
@@ -76,7 +76,7 @@ def test_openai_adapter_missing_credential_fails_closed() -> None:
 
 
 def test_openai_adapter_malformed_stream_and_unexpected_exception_are_safe() -> None:
-    def malformed(_request: SynthesisRequest):
+    def malformed(_request: SynthesisRequest, _messages: list[dict[str, str]]):
         raise SynthesisAdapterError(
             "synthesis_malformed_response",
             "Synthesis response could not be normalized.",
@@ -86,7 +86,7 @@ def test_openai_adapter_malformed_stream_and_unexpected_exception_are_safe() -> 
         list(OpenAISynthesisAdapter(transport=malformed).stream(_request()))
     assert malformed_err.value.code == "synthesis_malformed_response"
 
-    def unexpected(_request: SynthesisRequest):
+    def unexpected(_request: SynthesisRequest, _messages: list[dict[str, str]]):
         raise RuntimeError("boom prompt=SECRET url=https://evil.example/job/1")
 
     with pytest.raises(SynthesisAdapterError) as unexpected_err:
@@ -98,7 +98,7 @@ def test_openai_adapter_malformed_stream_and_unexpected_exception_are_safe() -> 
 
 
 def test_openai_adapter_empty_token_stream_raises_distinguishable_empty_error() -> None:
-    def empty(_request: SynthesisRequest):
+    def empty(_request: SynthesisRequest, _messages: list[dict[str, str]]):
         return iter(())
 
     with pytest.raises(SynthesisAdapterError) as raised:
@@ -122,7 +122,7 @@ def test_privacy_sentinels_in_transport_errors_cannot_leak_into_error_surfaces()
     sentinel_job = "job_priv_9f3a"
     sentinel_key = "sk-live-PRIVACY-SENTINEL"
 
-    def leaky(_request: SynthesisRequest):
+    def leaky(_request: SynthesisRequest, _messages: list[dict[str, str]]):
         # Transport may yield ordinary answer text (including URLs in docs).
         # Provider exception text must not escape into typed error messages.
         yield "See https://example.com/policy for the credential rotation steps."
@@ -156,7 +156,7 @@ def test_settings_require_positive_synthesis_timeout_and_max_output() -> None:
 
 
 def test_registry_resolves_openai_and_uses_runtime_provider_kind() -> None:
-    def transport(request: SynthesisRequest):
+    def transport(request: SynthesisRequest, _messages: list[dict[str, str]]):
         assert request.mode == "grounded"
         assert request.evidence[0].excerpt == "Authorized excerpt."
         assert "blk_" not in request.evidence[0].excerpt

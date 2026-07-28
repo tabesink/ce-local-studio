@@ -442,7 +442,7 @@ def test_m03_ae6_privacy_sentinels_absent_from_public_projection(tmp_path: Path)
         )
         retrieval = CountingRetrievalPort([_mapped_evidence(excerpt="Authorized policy excerpt.")])
 
-        def transport(request: SynthesisRequest):
+        def transport(request: SynthesisRequest, _messages: list[dict[str, str]]):
             # Private retrieval/provider material must not be required for synthesis.
             assert PRIVACY_SENTINEL not in request.message
             assert all(PRIVACY_SENTINEL not in item.excerpt for item in request.evidence)
@@ -599,7 +599,7 @@ def test_openai_empty_before_answer_is_evidence_only_for_domain(tmp_path: Path) 
             domain_id="domain-orch",
         )
 
-        def empty(_request: SynthesisRequest):
+        def empty(_request: SynthesisRequest, _messages: list[dict[str, str]]):
             return iter(())
 
         facade = RegistrySynthesisStreamAdapter(

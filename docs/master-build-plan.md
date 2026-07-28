@@ -21,7 +21,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | P4 | Source preparation | DONE | P3 | upload/storage/parser adapters produce canonical blocks and support retry/cancel/delete — P4-01..P4-05 DONE; evidence `docs/_scratch/p4-05-region-provenance-evidence.md` |
 | P5 | LightRAG indexing eligibility | DONE | P4 | per-domain vendored LightRAG topology, immutable-profile bootstrap, isolation, idempotent submit, readiness, retrieval provenance, delete/absence and recovery are proven — P5-01..P5-04 DONE; real provider calls and parser-to-Evidence proof remain P10-05 |
 | P6 | Scoped Evidence retrieval | DONE | P5 | single-domain authorized retrieval maps only valid local blocks to safe Evidence |
-| P7 | Durable grounded streaming chat | IN_PROGRESS | P6 | conversation ownership, intent gate, bounded RAG, SSE, idempotent replay, redaction pass — P7-01..P7-05 DONE; P7-06 synthesis isolation + turn-lease heartbeat open |
+| P7 | Durable grounded streaming chat | DONE | P6 | conversation ownership, intent gate, bounded RAG, SSE, idempotent replay, redaction, synthesis isolation + turn-lease heartbeat — P7-01..P7-06 DONE; evidence `docs/_scratch/p7-06-synthesis-isolation-heartbeat-evidence.md` |
 | P8 | Operational safety and Phase 1 gate | DONE | P1-P7 | transactional audit writes, allowlisted logs, request/trace correlation, health, privacy scans, and resilience evidence pass |
 | P9 | Thin Next.js frontend | IN_PROGRESS | P1-P8 | login/chat/documents/settings and the reserved graph state use only versioned APIs — P9-01..P9-06 DONE; P9-07 contracted browser workflows open; P12 owns deployed-ingress / visual-matrix residuals |
 | P10 | Deployable application stack | IN_PROGRESS | P8-P9 | runnable Compose stack, explicit migrations/bootstrap, worker lifecycle, smoke path, and operator runbook pass — P10-01..P10-03 DONE; P10-04 MinIO, P10-05 real parser/provider pipeline, and P10-06 governed preview generation open |
@@ -161,7 +161,7 @@ system-wide cross-sink privacy with P8, and browser navigation with P9.
 | P7-03 | DONE | P7-02 | bounded plan/retrieve/repair/synthesize orchestration |
 | P7-04 | DONE | P7-03 | sealed versioned SSE live/resume/replay pipeline, terminal persistence, idempotent attach/replay, and grounded-refusal/evidence-only terminal projections |
 | P7-05 | DONE | P7-04 | source/domain delete redaction hooks and public omission tests |
-| P7-06 | NOT_STARTED | P7-03,P7-04 | private synthesis-context delimiter isolation with instruction-boundary tests, plus mid-turn database lease heartbeat so a second worker cannot reclaim an active turn — plan `docs/plans/2026-07-28-009-feat-p7-06-synthesis-isolation-heartbeat-plan.md` |
+| P7-06 | DONE | P7-03,P7-04 | private synthesis-context delimiter isolation with instruction-boundary tests, plus mid-turn database lease heartbeat so a second worker cannot reclaim an active turn — plan `docs/plans/2026-07-28-009-feat-p7-06-synthesis-isolation-heartbeat-plan.md`; evidence `docs/_scratch/p7-06-synthesis-isolation-heartbeat-evidence.md` |
 | P8-01 | DONE | P1-06,P7 | transactional audit-write allowlist coverage, denial events and privacy/adversarial audit tests |
 | P8-02 | DONE | P8-01 | safe JSON logs, request/trace correlation and bounded-cardinality service metrics |
 | P8-03 | DONE | P8-02 | liveness/readiness, privacy scans and resilience/load evidence with no observability read API or UI |
@@ -209,6 +209,8 @@ absence remains green. `docs/_scratch/p8-01-audit-evidence.md` records
 commands and residuals (P8-02 logs/metrics, P8-03 cross-sink/health,
 Phase 2 audit-read, P12 ingress). DRIFT-20 / DRIFT-29 audit-write halves
 advanced; log/metric/cross-sink residuals stay P8-02/P8-03.
+
+P7-06 closure evidence (2026-07-28): `docs/_scratch/p7-06-synthesis-isolation-heartbeat-inventory.md` and `docs/_scratch/p7-06-synthesis-isolation-heartbeat-evidence.md`. Synthesis adapter wraps full untrusted Evidence/assembly lines with per-call random delimiters and fail-closed collision handling before provider dispatch. `ConversationTurnWorker` heartbeats turn leases with generation-gated compare-and-extend plus liveness miss detection. Focused suite 37 passed; Ruff clean; opt-in PostgreSQL AE3/AE4 skipped without disposable-DB env. Residuals: P12-05 hard drain; prior-user wrap deferred. P7 phase exit complete.
 
 P7-05 closure evidence (2026-07-27):
 `docs/_scratch/p7-05-delete-redaction-inventory.md` records retain/modify/defer
