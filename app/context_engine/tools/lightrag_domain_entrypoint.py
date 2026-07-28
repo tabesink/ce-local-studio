@@ -1,9 +1,4 @@
-"""Private per-domain LightRAG API entrypoint for Docker controller start.
-
-Runs inside the domain container. Loads sealed provider env from the bind mount
-when present, then starts the vendored LightRAG FastAPI server on an internal
-listen address (never host-published).
-"""
+"""Private per-domain LightRAG shim entrypoint for Docker controller start."""
 
 from __future__ import annotations
 
@@ -20,7 +15,6 @@ DEFAULT_PORT = "9621"
 def _load_sealed_env() -> None:
     if not SECRETS_FILE.is_file():
         return
-    # mode must be owner-only when the controller wrote the file (KTD5).
     mode = SECRETS_FILE.stat().st_mode & 0o777
     if mode & 0o077:
         print("Sealed provider env permissions are too open.", file=sys.stderr)
@@ -45,13 +39,12 @@ def main() -> int:
     os.environ.setdefault("HOST", "0.0.0.0")
     os.environ.setdefault("PORT", DEFAULT_PORT)
     os.environ.setdefault("WORKING_DIR", str(WORKING_DIR))
-    os.environ.setdefault("WHITELIST_PATHS", "/health,/api/*")
-    # Bind to all interfaces inside the private Docker network only.
+    os.environ.setdefault("CE_RUNTIME_ROOT", str(RUNTIME_ROOT))
     os.chdir(str(RUNTIME_ROOT))
 
-    from lightrag.api.lightrag_server import main as lightrag_main
+    from context_engine.tools.ce_lightrag_shim import main as shim_main
 
-    lightrag_main()
+    shim_main()
     return 0
 
 

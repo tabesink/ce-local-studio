@@ -113,6 +113,11 @@ class Settings:
     turn_tail_poll_milliseconds: int = field(default_factory=lambda: _env_int("CE_TURN_TAIL_POLL_MILLISECONDS", 250))
     turn_tail_idle_seconds: int = field(default_factory=lambda: _env_int("CE_TURN_TAIL_IDLE_SECONDS", 30))
     lightrag_client_kind: str = field(default_factory=lambda: _env("CE_LIGHTRAG_CLIENT_KIND", "native") or "native")
+    # Residual/dev only: in-process synthetic LightRAG behind the process-wide lock.
+    # Production live lane uses private HTTP (PrivateHttpLightRAGClient) when this is false.
+    lightrag_inprocess_synthetic: bool = field(
+        default_factory=lambda: _env_bool("CE_LIGHTRAG_INPROCESS_SYNTHETIC", False)
+    )
     worker_idle_seconds: int = field(default_factory=lambda: _env_int("CE_WORKER_IDLE_SECONDS", 2))
 
     def __post_init__(self) -> None:
