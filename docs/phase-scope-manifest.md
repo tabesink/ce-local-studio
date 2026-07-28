@@ -94,11 +94,13 @@ This is the machine-read D0 boundary. The table is sorted bytewise by record cla
 | scan-file | docs/frontend/ui-parity-spec.md | active | parity and factory catalog |
 | scan-file | docs/frontend/visual-regression-plan.md | active | visual evidence |
 | scan-file | docs/future/README.md | future | non-normative release roadmap |
+| scan-file | docs/future/document-preview-formats.md | future | non-normative non-PDF preview brief |
 | scan-file | docs/future/observability-layer.md | future | non-normative Phase 2 brief |
 | scan-file | docs/future/wiki-layer.md | future | non-normative Phase 3 brief |
 | scan-file | docs/ideation/2026-07-22-lean-agent-shell-ideation.html | historical | historical ideation only |
 | scan-file | docs/interaction-behavior-prd.md | active | stable behavioral cases |
 | scan-file | docs/master-build-plan.md | active | brownfield package tracker |
+| scan-file | docs/operations/compose-stack-runbook.md | active | Compose operator runbook |
 | scan-file | docs/phase-scope-manifest.md | manifest | this structural source |
 | scan-file | docs/plans/2026-07-22-001-docs-brownfield-phase-contract-alignment-plan.md | mixed-removal | approved D0 execution plan |
 | scan-file | docs/plans/2026-07-22-002-feat-lean-agent-shell-umbrella-plan.md | mixed-removal | subordinate chat child |
@@ -113,6 +115,14 @@ This is the machine-read D0 boundary. The table is sorted bytewise by record cla
 | scan-file | docs/plans/2026-07-27-006-feat-audit-allowlist-denial-privacy-plan.md | active | P8-01 audit allowlist denial privacy plan |
 | scan-file | docs/plans/2026-07-27-007-feat-safe-json-logs-metrics-plan.md | active | P8-02 safe JSON logs metrics plan |
 | scan-file | docs/plans/2026-07-27-008-feat-health-privacy-resilience-gate-plan.md | active | P8-03 health privacy resilience gate plan |
+| scan-file | docs/plans/2026-07-27-009-feat-chat-workbench-reducer-plan.md | active | P9-02 chat workbench plan |
+| scan-file | docs/plans/2026-07-27-010-feat-documents-library-preview-plan.md | active | P9-03 documents library plan |
+| scan-file | docs/plans/2026-07-27-011-feat-settings-domain-accordion-plan.md | active | P9-04 settings domains plan |
+| scan-file | docs/plans/2026-07-27-012-feat-p9-05-ci-validators-plan.md | active | P9-05 CI validators plan |
+| scan-file | docs/plans/2026-07-27-013-feat-p10-01-compose-production-like-config-plan.md | active | P10-01 Compose config plan |
+| scan-file | docs/plans/2026-07-27-014-feat-p10-02-stack-smoke-bootstrap-plan.md | active | P10-02 stack smoke plan |
+| scan-file | docs/plans/2026-07-27-015-feat-p10-03-worker-lifecycle-runbook-plan.md | active | P10-03 worker lifecycle plan |
+| scan-file | docs/plans/2026-07-27-016-feat-p11-01-composer-ref-schema-seeds-plan.md | active | P11-01 composer-ref schema seeds plan |
 | scan-file | docs/prd.md | active | product authority |
 | scan-file | docs/quality/definition-of-done.md | active | completion gates |
 | scan-file | docs/quality/seeded-demo-and-test-data.md | active | deterministic fixture contract |
