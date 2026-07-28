@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "targetId": "tabs",
+  "owner": "src/_shared/ui",
+  "layer": "primitive",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Live body: app/client/src/_shared/ui/index.tsx (Tabs).",
+      "Synthetic tab labels only; no private IDs, runtime URLs, paths, credentials, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": { "overview": "Overview", "details": "Details" },
+    "variants": ["underline", "pill", "button-group"],
+    "states": ["overview-active", "details-active"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": ["--ui-bg", "--ui-fg", "--ui-muted", "--ui-accent", "--ui-border", "--color-tab-active"],
+    "geometry": { "density": "compact", "overflow": "horizontal", "activeMarker": "variant-specific" }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark", "theme-light", "underline", "pill", "button-group"],
+    "expectedTokenGeometry": ["Active state uses semantic accent or active-tab token", "Labels stay on one line"],
+    "forbiddenClaims": ["focus", "ARIA", "keyboard", "touch", "state-transition"]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "native tab buttons emit selection intent",
+      "focus": "enabled buttons remain focusable",
+      "screenReader": "visible button names expose each option",
+      "reducedMotion": "only tokenized color transitions are present",
+      "validationBusyDisabledStatus": "controlled active tab is explicit",
+      "zoom": "labels remain visible in overflow container",
+      "darkLight": "renders under zai-dark and zai-light wrappers",
+      "narrow": "pill and button-group variants permit horizontal overflow"
+    }
+  }
+}

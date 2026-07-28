@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "targetId": "navigation-rail",
+  "owner": "src/features/navigation-sidebar",
+  "layer": "shared",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical body: app/client/src/features/navigation-sidebar/NavigationSidebar.tsx.",
+      "Desktop resizable rail with collapse, Cmd/Ctrl+K conversation search overlay, and mobile top bar + right drawer.",
+      "Nav registry: app/client/src/features/navigation-sidebar/constants.ts (Chat, Library, Graph, Settings).",
+      "HTML uses synthetic route labels Chat / Documents / Settings; React asserts live registry labels.",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "productName": "Context Engine",
+      "newChat": "New chat",
+      "search": "Search",
+      "workspaceSection": "Workspace",
+      "chat": "Chat",
+      "documents": "Documents",
+      "settings": "Settings",
+      "logout": "Logout",
+      "expandRail": "Expand sidebar",
+      "collapseRail": "Collapse sidebar",
+      "openMenu": "Open navigation menu",
+      "closeMenu": "Close navigation menu"
+    },
+    "variants": [
+      "desktop-expanded",
+      "desktop-collapsed",
+      "mobile-drawer"
+    ],
+    "states": [
+      "route-active-indicator",
+      "footer-settings-logout"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--sidebar-bg",
+      "--border",
+      "--fg",
+      "--dim",
+      "--color-surface-hover",
+      "--color-foreground-subtle"
+    ],
+    "geometry": {
+      "header": "sticky min-h-16 brand row with collapse control",
+      "navRow": "h-8 rounded-md px-2.5 compact rows",
+      "resizeHandle": "absolute right-0 w-2 col-resize separator",
+      "mobileBar": "fixed h-14 md:hidden"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark-expanded",
+      "theme-dark-collapsed",
+      "theme-light-expanded"
+    ],
+    "expectedTokenGeometry": [
+      "Rail background uses --sidebar-bg",
+      "Active row shows leading 2px indicator",
+      "Collapsed variant notes zero-width rail + expand affordance",
+      "Mobile bar uses --bg with bottom border"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "collapse/expand IconButtons and mobile menu are keyboard-focusable",
+      "focus": "collapse control receives focus; nav links expose accessible names",
+      "screenReader": "Application nav landmark; aria-expanded on mobile menu button",
+      "reducedMotion": "width transition uses duration-150; no motion-dependent correctness",
+      "validationBusyDisabledStatus": "search overlay lists synthetic empty state without network in tests",
+      "zoom": "nav labels remain present at component level",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "mobile bar and drawer covered; desktop rail hidden below md in live component"
+    }
+  }
+}

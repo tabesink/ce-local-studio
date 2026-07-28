@@ -2,13 +2,14 @@
   "schemaVersion": 1,
   "targetId": "domains-accordion",
   "owner": "src/features/settings-panel",
+  "layer": "feature",
   "catalogState": "FACTORY_READY",
   "disposition": "retain-and-reverify",
   "sourceEvidence": {
     "notes": [
       "Canonical composition: app/client/src/features/settings-panel/DomainAccordionRow.tsx used by SettingsPanel DomainsSection.",
       "Settings-owned Controllers-style disclosure; not a product-neutral src/ui Accordion primitive.",
-      "Locked-fact expand body only — no storageSummary / ProgressBar-on-expand.",
+      "Locked-fact expand body only \u2014 no storageSummary / ProgressBar-on-expand.",
       "Inventory: docs/_scratch/p9-04-settings-domains-inventory.md.",
       "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads.",
       "Production-boundary Playwright F3 remains P12-07."
@@ -21,14 +22,26 @@
       "state": "Running",
       "expand": "Expand Synthetic Alpha Domain",
       "collapse": "Collapse Synthetic Alpha Domain",
-      "embedding": "embed-synth · 768d · locked",
+      "embedding": "embed-synth \u00b7 768d \u00b7 locked",
       "queryEligible": "Query eligible",
       "runtimeReady": "Runtime ready"
     },
-    "variants": ["collapsed", "expanded-locked-facts"],
-    "states": ["one-open", "lifecycle-toggle-slot"],
-    "themes": ["zai-dark", "zai-light"],
-    "viewports": ["390x844", "1280x800"],
+    "variants": [
+      "collapsed",
+      "expanded-locked-facts"
+    ],
+    "states": [
+      "one-open",
+      "lifecycle-toggle-slot"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
     "semanticTokens": [
       "--ui-fg",
       "--ui-muted",
@@ -43,7 +56,11 @@
     }
   },
   "htmlStatic": {
-    "snapshotRegions": ["theme-dark-collapsed", "theme-dark-expanded", "theme-light-collapsed"],
+    "snapshotRegions": [
+      "theme-dark-collapsed",
+      "theme-dark-expanded",
+      "theme-light-collapsed"
+    ],
     "expectedTokenGeometry": [
       "Display name uses --ui-fg at --fs-base",
       "Domain id uses mono --ui-muted at --fs-xs",

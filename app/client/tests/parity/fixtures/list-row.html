@@ -1,0 +1,30 @@
+<!-- Not product authority. Synthetic, non-routable, script-free, and network-free parity fixture. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>List row parity fixture</title>
+    <style>
+      :root { --ui-bg:#141414; --ui-fg:#f2f2f2; --ui-muted:#9a9a9a; --ui-surface:#202020; --ui-separator:#303030; --ui-info:#3b9eff; font-family:Geist,ui-sans-serif,system-ui,sans-serif; }
+      [data-theme="zai-light"] { --ui-bg:#f4f5f5; --ui-fg:#1a1a1a; --ui-muted:#6b6b6b; --ui-surface:#fff; --ui-separator:#0d0d0d1a; --ui-info:#2563eb; }
+      body { margin:0; background:var(--ui-bg); color:var(--ui-fg); }
+      .region { max-width:640px; padding:16px; border-bottom:1px solid var(--ui-separator); background:var(--ui-bg); }
+      .caption { margin:0 0 10px; color:var(--ui-muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+      .row { display:grid; grid-template-columns:minmax(160px,.42fr) minmax(0,1fr); align-items:center; gap:20px; padding:10px 14px; background:var(--ui-surface); border:1px solid var(--ui-separator); }
+      .resource { grid-template-columns:minmax(0,1fr) auto; padding:12px 14px; }
+      .label { font-size:13px; font-weight:500; } .description,.value { margin-top:3px; color:var(--ui-muted); font-size:12px; }
+      .value { margin:0; text-align:right; } .status { color:var(--ui-info); font-size:12px; }
+      @media (max-width:480px) { .row { grid-template-columns:1fr; gap:6px; } .value { text-align:left; } }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="settings">
+      <p class="caption">zai-dark · settings</p>
+      <div class="row"><div><div class="label">Display density</div><div class="description">Choose a compact presentation</div></div><div class="value">Compact</div></div>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="resource">
+      <p class="caption">zai-light · resource</p>
+      <div class="row resource"><div><div class="label">Example resource</div><div class="description">Synthetic supporting text</div></div><div class="status">Ready</div></div>
+    </section>
+  </body>
+</html>

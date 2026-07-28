@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "targetId": "chat-workbench",
+  "owner": "src/features/chat-shell",
+  "layer": "feature",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical composition: ChatShell.tsx main column (header + transcript + composer) + EvidencePanel inspector.",
+      "Optional combined geometry target for three-region chat workbench inside app shell main slot.",
+      "HTML wireframe shows main column + dashed inspector; React asserts live composition with stubbed hook.",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "title": "Valve maintenance notes",
+      "userQuestion": "Synthetic question about valves",
+      "assistantAnswer": "Lorem ipsum grounded answer about valve inspection procedures.",
+      "inspectorTitle": "Evidence"
+    },
+    "variants": [
+      "main-only",
+      "main-with-inspector",
+      "narrow-inspector-drawer"
+    ],
+    "states": [
+      "empty-workbench",
+      "ready-with-selection",
+      "inspector-open"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--agent-bg",
+      "--color-panel",
+      "--border",
+      "--thread-w",
+      "--composer-w"
+    ],
+    "geometry": {
+      "layout": "flex h-full min-h-0; main flex-1 flex-col | inspector shrink-0 border-l",
+      "mainColumn": "header + scroll transcript + lifted composer",
+      "inspector": "320px-65vw default 440px desktop"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark-main-only",
+      "theme-dark-with-inspector",
+      "theme-light-with-inspector",
+      "theme-dark-narrow"
+    ],
+    "expectedTokenGeometry": [
+      "Workbench root uses --agent-bg",
+      "Main column owns vertical scroll for transcript",
+      "Inspector docks right with panel background token"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "workbench composes focusable header, transcript turns, composer, inspector tabs",
+      "focus": "inspector toggle aria-expanded reflects panelOpen stub",
+      "screenReader": "Evidence complementary region when panel open on desktop",
+      "reducedMotion": "no motion-dependent workbench correctness",
+      "validationBusyDisabledStatus": "combined stub covers empty and ready states",
+      "zoom": "title and thread content remain present",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "EvidencePanel drawer path available via matchMedia in component tests"
+    }
+  }
+}

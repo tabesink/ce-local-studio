@@ -1,0 +1,152 @@
+<!--
+  Synthetic parity fixture for UiModal.
+  Not product authority. Not routable. Script-free and network-free.
+  Shared scenarios mirror tests/parity/manifests/ui-modal.json.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>UiModal parity fixture (synthetic)</title>
+    <style>
+      :root {
+        --ui-bg: #141414;
+        --ui-fg: #f2f2f2;
+        --ui-muted: #9a9a9a;
+        --ui-surface: #1e1e1e;
+        --ui-border: #2a2a2a;
+        --ui-hover: #ffffff14;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --ui-bg: #f4f5f5;
+        --ui-fg: #1a1a1a;
+        --ui-muted: #6b6b6b;
+        --ui-surface: #ffffff;
+        --ui-border: #0d0d0d1a;
+        --ui-hover: #0d0d0d0d;
+      }
+      body {
+        margin: 0;
+        background: var(--ui-bg);
+        color: var(--ui-fg);
+      }
+      .region {
+        padding: 16px;
+        border-bottom: 1px solid var(--ui-border);
+      }
+      .caption {
+        margin: 0 0 10px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .stage {
+        position: relative;
+        min-height: 220px;
+        border-radius: 12px;
+        overflow: hidden;
+        background: color-mix(in oklab, var(--ui-bg) 80%, #000);
+      }
+      .backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+      }
+      .dialog {
+        position: relative;
+        z-index: 1;
+        margin: 24px auto;
+        max-width: 28rem;
+        border-radius: 12px;
+        border: 1px solid var(--ui-border);
+        background: var(--ui-surface);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+      }
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--ui-border);
+        padding: 16px 24px;
+      }
+      .title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      .close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--ui-muted);
+      }
+      .body {
+        padding: 16px 24px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 0 24px 16px;
+      }
+      .btn {
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-size: 13px;
+        border: 1px solid var(--ui-border);
+        background: transparent;
+        color: var(--ui-muted);
+      }
+      .btn-primary {
+        border: 0;
+        background: color-mix(in oklab, var(--ui-fg) 90%, transparent);
+        color: var(--ui-bg);
+      }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark">
+      <p class="caption">zai-dark · dialog open</p>
+      <div class="stage" data-snapshot="dialog-open">
+        <div class="backdrop"></div>
+        <div class="dialog">
+          <div class="header" data-snapshot="header">
+            <h2 class="title">Confirm action</h2>
+            <span class="close">×</span>
+          </div>
+          <div class="body">This synthetic action cannot be undone.</div>
+          <div class="actions">
+            <span class="btn">Cancel</span>
+            <span class="btn btn-primary">Confirm</span>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light">
+      <p class="caption">zai-light · dialog open</p>
+      <div class="stage">
+        <div class="backdrop"></div>
+        <div class="dialog">
+          <div class="header">
+            <h2 class="title">Confirm action</h2>
+            <span class="close">×</span>
+          </div>
+          <div class="body">This synthetic action cannot be undone.</div>
+          <div class="actions">
+            <span class="btn">Cancel</span>
+            <span class="btn btn-primary">Confirm</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </body>
+</html>

@@ -1,0 +1,29 @@
+<!-- Not product authority. Synthetic, non-routable, script-free, and network-free parity fixture. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Skeleton parity fixture</title>
+    <style>
+      :root { --ui-bg:#141414; --ui-surface:#242424; --ui-hover:#303030; --ui-muted:#9a9a9a; --ui-border:#303030; font-family:Geist,ui-sans-serif,system-ui,sans-serif; }
+      [data-theme="zai-light"] { --ui-bg:#f4f5f5; --ui-surface:#e7e7e7; --ui-hover:#d9d9d9; --ui-muted:#6b6b6b; --ui-border:#0d0d0d1a; }
+      body { margin:0; background:var(--ui-bg); }
+      .region { max-width:520px; padding:16px; border-bottom:1px solid var(--ui-border); background:var(--ui-bg); }
+      .caption { margin:0 0 12px; color:var(--ui-muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+      .stack { display:grid; gap:10px; }
+      .shape { border-radius:5px; background:var(--ui-surface); }
+      .text { width:68%; height:12px; } .text.short { width:42%; }
+      .row { height:36px; } .card { height:84px; border:1px solid var(--ui-border); } .pane { height:132px; }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark">
+      <p class="caption">zai-dark · loading shapes</p>
+      <div class="stack"><div class="shape text"></div><div class="shape text short"></div><div class="shape row"></div><div class="shape card"></div></div>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light">
+      <p class="caption">zai-light · pane</p>
+      <div class="shape pane"></div>
+    </section>
+  </body>
+</html>

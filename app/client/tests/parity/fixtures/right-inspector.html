@@ -1,0 +1,64 @@
+<!-- Not product authority. Synthetic data only. Script-free, network-free, and non-routable. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Right inspector parity fixture</title>
+    <style>
+      :root {
+        --ui-bg: #141414;
+        --ui-fg: #f2f2f2;
+        --ui-muted: #9a9a9a;
+        --ui-surface: #1e1e1e;
+        --ui-border: #303030;
+        --link: #78a9ff;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --ui-bg: #f4f5f5;
+        --ui-fg: #1a1a1a;
+        --ui-muted: #666;
+        --ui-surface: #fff;
+        --ui-border: #d8d8d8;
+        --link: #245fbd;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--ui-bg); color: var(--ui-fg); }
+      .region { padding: 18px; border-bottom: 1px solid var(--ui-border); background: var(--ui-bg); }
+      .caption { margin: 0 0 10px; color: var(--ui-muted); font: 11px Geist Mono, monospace; text-transform: uppercase; }
+      .workbench { display: flex; height: 290px; overflow: hidden; border: 1px solid var(--ui-border); border-radius: 8px; background: var(--ui-bg); }
+      .workspace { flex: 1; padding: 16px; color: var(--ui-muted); font-size: 13px; }
+      .inspector { width: min(440px, 45%); border-left: 1px solid var(--ui-border); background: var(--ui-surface); }
+      .header { display: flex; height: 42px; align-items: center; justify-content: space-between; padding: 0 12px; border-bottom: 1px solid var(--ui-border); }
+      .title { font-size: 13px; font-weight: 600; }
+      .close { color: var(--ui-muted); font-size: 12px; }
+      .body { padding: 14px; color: var(--ui-muted); font-size: 13px; }
+      .narrow { position: relative; max-width: 390px; }
+      .narrow .workspace { opacity: .55; }
+      .narrow .inspector { position: absolute; inset: 0 0 0 auto; width: min(100%, 360px); box-shadow: -14px 0 30px #0005; }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-desktop">
+      <p class="caption">Desktop adjacent inspector · dark</p>
+      <div class="workbench"><div class="workspace">Synthetic primary surface</div><div class="inspector">
+        <div class="header"><span class="title">Details</span><span class="close">Close</span></div>
+        <div class="body">Synthetic detail content</div>
+      </div></div>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light-desktop">
+      <p class="caption">Desktop adjacent inspector · light</p>
+      <div class="workbench"><div class="workspace">Synthetic primary surface</div><div class="inspector">
+        <div class="header"><span class="title">Details</span><span class="close">Close</span></div>
+        <div class="body">Synthetic detail content</div>
+      </div></div>
+    </section>
+    <section class="region narrow" data-theme="zai-dark" data-snapshot="narrow-drawer">
+      <p class="caption">Narrow right drawer · dark</p>
+      <div class="workbench"><div class="workspace">Synthetic primary surface</div><div class="inspector">
+        <div class="header"><span class="title">Details</span><span class="close">Close</span></div>
+        <div class="body">Synthetic detail content</div>
+      </div></div>
+    </section>
+  </body>
+</html>

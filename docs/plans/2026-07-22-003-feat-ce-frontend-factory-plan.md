@@ -145,9 +145,12 @@ flowchart TB
 
 - Full FE-01 primitive catalog (table, modal, drawer, markdown, etc.).
 - Removal of every temporary legacy import alias beyond the dependency-ordered brownfield package; aliases may point only to the single inventoried physical home for that symbol.
-- Future CE-owned chat, document, or graph parity work only after an approved product contract and threat model, per-file adaptation disposition, minimum-source copying, and proof that no Local Studio runtime, controller, credential, filesystem, browser, or private-data assumption enters the bundle.
 - Storybook-as-authority (fixture/HTML gallery is sufficient for v1).
 - Generalizing a Settings accordion composition into a shared primitive before contracted behavior and a second real consumer justify it.
+
+**Superseded for gallery scope (P9-06 / Option A — 2026-07-28)**
+
+- The former deferral that held “Future CE-owned chat, document, or graph parity work” out of the HTML gallery is superseded by `docs/plans/2026-07-28-002-feat-full-workstation-html-gallery-plan.md` and `docs/master-build-plan.md` P9-06. Chat, documents, shell, login, and graph-**unavailable** are first-class HTML gallery targets. Graph **canvas** enablement remains blocked until an approved graph DTO. Product/threat-model adaptation rules for copying Local Studio still apply; HTML never authorizes product behavior.
 
 **Outside this initiative’s identity**
 

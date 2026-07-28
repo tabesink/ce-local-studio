@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "targetId": "right-inspector",
+  "owner": "src/ui",
+  "layer": "shared",
+  "catalogState": "FACTORY_READY",
+  "disposition": "add",
+  "sourceEvidence": {
+    "notes": [
+      "EvidencePanel supplies existing inspector geometry, but it is feature-owned and is not duplicated as a generic production component here.",
+      "React parity uses a test-local shell harness with synthetic detail content and no Evidence attach or suggestion UI."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "title": "Details",
+      "body": "Synthetic detail content",
+      "close": "Close details"
+    },
+    "variants": ["desktop-aside", "narrow-drawer"],
+    "states": ["open", "closed", "resized"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": ["--ui-bg", "--ui-fg", "--ui-muted", "--ui-surface", "--ui-border", "--link"],
+    "geometry": {
+      "desktop": "adjacent 440px aside with sticky header",
+      "narrow": "right drawer no wider than min(100vw, 440px)",
+      "resize": "vertical separator adjusts in 16px keyboard steps"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark-desktop", "theme-light-desktop", "narrow-drawer"],
+    "expectedTokenGeometry": [
+      "Inspector is adjacent on desktop and right-aligned on narrow screens",
+      "Header remains separated from the scrolling body"
+    ],
+    "forbiddenClaims": ["focus", "ARIA", "keyboard", "touch", "state-transition", "evidence-attach", "suggestion"]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "close is a button; desktop separator handles ArrowLeft and ArrowRight",
+      "focus": "close control is focusable without trapping desktop focus",
+      "screenReader": "desktop uses named complementary; narrow mode uses named modal dialog",
+      "reducedMotion": "layout substitution does not depend on motion",
+      "validationBusyDisabledStatus": "not applicable to generic inspector chrome",
+      "zoom": "header and body remain distinct regions",
+      "darkLight": "harness renders in zai-dark and zai-light wrappers",
+      "narrow": "modal drawer substitutes below the contracted breakpoint"
+    }
+  }
+}

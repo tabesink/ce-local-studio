@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "targetId": "markdown-content",
+  "owner": "src/ui",
+  "layer": "primitive",
+  "catalogState": "FACTORY_READY",
+  "disposition": "add",
+  "sourceEvidence": {
+    "notes": [
+      "No production MarkdownContent component or usage was found under app/client/src; React parity uses a test-local semantic harness.",
+      "Synthetic prose only; no private IDs, runtime URLs, paths, credentials, raw answers, or copied server payloads."
+    ]
+  },
+  "shared": {
+    "labels": { "heading": "Synthetic answer", "paragraph": "This example demonstrates governed typography.", "code": "example()" },
+    "variants": ["answer"],
+    "states": ["ready"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": ["--ui-fg", "--ui-muted", "--ui-border", "--ui-surface", "--ui-info"],
+    "geometry": { "measure": "bounded prose", "spacing": "compact vertical rhythm", "overflow": "code and tables contained" }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark", "theme-light", "heading", "table", "code"],
+    "expectedTokenGeometry": ["Prose uses semantic foreground tokens", "Code and table boundaries use surface and border tokens"],
+    "forbiddenClaims": ["focus", "ARIA", "keyboard", "touch", "state-transition"]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "semantic content adds no custom interaction",
+      "focus": "static prose adds no focus target",
+      "screenReader": "headings, table, and code retain native semantics",
+      "reducedMotion": "no motion-dependent behavior",
+      "validationBusyDisabledStatus": "ready content has no busy state",
+      "zoom": "prose reflows and overflow regions remain bounded",
+      "darkLight": "renders under zai-dark and zai-light wrappers",
+      "narrow": "content uses container width"
+    }
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "targetId": "document-viewer",
+  "owner": "src/features/documents",
+  "layer": "feature",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical composition: app/client/src/features/documents/PdfPreview.tsx viewer chrome (page toolbar + canvas region).",
+      "DocumentsPage preview panel header/metadata is steered in HTML only; React tests PdfPreview chrome with mocked pdf.js.",
+      "Fixtures use synthetic canvas placeholder — no real PDF bytes, object URLs, or blob payloads.",
+      "Inventory: docs/_scratch/p9-03-documents-library-inventory.md."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "filename": "Synthetic Policy Guide.pdf",
+      "previousPage": "Previous page",
+      "nextPage": "Next page",
+      "pageLabel": "Page 2 of 12",
+      "loadingLabel": "Loading…",
+      "errorNotice": "PDF preview could not be displayed in this browser."
+    },
+    "variants": [
+      "toolbar-ready",
+      "canvas-placeholder",
+      "loading-label"
+    ],
+    "states": [
+      "page-navigation-chrome",
+      "synthetic-canvas-region"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--ui-bg",
+      "--ui-border",
+      "--ui-fg",
+      "--ui-muted",
+      "--fs-xs"
+    ],
+    "geometry": {
+      "layout": "h-8 toolbar | min(60vh,28rem) canvas viewport",
+      "density": "compact icon buttons h-6 w-6; mono page label"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark-toolbar",
+      "theme-light-toolbar",
+      "theme-dark-canvas-placeholder"
+    ],
+    "expectedTokenGeometry": [
+      "Toolbar uses border-b and compact height",
+      "Canvas region uses bounded max height without real PDF render",
+      "Page label uses mono --fs-xs"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition",
+      "real-pdf-bytes"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "previous/next page buttons are keyboard-focusable when enabled",
+      "focus": "page navigation buttons receive focus; canvas exposes aria-label with filename and page",
+      "screenReader": "page label announces Page N of M when pdf.js mock resolves",
+      "reducedMotion": "no motion-dependent viewer correctness",
+      "validationBusyDisabledStatus": "buttons disabled at bounds and while loading",
+      "zoom": "toolbar labels remain present at component level",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "canvas region scrolls within bounded viewport"
+    }
+  }
+}

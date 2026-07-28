@@ -1,0 +1,192 @@
+<!--
+  Synthetic parity fixture for Transcript (chat timeline).
+  Not product authority. Not routable. Script-free and network-free.
+  Shared scenarios mirror tests/parity/manifests/transcript.json.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Transcript parity fixture (synthetic)</title>
+    <style>
+      :root {
+        --ui-bg: #141414;
+        --ui-fg: #f2f2f2;
+        --ui-muted: #9a9a9a;
+        --ui-border: #2a2a2a;
+        --agent-bg: #101010;
+        --surface: #1c1c1c;
+        --fg: #f2f2f2;
+        --dim: #9a9a9a;
+        --link: #60a5fa;
+        --thread-w: 680px;
+        --fs-base: 14px;
+        --fs-sm: 13px;
+        --fs-2xs: 10px;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --ui-bg: #f4f5f5;
+        --ui-fg: #1a1a1a;
+        --ui-muted: #6b6b6b;
+        --ui-border: #0d0d0d1a;
+        --agent-bg: #ececec;
+        --surface: #ffffff;
+        --fg: #1a1a1a;
+        --dim: #6b6b6b;
+      }
+      body {
+        margin: 0;
+        background: var(--ui-bg);
+        color: var(--ui-fg);
+      }
+      .region {
+        padding: 16px;
+        border-bottom: 1px solid var(--ui-border);
+      }
+      .caption {
+        margin: 0 0 10px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .scroller {
+        max-width: 760px;
+        min-height: 280px;
+        padding: 20px 24px;
+        border: 1px solid var(--ui-border);
+        border-radius: 8px;
+        background: var(--agent-bg);
+      }
+      .thread {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        max-width: var(--thread-w);
+        margin: 0 auto;
+      }
+      .empty {
+        display: flex;
+        height: 240px;
+        align-items: center;
+        justify-content: center;
+        color: var(--dim);
+        font-size: var(--fs-base);
+      }
+      .user {
+        margin-left: auto;
+        max-width: 80%;
+      }
+      .user-bubble {
+        border-radius: 16px;
+        background: var(--surface);
+        padding: 10px 16px;
+        font-size: var(--fs-base);
+        line-height: 1.625;
+        color: var(--fg);
+      }
+      .assistant {
+        margin-right: auto;
+        max-width: 92%;
+        padding-left: 12px;
+        border-left: 2px solid transparent;
+      }
+      .assistant.selected {
+        border-left-color: color-mix(in oklab, var(--link) 70%, transparent);
+        background: color-mix(in oklab, var(--fg) 4%, transparent);
+        border-radius: 6px;
+      }
+      .assistant-text {
+        font-size: var(--fs-base);
+        line-height: 1.75;
+        color: var(--fg);
+      }
+      .evidence-meta {
+        margin-top: 8px;
+        font-family: Geist Mono, ui-monospace, monospace;
+        font-size: var(--fs-2xs);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: color-mix(in oklab, var(--dim) 60%, transparent);
+      }
+      .redacted {
+        font-size: var(--fs-sm);
+        font-style: italic;
+        color: var(--dim);
+      }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-empty">
+      <p class="caption">zai-dark · empty transcript</p>
+      <div class="scroller" data-snapshot="empty">
+        <div class="empty">Ask Context Engine to start.</div>
+      </div>
+    </section>
+
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-ready">
+      <p class="caption">zai-dark · ready thread</p>
+      <div class="scroller" data-snapshot="ready-thread">
+        <div class="thread">
+          <div class="user">
+            <div class="user-bubble">Synthetic question about valves</div>
+          </div>
+          <div class="assistant">
+            <div class="assistant-text">
+              Lorem ipsum grounded answer about valve inspection procedures.
+            </div>
+            <div class="evidence-meta">2 evidence</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-selected">
+      <p class="caption">zai-dark · selected assistant turn</p>
+      <div class="scroller" data-snapshot="selected-assistant-turn">
+        <div class="thread">
+          <div class="user">
+            <div class="user-bubble">Synthetic question about valves</div>
+          </div>
+          <div class="assistant selected">
+            <div class="assistant-text">
+              Lorem ipsum grounded answer about valve inspection procedures.
+            </div>
+            <div class="evidence-meta">2 evidence</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light-ready">
+      <p class="caption">zai-light · ready thread</p>
+      <div class="scroller">
+        <div class="thread">
+          <div class="user">
+            <div class="user-bubble">Synthetic question about valves</div>
+          </div>
+          <div class="assistant">
+            <div class="assistant-text">
+              Lorem ipsum grounded answer about valve inspection procedures.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-redacted">
+      <p class="caption">zai-dark · redacted turn</p>
+      <div class="scroller" data-snapshot="redacted-turn">
+        <div class="thread">
+          <div class="user">
+            <div class="user-bubble">Synthetic question about valves</div>
+          </div>
+          <div class="assistant">
+            <div class="redacted">This turn was redacted.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </body>
+</html>

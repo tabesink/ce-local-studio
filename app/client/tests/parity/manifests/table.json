@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "targetId": "table",
+  "owner": "src/_shared/ui",
+  "layer": "primitive",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Live bodies: app/client/src/_shared/ui/index.tsx (Table, THead, TBody, TRow, TH, TCell).",
+      "Synthetic rows only; no private IDs, runtime URLs, paths, credentials, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": { "columnA": "Item", "columnB": "State", "rowA": "Example one", "stateA": "Ready" },
+    "variants": ["bordered", "borderless"],
+    "states": ["default", "interactive-row"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": ["--ui-bg", "--ui-fg", "--ui-muted", "--ui-surface", "--ui-hover", "--ui-border"],
+    "geometry": { "wrapper": "overflow-x-auto", "cellPadding": "px-4 py-3", "density": "compact" }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark", "theme-light", "bordered", "borderless"],
+    "expectedTokenGeometry": ["Header uses --ui-surface", "Rows and wrapper use --ui-border"],
+    "forbiddenClaims": ["focus", "ARIA", "keyboard", "touch", "state-transition"]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "row click emits intent when supplied",
+      "focus": "static table introduces no implicit focus target",
+      "screenReader": "native table, columnheader, row, and cell semantics are preserved",
+      "reducedMotion": "only tokenized color transitions are present",
+      "validationBusyDisabledStatus": "not applicable to table shell",
+      "zoom": "horizontal wrapper prevents viewport push",
+      "darkLight": "renders under zai-dark and zai-light wrappers",
+      "narrow": "table scrolls inside its wrapper"
+    }
+  }
+}

@@ -1,0 +1,210 @@
+<!--
+  Synthetic parity fixture for Composer (lifted chat input).
+  Not product authority. Not routable. Script-free and network-free.
+  Shared scenarios mirror tests/parity/manifests/composer.json.
+  No P11-04 attach/suggest chips.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Composer parity fixture (synthetic)</title>
+    <style>
+      :root {
+        --ui-bg: #141414;
+        --ui-fg: #f2f2f2;
+        --ui-muted: #9a9a9a;
+        --ui-border: #2a2a2a;
+        --agent-bg: #101010;
+        --composer: #181818;
+        --composer-w: 720px;
+        --composer-radius: 24px;
+        --composer-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+        --border: #2a2a2a;
+        --fg: #f2f2f2;
+        --dim: #9a9a9a;
+        --bg: #141414;
+        --fs-base: 14px;
+        --fs-xs: 11px;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --ui-bg: #f4f5f5;
+        --ui-fg: #1a1a1a;
+        --ui-muted: #6b6b6b;
+        --ui-border: #0d0d0d1a;
+        --agent-bg: #ececec;
+        --composer: #ffffff;
+        --composer-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        --fg: #1a1a1a;
+        --dim: #6b6b6b;
+        --bg: #f4f5f5;
+      }
+      body {
+        margin: 0;
+        background: var(--ui-bg);
+        color: var(--ui-fg);
+      }
+      .region {
+        padding: 16px;
+        border-bottom: 1px solid var(--ui-border);
+      }
+      .caption {
+        margin: 0 0 10px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .composer-wrap {
+        max-width: var(--composer-w);
+        margin: 0 auto;
+        padding: 10px 24px 8px;
+        background: var(--agent-bg);
+        border: 1px solid var(--ui-border);
+        border-radius: 8px;
+      }
+      .composer {
+        border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+        border-radius: var(--composer-radius);
+        background: var(--composer);
+        box-shadow: var(--composer-shadow);
+        overflow: hidden;
+      }
+      .textarea {
+        min-height: 96px;
+        padding: 12px 16px;
+        font-size: var(--fs-base);
+        line-height: 1.5;
+        color: color-mix(in oklab, var(--dim) 60%, transparent);
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 10px 10px;
+      }
+      .left-tools {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: var(--fs-base);
+        color: var(--dim);
+      }
+      .ref-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        border: 1px dashed var(--ui-border);
+        opacity: 0.45;
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+      }
+      .domain {
+        padding: 0 8px;
+        font-size: 13px;
+      }
+      .send {
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        background: color-mix(in oklab, var(--fg) 90%, transparent);
+        color: var(--bg);
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+      }
+      .send.disabled {
+        opacity: 0.3;
+      }
+      .status {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 4px;
+        padding: 0 4px;
+        font-family: Geist Mono, ui-monospace, monospace;
+        font-size: var(--fs-xs);
+        color: color-mix(in oklab, var(--dim) 80%, transparent);
+      }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-direct">
+      <p class="caption">zai-dark · direct chat</p>
+      <div class="composer-wrap" data-snapshot="direct-chat">
+        <div class="composer">
+          <div class="textarea">Ask anything — choose a domain for grounded answers</div>
+          <div class="toolbar">
+            <div class="left-tools">
+              <span class="ref-btn" aria-hidden="true">@</span>
+              <span class="domain">Direct chat</span>
+            </div>
+            <span class="send disabled" aria-hidden="true">↑</span>
+          </div>
+        </div>
+        <div class="status">
+          <span>direct chat</span>
+          <span></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-domain">
+      <p class="caption">zai-dark · domain selected</p>
+      <div class="composer-wrap" data-snapshot="domain-selected">
+        <div class="composer">
+          <div class="textarea" style="color: var(--fg)">Synthetic draft about valve schedules</div>
+          <div class="toolbar">
+            <div class="left-tools">
+              <span class="ref-btn" aria-hidden="true">@</span>
+              <span class="domain">Plant manuals</span>
+            </div>
+            <span class="send" aria-hidden="true">↑</span>
+          </div>
+        </div>
+        <div class="status">
+          <span>domain: Plant manuals</span>
+          <span></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light-direct">
+      <p class="caption">zai-light · direct chat</p>
+      <div class="composer-wrap">
+        <div class="composer">
+          <div class="textarea">Ask anything — choose a domain for grounded answers</div>
+          <div class="toolbar">
+            <div class="left-tools">
+              <span class="ref-btn" aria-hidden="true">@</span>
+              <span class="domain">Direct chat</span>
+            </div>
+            <span class="send disabled" aria-hidden="true">↑</span>
+          </div>
+        </div>
+        <div class="status"><span>direct chat</span></div>
+      </div>
+    </section>
+
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-streaming">
+      <p class="caption">zai-dark · streaming disabled send</p>
+      <div class="composer-wrap" data-snapshot="streaming-disabled">
+        <div class="composer">
+          <div class="textarea" style="color: var(--fg)">Synthetic draft about valve schedules</div>
+          <div class="toolbar">
+            <div class="left-tools">
+              <span class="ref-btn" aria-hidden="true">@</span>
+              <span class="domain">Plant manuals</span>
+            </div>
+            <span class="send disabled" aria-hidden="true">↑</span>
+          </div>
+        </div>
+        <div class="status">
+          <span>domain: Plant manuals</span>
+          <span>streaming</span>
+        </div>
+      </div>
+    </section>
+  </body>
+</html>

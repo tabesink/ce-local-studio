@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "targetId": "conversation-rail",
+  "owner": "src/features/chat-shell",
+  "layer": "feature",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical region: ChatShell pane header (conversation title, stream status, conversation picker, new conversation, inspector toggle).",
+      "ConversationPicker dropdown lives in ChatShell.tsx; not a separate export.",
+      "HTML steers 40px header bar geometry and synthetic conversation titles.",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "titleReady": "Valve maintenance notes",
+      "titleEmpty": "New conversation",
+      "conversations": "Conversations",
+      "newConversation": "New conversation",
+      "openInspector": "Open evidence panel",
+      "closeInspector": "Close evidence panel"
+    },
+    "variants": [
+      "title-only",
+      "title-with-stream-pill",
+      "picker-dropdown-wireframe"
+    ],
+    "states": [
+      "empty-title",
+      "ready-title",
+      "inspector-toggle-expanded"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--agent-bg",
+      "--border",
+      "--fg",
+      "--dim",
+      "--fs-base",
+      "--fs-sm"
+    ],
+    "geometry": {
+      "header": "h-10 shrink-0 border-b px-4 flex justify-between",
+      "title": "truncate text-[length:var(--fs-base)] font-medium",
+      "actions": "flex shrink-0 items-center gap-1.5 icon buttons h-7"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark-ready",
+      "theme-dark-empty",
+      "theme-light-ready",
+      "theme-dark-inspector-open"
+    ],
+    "expectedTokenGeometry": [
+      "Header uses --agent-bg with bottom hairline border",
+      "Title truncates on the left cluster",
+      "Action cluster aligns right with compact icon affordances"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "conversation picker, new conversation, and inspector toggle are focusable buttons",
+      "focus": "header action buttons expose accessible names",
+      "screenReader": "stream status uses role=status when reconnecting or streaming",
+      "reducedMotion": "no motion-dependent header correctness",
+      "validationBusyDisabledStatus": "replay disabled while streaming; synthetic stub only",
+      "zoom": "title text remains present at component level",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "header flex row preserves truncate + action cluster"
+    }
+  }
+}

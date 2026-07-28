@@ -1,0 +1,36 @@
+<!-- Not product authority. Synthetic, non-routable, script-free, and network-free parity fixture. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Drawer parity fixture</title>
+    <style>
+      :root { --ui-bg:#141414; --ui-fg:#f2f2f2; --ui-muted:#9a9a9a; --ui-border:#303030; --ui-hover:#242424; font-family:Geist,ui-sans-serif,system-ui,sans-serif; }
+      [data-theme="zai-light"] { --ui-bg:#f4f5f5; --ui-fg:#1a1a1a; --ui-muted:#6b6b6b; --ui-border:#0d0d0d1a; --ui-hover:#e8e8e8; }
+      body { margin:0; background:var(--ui-hover); color:var(--ui-fg); }
+      .region { display:flex; justify-content:flex-end; min-height:220px; background:var(--ui-hover); }
+      .drawer { display:flex; width:min(420px,76%); flex-direction:column; border-left:1px solid var(--ui-border); background:var(--ui-bg); }
+      header,footer { display:flex; align-items:center; flex:none; padding:0 10px; border-color:var(--ui-border); font-size:12px; }
+      header { height:36px; justify-content:space-between; border-bottom:1px solid var(--ui-border); }
+      footer { height:40px; justify-content:space-between; border-top:1px solid var(--ui-border); color:var(--ui-muted); }
+      .body { flex:1; padding:16px; color:var(--ui-muted); font-size:13px; }
+      button { border:0; border-radius:5px; background:transparent; color:var(--ui-fg); padding:5px 8px; }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark">
+      <aside class="drawer">
+        <header data-snapshot="header"><strong>Details</strong><button>Close</button></header>
+        <div class="body" data-snapshot="body">Synthetic drawer content</div>
+        <footer data-snapshot="footer"><span>Saved</span><button>Done</button></footer>
+      </aside>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light">
+      <aside class="drawer">
+        <header><strong>Details</strong><button>Close</button></header>
+        <div class="body">Synthetic drawer content</div>
+        <footer><span>Saved</span><button>Done</button></footer>
+      </aside>
+    </section>
+  </body>
+</html>

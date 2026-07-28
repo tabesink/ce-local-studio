@@ -1,0 +1,32 @@
+<!-- Not product authority. Synthetic, non-routable, script-free, and network-free parity fixture. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Markdown content parity fixture</title>
+    <style>
+      :root { --ui-bg:#141414; --ui-fg:#f2f2f2; --ui-muted:#9a9a9a; --ui-surface:#202020; --ui-border:#303030; --ui-info:#3b9eff; font-family:Geist,ui-sans-serif,system-ui,sans-serif; }
+      [data-theme="zai-light"] { --ui-bg:#f4f5f5; --ui-fg:#1a1a1a; --ui-muted:#6b6b6b; --ui-surface:#fff; --ui-border:#0d0d0d1a; --ui-info:#2563eb; }
+      body { margin:0; background:var(--ui-bg); color:var(--ui-fg); }
+      .region { max-width:620px; padding:16px; border-bottom:1px solid var(--ui-border); background:var(--ui-bg); }
+      article { font-size:13px; line-height:1.55; overflow-wrap:anywhere; }
+      h2 { margin:0 0 8px; font-size:16px; } p { margin:0 0 12px; color:var(--ui-muted); }
+      a { color:var(--ui-info); } code { font-family:Geist Mono,ui-monospace,monospace; }
+      pre { overflow-x:auto; padding:10px; border:1px solid var(--ui-border); border-radius:6px; background:var(--ui-surface); }
+      table { width:100%; border-collapse:collapse; } th,td { padding:7px 9px; border:1px solid var(--ui-border); text-align:left; }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark">
+      <article>
+        <h2 data-snapshot="heading">Synthetic answer</h2>
+        <p>This example demonstrates governed typography with <a href="#example">a local example link</a>.</p>
+        <table data-snapshot="table"><thead><tr><th>Item</th><th>State</th></tr></thead><tbody><tr><td>Example</td><td>Ready</td></tr></tbody></table>
+        <pre data-snapshot="code"><code>example()</code></pre>
+      </article>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light">
+      <article><h2>Synthetic answer</h2><p>This example demonstrates governed typography.</p><pre><code>example()</code></pre></article>
+    </section>
+  </body>
+</html>

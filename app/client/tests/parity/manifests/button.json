@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "targetId": "button",
   "owner": "src/ui",
+  "layer": "primitive",
   "catalogState": "FACTORY_READY",
   "disposition": "migrate+retain-and-reverify",
   "sourceEvidence": {
@@ -20,11 +21,31 @@
       "icon": "Open menu",
       "loading": "Saving"
     },
-    "variants": ["primary", "secondary", "danger", "ghost", "icon"],
-    "states": ["default", "disabled", "loading"],
-    "sizes": ["sm", "md", "lg"],
-    "themes": ["zai-dark", "zai-light"],
-    "viewports": ["390x844", "1280x800"],
+    "variants": [
+      "primary",
+      "secondary",
+      "danger",
+      "ghost",
+      "icon"
+    ],
+    "states": [
+      "default",
+      "disabled",
+      "loading"
+    ],
+    "sizes": [
+      "sm",
+      "md",
+      "lg"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
     "semanticTokens": [
       "--ui-fg",
       "--ui-bg",
@@ -34,13 +55,18 @@
       "--ui-surface"
     ],
     "geometry": {
-      "controlHeightHint": "compact workstation control (~28–32px via density tokens)",
+      "controlHeightHint": "compact workstation control (~28\u201332px via density tokens)",
       "radius": "rounded-lg / --ui-radius family",
       "density": "compact"
     }
   },
   "htmlStatic": {
-    "snapshotRegions": ["theme-dark", "theme-light", "variants", "states"],
+    "snapshotRegions": [
+      "theme-dark",
+      "theme-light",
+      "variants",
+      "states"
+    ],
     "expectedTokenGeometry": [
       "Primary uses --ui-fg/--ui-bg contrast",
       "Danger label uses --ui-danger",

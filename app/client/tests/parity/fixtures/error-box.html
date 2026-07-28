@@ -1,0 +1,68 @@
+<!--
+  Synthetic parity fixture for ErrorBox.
+  Not product authority. Not routable. Script-free and network-free.
+  Shared scenarios mirror tests/parity/manifests/error-box.json.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>ErrorBox parity fixture (synthetic)</title>
+    <style>
+      :root {
+        --ui-bg: #141414;
+        --ui-danger: #e35d5d;
+        --fg: #f2f2f2;
+        --fs-sm: 13px;
+        --rad-lg: 8px;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --ui-bg: #f4f5f5;
+        --ui-danger: #c23b3b;
+        --fg: #1a1a1a;
+      }
+      body {
+        margin: 0;
+        background: var(--ui-bg);
+        color: var(--fg);
+      }
+      .region {
+        padding: 16px;
+        border-bottom: 1px solid color-mix(in srgb, var(--ui-danger) 20%, transparent);
+        max-width: 420px;
+      }
+      .caption {
+        margin: 0 0 10px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: color-mix(in srgb, var(--fg) 55%, transparent);
+      }
+      .alert {
+        margin: 0;
+        border-radius: var(--rad-lg);
+        border: 1px solid color-mix(in srgb, var(--ui-danger) 40%, transparent);
+        background: color-mix(in srgb, var(--ui-danger) 12%, transparent);
+        padding: 8px 12px;
+        font-size: var(--fs-sm);
+        color: var(--fg);
+        line-height: 1.45;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark">
+      <p class="caption">zai-dark · alert</p>
+      <p class="alert" data-snapshot="alert">
+        Sign-in failed. Check your credentials and try again.
+      </p>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light">
+      <p class="caption">zai-light · alert</p>
+      <p class="alert">
+        Sign-in failed. Check your credentials and try again.
+      </p>
+    </section>
+  </body>
+</html>

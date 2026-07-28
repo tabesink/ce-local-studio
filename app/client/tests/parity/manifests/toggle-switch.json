@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "targetId": "toggle-switch",
+  "owner": "src/_shared/ui",
+  "layer": "primitive",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify (pending migrate to src/ui)",
+  "sourceEvidence": {
+    "notes": [
+      "Live body: app/client/src/_shared/ui/index.tsx (ToggleSwitch).",
+      "Call sites: SettingsPanel domain lifecycle control, DomainAccordionRow slot.",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "off": "Enable notifications",
+      "on": "Disable notifications",
+      "disabled": "Locked preference"
+    },
+    "variants": [
+      "unchecked",
+      "checked"
+    ],
+    "states": [
+      "default",
+      "checked",
+      "disabled"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--ui-fg",
+      "--ui-bg",
+      "--ui-muted",
+      "--ui-separator",
+      "--ui-accent"
+    ],
+    "geometry": {
+      "trackSize": "h-5 w-9 rounded-full",
+      "thumbSize": "h-3.5 w-3.5",
+      "density": "compact"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark",
+      "theme-light",
+      "unchecked",
+      "checked",
+      "disabled"
+    ],
+    "expectedTokenGeometry": [
+      "Checked track uses --ui-accent tint",
+      "Unchecked track uses --ui-separator border",
+      "Thumb translates on checked presentation only"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "Space activates switch via user-event",
+      "focus": "enabled switch is focusable; disabled switch is not activatable",
+      "screenReader": "role=switch with aria-checked and required aria-label",
+      "reducedMotion": "thumb transition is presentation; checked state readable without motion",
+      "validationBusyDisabledStatus": "disabled sets pointer-events-none and reduced opacity",
+      "zoom": "aria-label remains the accessible name at component level",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "inline-flex control; shared viewport labels only"
+    }
+  }
+}

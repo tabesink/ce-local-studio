@@ -1,0 +1,132 @@
+<!--
+  Synthetic parity fixture for pane header (PageHeader geometry).
+  Not product authority. Not routable. Script-free and network-free.
+  Shared scenarios mirror tests/parity/manifests/pane-header.json.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pane header parity fixture (synthetic)</title>
+    <style>
+      :root {
+        --ui-bg: #141414;
+        --ui-fg: #f2f2f2;
+        --ui-muted: #9a9a9a;
+        --ui-border: #2a2a2a;
+        --fs-xs: 11px;
+        --fs-sm: 13px;
+        --fs-3xl: 28px;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --ui-bg: #f4f5f5;
+        --ui-fg: #1a1a1a;
+        --ui-muted: #6b6b6b;
+        --ui-border: #0d0d0d1a;
+      }
+      body {
+        margin: 0;
+        background: var(--ui-bg);
+        color: var(--ui-fg);
+      }
+      .region {
+        padding: 16px;
+        border-bottom: 1px solid var(--ui-border);
+      }
+      .caption {
+        margin: 0 0 10px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .header-bar {
+        display: flex;
+        min-height: 40px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 4px 0 20px;
+      }
+      .title-cluster {
+        min-width: 0;
+      }
+      .eyebrow {
+        font-size: var(--fs-xs);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .title {
+        margin: 4px 0 0;
+        font-size: var(--fs-3xl);
+        font-weight: 500;
+        letter-spacing: -0.02em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .actions {
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .btn {
+        height: 32px;
+        padding: 0 12px;
+        border-radius: 6px;
+        border: 1px solid var(--ui-border);
+        background: transparent;
+        color: var(--ui-muted);
+        font-size: var(--fs-sm);
+      }
+      .btn-primary {
+        background: color-mix(in oklab, var(--ui-fg) 90%, transparent);
+        color: var(--ui-bg);
+        border-color: transparent;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-title-actions">
+      <p class="caption">zai-dark · title + actions</p>
+      <header class="header-bar" data-snapshot="title-with-actions">
+        <div class="title-cluster">
+          <h2 class="title">Primary surface</h2>
+        </div>
+        <div class="actions">
+          <span class="btn">Filter</span>
+          <span class="btn btn-primary">New item</span>
+        </div>
+      </header>
+    </section>
+
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light-title-actions">
+      <p class="caption">zai-light · title + actions</p>
+      <header class="header-bar">
+        <div class="title-cluster">
+          <h2 class="title">Primary surface</h2>
+        </div>
+        <div class="actions">
+          <span class="btn">Filter</span>
+          <span class="btn btn-primary">New item</span>
+        </div>
+      </header>
+    </section>
+
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-eyebrow">
+      <p class="caption">zai-dark · eyebrow + title + actions</p>
+      <header class="header-bar" data-snapshot="eyebrow-title-actions">
+        <div class="title-cluster">
+          <div class="eyebrow">Workspace</div>
+          <h2 class="title">Primary surface</h2>
+        </div>
+        <div class="actions">
+          <span class="btn btn-primary">New item</span>
+        </div>
+      </header>
+    </section>
+  </body>
+</html>

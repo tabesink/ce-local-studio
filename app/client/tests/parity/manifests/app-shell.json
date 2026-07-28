@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "targetId": "app-shell",
+  "owner": "src/features/shell",
+  "layer": "shared",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical composition: app/client/src/features/shell/AppShell.tsx composes NavigationSidebar + primary main canvas.",
+      "Auth gate stays in AppLayout; chat workbench and route inspectors stay in feature shells.",
+      "Three-region workstation geometry (discovery rail | primary workspace | optional inspector) is steered in HTML; live AppShell currently wires rail + main; inspector is route-owned.",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "mainPlaceholder": "Primary workspace",
+      "inspectorPlaceholder": "Optional inspector",
+      "mobileBarTitle": "Context Engine",
+      "expandRail": "Expand sidebar",
+      "openMenu": "Open navigation menu"
+    },
+    "variants": [
+      "desktop-expanded-rail",
+      "desktop-collapsed-rail",
+      "narrow-mobile-bar"
+    ],
+    "states": [
+      "main-slot-ready",
+      "optional-inspector-wireframe"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800",
+      "1920x1080"
+    ],
+    "semanticTokens": [
+      "--ui-bg",
+      "--ui-fg",
+      "--agent-bg",
+      "--sidebar-bg",
+      "--border"
+    ],
+    "geometry": {
+      "layout": "flex h-[var(--app-height)] overflow-hidden; rail | flex-1 main | optional inspector",
+      "mobileBar": "fixed top h-14 md:hidden on primary main pt-14 md:pt-0",
+      "collapsedRailNote": "desktop expand affordance when rail width is 0"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark-expanded",
+      "theme-dark-collapsed",
+      "theme-dark-narrow-bar",
+      "theme-light-expanded"
+    ],
+    "expectedTokenGeometry": [
+      "Shell root uses --ui-bg / --ui-fg",
+      "Primary workspace uses --agent-bg tint",
+      "Rail uses --sidebar-bg with border-r",
+      "Optional inspector shown as dashed wireframe only"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "shell defers nav interaction to navigation-rail target; main slot is scrollable content region",
+      "focus": "main landmark hosts route children; mobile menu button is focusable via navigation-rail composition",
+      "screenReader": "main element wraps primary workspace children",
+      "reducedMotion": "no motion-dependent shell correctness",
+      "validationBusyDisabledStatus": "children-only API; no mutation controls on shell frame",
+      "zoom": "flex min-h-0 overflow-hidden layout survives component-level zoom",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "mobile top bar region present; main uses pt-14 offset below md breakpoint"
+    }
+  }
+}

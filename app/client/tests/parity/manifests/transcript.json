@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "targetId": "transcript",
+  "owner": "src/features/chat-shell",
+  "layer": "feature",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical region: ChatShell timeline scroller and TimelineMessage blocks.",
+      "User bubbles align right max 80%; assistant turns align left max 92% with optional selection rail.",
+      "HTML steers empty, ready, selected-turn, and redacted presentation labels.",
+      "Synthetic lorem only; no real prompts, answers, or private identifiers."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "emptyPrompt": "Ask Context Engine to start.",
+      "userQuestion": "Synthetic question about valves",
+      "assistantAnswer": "Lorem ipsum grounded answer about valve inspection procedures.",
+      "evidenceCount": "2 evidence",
+      "redactedNotice": "This turn was redacted."
+    },
+    "variants": [
+      "empty",
+      "ready-thread",
+      "selected-assistant-turn",
+      "redacted-turn"
+    ],
+    "states": [
+      "loading-placeholder",
+      "streaming-placeholder",
+      "turn-selected"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--agent-bg",
+      "--surface",
+      "--fg",
+      "--dim",
+      "--link",
+      "--thread-w",
+      "--fs-base"
+    ],
+    "geometry": {
+      "scroller": "min-h-0 flex-1 overflow-y-auto px-4 py-5",
+      "thread": "mx-auto max-w-[var(--thread-w)] flex-col gap-5",
+      "userBubble": "ml-auto max-w-[80%] rounded-2xl bg-[var(--surface)]",
+      "assistantTurn": "mr-auto max-w-[92%] border-l-2 when selected"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark-empty",
+      "theme-dark-ready",
+      "theme-dark-selected",
+      "theme-light-ready",
+      "theme-dark-redacted"
+    ],
+    "expectedTokenGeometry": [
+      "Thread clamped to --thread-w centered column",
+      "User bubble on subtle --surface",
+      "Selected assistant turn shows link-colored left rule"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "persisted assistant turns are keyboard-selectable containers",
+      "focus": "assistant turn exposes tabindex=0 when selectable",
+      "screenReader": "redacted and cancelled turns show neutral notices",
+      "reducedMotion": "no motion-dependent transcript correctness",
+      "validationBusyDisabledStatus": "empty vs loading placeholder distinguished by stub",
+      "zoom": "message text remains readable at component level",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "max-width clamps preserve bubble geometry"
+    }
+  }
+}

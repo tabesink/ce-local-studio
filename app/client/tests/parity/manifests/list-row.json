@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "targetId": "list-row",
+  "owner": "src/_shared/ui",
+  "layer": "primitive",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Live body: app/client/src/_shared/ui/index.tsx (ListRow).",
+      "Synthetic row labels only; no private IDs, runtime URLs, paths, credentials, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": { "label": "Display density", "description": "Choose a compact presentation", "value": "Compact", "status": "Ready" },
+    "variants": ["settings", "resource"],
+    "states": ["value", "status", "actions", "expanded-content"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": ["--ui-fg", "--ui-muted", "--ui-hover", "--ui-separator", "--fs-base", "--fs-sm"],
+    "geometry": { "settingsPadding": "px-3.5 py-2.5", "resourcePadding": "px-3.5 py-3", "density": "compact" }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark", "theme-light", "settings", "resource"],
+    "expectedTokenGeometry": ["Primary label uses --ui-fg", "Description and value use --ui-muted"],
+    "forbiddenClaims": ["focus", "ARIA", "keyboard", "touch", "state-transition"]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "embedded native actions remain independently operable",
+      "focus": "presentational row adds no implicit focus target",
+      "screenReader": "visible labels and child controls preserve native semantics",
+      "reducedMotion": "only tokenized color transitions are present",
+      "validationBusyDisabledStatus": "status and control slots remain explicit",
+      "zoom": "grid collapses to one column",
+      "darkLight": "renders under zai-dark and zai-light wrappers",
+      "narrow": "settings and resource variants stack at narrow widths"
+    }
+  }
+}
