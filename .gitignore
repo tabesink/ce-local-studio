@@ -65,3 +65,11 @@ tests/.pytest-tmp/
 # P10-04 / P12-04 operator object-store export manifests (secret-class)
 *.object-store-export.json
 **/object-store-exports/
+
+# P12-04 backup/restore drill artifacts (secret-class — dumps, object bytes, companion keys)
+*.backup-archive/
+**/*.backup-archive/
+*.pg.dump
+**/backup-restore-artifacts/
+*.companion-config-key
+**/*.companion-config-key
