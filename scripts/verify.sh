@@ -22,6 +22,9 @@ run_check "phase-scope checker fixtures" bash "$ROOT_DIR/scripts/tests/check-doc
 run_check "Python lock integrity" bash -c "cd '$APP_DIR' && uv lock --check"
 run_check "backend package import" bash -c "cd '$APP_DIR' && uv run --frozen --python 3.12 python -c 'import context_engine'"
 run_check "backend lint" bash -c "cd '$APP_DIR' && uv run --frozen --python 3.12 --extra test ruff check context_engine"
+# Privacy scans (P8-01 audit, P8-02 logs/metrics, P8-03 cross-sink) ride default pytest.
+# Disposable PostgreSQL suites skip unless CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS=1;
+# CI runs them in the separate verify-postgresql job (pytest -m postgresql).
 run_check "backend tests" bash -c "cd '$APP_DIR' && uv run --frozen --python 3.12 --extra test pytest"
 run_check "frontend dependency lock" bash -c "cd '$APP_DIR/client' && npm ci"
 run_check "generated contract snapshots" bash "$ROOT_DIR/scripts/check-generated-contracts.sh"

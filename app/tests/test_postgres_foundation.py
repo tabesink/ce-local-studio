@@ -582,9 +582,15 @@ def test_p1_03_role_recheck_denial_audit_and_owner_isolation_on_postgresql_16() 
                         "password",
                         role=ROLE_ADMINISTRATOR,
                     )
-                    conversation = create_conversation(session, owner=owner, title="Private")
-                    conversation_id = conversation.id
-                    owner_token, _ = create_auth_session(session, owner, settings)
+                    owner_token, owner_auth_session = create_auth_session(session, owner, settings)
+                    conversation = create_conversation(
+                        session,
+                        settings=settings,
+                        owner=owner,
+                        title="Private",
+                        auth_session=owner_auth_session,
+                    )
+                    conversation_ref = conversation.public_ref
                     outsider_token, _ = create_auth_session(session, outsider, settings)
                     admin_token, _ = create_auth_session(session, administrator, settings)
                     outsider_id = outsider.id
@@ -601,14 +607,14 @@ def test_p1_03_role_recheck_denial_audit_and_owner_isolation_on_postgresql_16() 
                         {},
                     )
                     cross_owner = outsider_client.get(
-                        f"{CANONICAL_API_PREFIX}/conversations/{conversation_id}"
+                        f"{CANONICAL_API_PREFIX}/conversations/{conversation_ref}"
                     )
                     unknown = outsider_client.get(
-                        f"{CANONICAL_API_PREFIX}/conversations/00000000-0000-0000-0000-000000000000"
+                        f"{CANONICAL_API_PREFIX}/conversations/conv_{'0' * 32}"
                     )
                     assert _stable_error(cross_owner) == _stable_error(unknown) == (
                         404,
-                        "conversation_not_found",
+                        "not_found",
                         "Conversation not found.",
                         {},
                     )
@@ -617,11 +623,11 @@ def test_p1_03_role_recheck_denial_audit_and_owner_isolation_on_postgresql_16() 
                     _set_session_cookie(admin_client, settings, admin_token)
                     assert admin_client.get(f"{CANONICAL_API_PREFIX}/admin/users").status_code == 200
                     admin_non_owner = admin_client.get(
-                        f"{CANONICAL_API_PREFIX}/conversations/{conversation_id}"
+                        f"{CANONICAL_API_PREFIX}/conversations/{conversation_ref}"
                     )
                     assert _stable_error(admin_non_owner) == (
                         404,
-                        "conversation_not_found",
+                        "not_found",
                         "Conversation not found.",
                         {},
                     )
@@ -643,7 +649,7 @@ def test_p1_03_role_recheck_denial_audit_and_owner_isolation_on_postgresql_16() 
                 with TestClient(app) as owner_client:
                     _set_session_cookie(owner_client, settings, owner_token)
                     assert owner_client.get(
-                        f"{CANONICAL_API_PREFIX}/conversations/{conversation_id}"
+                        f"{CANONICAL_API_PREFIX}/conversations/{conversation_ref}"
                     ).status_code == 200
                     with session_factory() as session:
                         current_owner = session.scalar(

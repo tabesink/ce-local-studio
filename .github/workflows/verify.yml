@@ -23,3 +23,65 @@ jobs:
           version: '0.8.9'
       - name: Run root verification
         run: bash scripts/verify.sh
+
+  # Disposable PostgreSQL 16 proofs (opt-in env). Parallel with root-verification;
+  # both are required merge gates. Live Compose smoke and Playwright stay out.
+  verify-postgresql:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: context_engine
+          POSTGRES_PASSWORD: context_engine
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U context_engine -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: '0.8.9'
+      - name: Run disposable PostgreSQL suite
+        working-directory: app
+        env:
+          CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS: '1'
+          CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL: postgresql+psycopg://context_engine:context_engine@127.0.0.1:5432/postgres
+        run: |
+          set -euo pipefail
+          # Fail closed if opt-in env is missing/mistyped — pytest exits 0 when all
+          # postgresql-marked tests skip without CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS=1.
+          test "${CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS}" = "1"
+          test -n "${CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL}"
+          junit="${RUNNER_TEMP:-/tmp}/postgresql-tests.xml"
+          uv run --frozen --python 3.12 --extra test pytest -m postgresql \
+            --junitxml="$junit" -q --tb=line
+          python3 - "$junit" <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          path = sys.argv[1]
+          root = ET.parse(path).getroot()
+          suites = [root] if root.tag == "testsuite" else list(root.findall("testsuite"))
+          if not suites and root.tag == "testsuites":
+              suites = list(root)
+          tests = sum(int(s.get("tests") or 0) for s in suites)
+          failures = sum(int(s.get("failures") or 0) for s in suites)
+          errors = sum(int(s.get("errors") or 0) for s in suites)
+          skipped = sum(int(s.get("skipped") or 0) for s in suites)
+          passed = tests - failures - errors - skipped
+          if passed < 1:
+              raise SystemExit(
+                  f"verify-postgresql ran zero passing tests "
+                  f"(tests={tests} passed={passed} skipped={skipped} "
+                  f"failures={failures} errors={errors})"
+              )
+          PY
