@@ -53,13 +53,14 @@ The target remains a modular monolith. P0-01 selected `app/context_engine/` as t
 
 ## Delivery and local runtime
 
-- Multi-stage responsibility expressed as Compose services: `postgres`, one-shot `migrate`, `api`, and `frontend`.
+- Multi-stage responsibility expressed as Compose services: `postgres`, one-shot `migrate`, `api`, `worker`, `frontend`, and (local-production / test) `minio`.
 - Backend image: `python:3.12-slim`; frontend uses its own Dockerfile and listens on port 3000.
 - Frontend image is a Node 22 Alpine multi-stage build.
 - API listens on 8000; Compose publishes both services only to `127.0.0.1` by default.
 - Health checks: `/health/live`, `/health/ready`, and frontend `/login`.
-- Compose uses local controller/LightRAG adapters for the runnable P10 stack; production may substitute the approved server-only Docker controller boundary.
-- Persistent PostgreSQL named volume; source and per-domain runtime roots are backend-managed filesystem locations.
+- Compose development path may use local controller/LightRAG adapters and the filesystem object adapter; local-production substitutes the approved Docker LightRAG controller (P5-04) and MinIO through one S3-compatible object-store adapter (P10-04).
+- Persistent PostgreSQL named volume; governed source binaries live in MinIO for local-production/test; per-domain LightRAG runtime directories remain ephemeral rebuildable derivatives.
+- Supported model egress: configured OpenAI and AWS Bedrock may leave the deployment; Ollama stays local. Browser never selects providers or runtime targets.
 
 ## Configuration surface
 

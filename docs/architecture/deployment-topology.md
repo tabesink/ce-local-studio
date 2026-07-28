@@ -34,9 +34,11 @@ Workers may be one image with queue flags or separate preparation/index/domain-c
 | Environment | Data/integrations | Required proof |
 | --- | --- | --- |
 | Development | Compose PostgreSQL, filesystem object adapter, fake/pinned adapters | fast unit/contract loop; never production evidence |
-| Test | disposable PostgreSQL 16 and S3-compatible store; deterministic adapters | migrations, transactions, concurrency, SSE, browser cases |
+| Test | disposable PostgreSQL 16 and S3-compatible store (MinIO or equivalent); deterministic adapters | migrations, transactions, concurrency, SSE, browser cases |
 | Staging | production ingress/network/object-store shape; sandbox providers | upgrade/rollback, load, failure, backup/restore rehearsal |
-| Production | HA database/store, KMS/secret manager, monitored private services | signed approval and release evidence manifest |
+| Production / local-production | PostgreSQL 16, local MinIO (S3-compatible) as governed object store, private per-domain LightRAG, database-leased workers; only configured OpenAI/AWS model calls may leave the deployment (Ollama stays local) | signed approval and release evidence manifest |
+
+**Object-store decision (2026-07-28):** Phase 1 production and local-production use one S3-compatible object-storage adapter exercised against locally deployed MinIO. The filesystem adapter remains development-only. Do not add multi-cloud abstractions, bucket-management UI, replication, or HA orchestration unless a later approved contract requires them.
 
 Production never uses SQLite, browser filesystem access, a filesystem source adapter, shared domain runtime directories, or an unauthenticated sidecar.
 
