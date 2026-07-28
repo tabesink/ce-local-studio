@@ -62,6 +62,16 @@ class NoAdministratorDatabase(HealthyDatabase):
         return None
 
 
+@pytest.fixture(autouse=True)
+def _bypass_catalog_compatibility_for_fake_dbs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unit fakes and SQLite create_all DBs are not Path 1 catalog targets.
+
+    Live PG catalog refusal belongs to test_postgres_migration_preflight / foundation.
+    """
+
+    monkeypatch.setattr(readiness_module, "check_catalog_compatibility", lambda _db: None)
+
+
 def test_health_handlers_return_catalog_statuses(tmp_path: Path) -> None:
     settings = Settings(testing=True, source_storage_root=str(tmp_path / "source-storage"))
     assert live() == {"status": "live"}
@@ -148,6 +158,18 @@ def test_readiness_schema_edges_share_safe_internal_reason() -> None:
         with pytest.raises(ReadinessError) as exc_info:
             check_readiness(_RevisionDatabase(revision))
         assert exc_info.value.reason == "schema_incompatible"
+
+
+def test_readiness_catalog_mismatch_is_schema_incompatible(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fail(_db: object) -> None:
+        raise ReadinessError("schema_incompatible")
+
+    monkeypatch.setattr(readiness_module, "check_catalog_compatibility", _fail)
+    with pytest.raises(ReadinessError) as exc_info:
+        check_readiness(HealthyDatabase())
+    assert exc_info.value.reason == "schema_incompatible"
 
 
 def test_readiness_bootstrap_incomplete_without_enabled_administrator() -> None:

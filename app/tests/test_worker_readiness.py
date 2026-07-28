@@ -35,6 +35,11 @@ class _BadSchemaDb:
         return "deadbeef0001"
 
 
+@pytest.fixture(autouse=True)
+def _bypass_catalog_compatibility_for_fake_dbs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(readiness_module, "check_catalog_compatibility", lambda _db: None)
+
+
 def test_worker_readiness_ok_without_administrator(tmp_path: Path) -> None:
     settings = Settings(testing=True, source_storage_root=str(tmp_path / "source-storage"))
     check_worker_readiness(_HealthySchemaDb(), settings)
@@ -45,6 +50,20 @@ def test_worker_readiness_rejects_incompatible_schema(tmp_path: Path) -> None:
     settings = Settings(testing=True, source_storage_root=str(tmp_path / "source-storage"))
     with pytest.raises(ReadinessError) as exc_info:
         check_worker_readiness(_BadSchemaDb(), settings)
+    assert exc_info.value.reason == "schema_incompatible"
+
+
+def test_worker_readiness_rejects_catalog_mismatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = Settings(testing=True, source_storage_root=str(tmp_path / "source-storage"))
+
+    def _fail(_db: object) -> None:
+        raise ReadinessError("schema_incompatible")
+
+    monkeypatch.setattr(readiness_module, "check_catalog_compatibility", _fail)
+    with pytest.raises(ReadinessError) as exc_info:
+        check_worker_readiness(_HealthySchemaDb(), settings)
     assert exc_info.value.reason == "schema_incompatible"
 
 

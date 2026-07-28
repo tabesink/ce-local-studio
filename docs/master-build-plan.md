@@ -360,7 +360,7 @@ CSRF, and mid-turn lease heartbeat.
 
 | Task | Status | Depends on | Deliverable |
 | --- | --- | --- | --- |
-| P12-01 | BLOCKED | P0-P11 | fresh-install proof plus the approved populated-compatibility path from `architecture/legacy-persistence-retirement.md` against PostgreSQL 16 |
+| P12-01 | DONE | P0-P11 | Path 1 unsupported populated-legacy upgrade: fresh-install + catalog preflight/refusal + startup catalog match on PostgreSQL 16 — evidence `docs/_scratch/p12-01-populated-compatibility-evidence.md`; Path 2 contraction and P12-04 backup drills remain |
 | P12-02 | NOT_STARTED | P0-P11 | full backend/frontend/adapter/Docker suite and contract snapshot convergence |
 | P12-03 | NOT_STARTED | P8-P11 | authz, secret/content leakage, deletion/redaction and adversarial retrieval review |
 | P12-04 | NOT_STARTED | P12-01 | backup/restore, image rollback, failed-worker recovery and incident drills |
@@ -386,7 +386,7 @@ See `future/README.md`, `future/observability-layer.md`, and `future/wiki-layer.
 
 ## Populated-database compatibility barrier
 
-The Phase 1 schema is a clean-install target, not authority for destructive contraction. Before P12-01 can leave `BLOCKED`, the release must choose one path:
+The Phase 1 schema is a clean-install target, not authority for destructive contraction. **P12-01 chose Path 1** (unsupported populated legacy upgrade) and recorded proof in `docs/_scratch/p12-01-populated-compatibility-evidence.md`. Path 2 remains available only under a future approved release decision. The two paths were:
 
 1. **Unsupported populated legacy upgrade:** a read-only migration preflight reconciles `pg_catalog`, `information_schema`, Alembic current/history, ORM metadata, and every application-owned table, column, enum, sequence, index, constraint, trigger, function, view, and dependency against a versioned system-schema and approved-extension allowlist. It accepts only an empty database or the exact current target catalog/Alembic head and refuses legacy, partial, renamed, unknown-object, unknown-history, behind, and ahead states before migration writes. Startup separately accepts the exact current target catalog/head with valid populated Phase 1 data and refuses behind, ahead, or unknown state before product writes. Fixtures prove empty-install and populated-current-target success plus every named refusal.
 2. **Supported populated upgrade:** reconcile live catalogs, full migration history, ORM metadata, and the documented closure across every table, column, enum, sequence, index, constraint, trigger, function, view, and dependency; block on anything unaccounted for; fence writes/claims; drain work; census and take a transactionally consistent protected backup/export; disposition every dependent object; quarantine rollback-compatibly; rehearse prior-version rollback and isolated restore; prove per-object counts, stable checksums, FK/orphan/constraint integrity, audit count/hash continuity, and affected-conversation replay/read behavior before later contraction.

@@ -39,7 +39,7 @@ services:
       context: .
       dockerfile: Dockerfile
     networks: [ce_stack]
-    command: ["alembic", "upgrade", "head"]
+    command: ["python", "-m", "context_engine.migrate_release"]
     environment:
       CONTEXT_ENGINE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?set POSTGRES_USER locally}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD locally}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB locally}
     depends_on:
