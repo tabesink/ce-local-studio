@@ -903,6 +903,7 @@ class ComposerRefToken(Base):
     safe_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     safe_description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now)
 
     owner: Mapped[User] = relationship()

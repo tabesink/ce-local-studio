@@ -21,7 +21,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 ADMIN_URL_ENV = "CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL"
 OPT_IN_ENV = "CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS"
 DATABASE_NAME_PATTERN = re.compile(r"^ce_p1101_[a-z0-9_]+$")
-HEAD_REVISION = "e9f2a1b83c70"
+HEAD_REVISION = "f1a8c3d04e92"
 
 pytestmark = pytest.mark.postgresql
 
@@ -200,7 +200,7 @@ def test_p11_01_composer_ref_schema_constraints_on_postgresql_16() -> None:
                     assert "token" not in token_columns
                     assert "raw_token" not in token_columns
                     assert "used_at" not in token_columns
-                    assert "consumed_at" not in token_columns
+                    assert "consumed_at" in token_columns
 
                     user_id, turn_id = _seed_user_and_turn(connection, now=now)
 

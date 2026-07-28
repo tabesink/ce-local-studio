@@ -54,7 +54,7 @@ def test_gated_composer_seed_covers_kinds_denials_and_accepted_refs(tmp_path: Pa
         )
         keys = list_seeded_token_fixture_keys(db)
         assert keys == set(TOKEN_HASHES)
-        assert RESERVED_CONSUMED_TOKEN_KEY not in keys
+        assert RESERVED_CONSUMED_TOKEN_KEY in keys
 
         tokens = list(db.scalars(select(ComposerRefToken)))
         assert all(len(token.token_hash) == 64 for token in tokens)
@@ -64,6 +64,14 @@ def test_gated_composer_seed_covers_kinds_denials_and_accepted_refs(tmp_path: Pa
         assert expired.expires_at < SEED_CLOCK
         valid = next(token for token in tokens if token.safe_description == "token_mina_source_valid")
         assert valid.expires_at > SEED_CLOCK
+        assert valid.consumed_at is None
+
+        consumed = next(token for token in tokens if token.safe_description == RESERVED_CONSUMED_TOKEN_KEY)
+        assert consumed.consumed_at is not None
+        assert consumed.consumed_at < SEED_CLOCK
+        assert consumed.expires_at > SEED_CLOCK
+        assert consumed.owner_user_id == valid.owner_user_id
+        assert consumed.ref_kind == COMPOSER_REF_KIND_SOURCE
 
         noah = next(token for token in tokens if token.safe_description == "token_noah_wrong_owner")
         assert noah.owner_user_id == USER_NOAH_ID

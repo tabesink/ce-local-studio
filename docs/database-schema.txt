@@ -202,7 +202,7 @@ composer_ref_tokens
   id PK; token_hash varchar(64) UNIQUE
   owner_user_id FK users.id CASCADE; ref_kind CHECK IN ('source','evidence','template')
   target_id private; domain_id varchar(64) NULL
-  safe_label/safe_description; expires_at, created_at
+  safe_label/safe_description; expires_at, consumed_at NULL, created_at
   INDEX(owner_user_id, expires_at)
 
 conversation_turn_composer_refs

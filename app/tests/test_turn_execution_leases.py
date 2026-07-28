@@ -14,6 +14,7 @@ from context_engine.services.chat_turns import safe_turn_summary
 APP_ROOT = Path(__file__).resolve().parents[1]
 TURN_LEASE_REVISION = "e9f2a1b83c70"
 PRIOR_REVISION = "c7d91e5a2f04"
+CURRENT_HEAD_REVISION = "f1a8c3d04e92"
 
 
 def test_turn_lease_migration_revises_conversation_ownership_head() -> None:
@@ -23,7 +24,8 @@ def test_turn_lease_migration_revises_conversation_ownership_head() -> None:
     revision = scripts.get_revision(TURN_LEASE_REVISION)
     assert revision is not None
     assert revision.down_revision == PRIOR_REVISION
-    assert TURN_LEASE_REVISION in scripts.get_heads()
+    assert CURRENT_HEAD_REVISION in scripts.get_heads()
+    assert scripts.get_revision(CURRENT_HEAD_REVISION).down_revision == TURN_LEASE_REVISION
 
 
 def test_conversation_turn_exposes_private_lease_fields() -> None:
