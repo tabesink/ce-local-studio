@@ -24,7 +24,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | P7 | Durable grounded streaming chat | DONE | P6 | conversation ownership, intent gate, bounded RAG, SSE, idempotent replay, redaction, synthesis isolation + turn-lease heartbeat — P7-01..P7-06 DONE; evidence `docs/_scratch/p7-06-synthesis-isolation-heartbeat-evidence.md` |
 | P8 | Operational safety and Phase 1 gate | DONE | P1-P7 | transactional audit writes, allowlisted logs, request/trace correlation, health, privacy scans, and resilience evidence pass |
 | P9 | Thin Next.js frontend | IN_PROGRESS | P1-P8 | login/chat/documents/settings and the reserved graph state use only versioned APIs — P9-01..P9-06 DONE; P9-07 contracted browser workflows open; P12 owns deployed-ingress / visual-matrix residuals |
-| P10 | Deployable application stack | IN_PROGRESS | P8-P9 | runnable Compose stack, explicit migrations/bootstrap, worker lifecycle, smoke path, and operator runbook pass — P10-01..P10-03 DONE; P10-04 MinIO, P10-05 real parser/provider pipeline, and P10-06 governed preview generation open |
+| P10 | Deployable application stack | IN_PROGRESS | P8-P9 | runnable Compose stack, explicit migrations/bootstrap, worker lifecycle, smoke path, and operator runbook pass — P10-01..P10-04 DONE; P10-05 real parser/provider pipeline and P10-06 governed preview generation open |
 | P11 | Governed context assembly | DONE | P6-P7 | opaque refs for sources/evidence/templates, private bounded assembly, replay fingerprint and invalidation pass — P11-01..P11-03 DONE; P11-04 DEFERRED (Evidence attach UX) |
 | P12 | Production release and recovery | NOT_STARTED | P0-P11 | immutable artifacts, deployed-path streaming, migration/rollback, security/load/backup/restore and runbooks pass |
 
@@ -350,8 +350,20 @@ interruptible idle sleep (`stack_worker.stop_claim`),
 `CE_INLINE_TURN_WORKERS` split for Compose-leased BFF smoke
 (`stack_smoke_worker.py`), Compose worker bootstrap depends_on +
 `stop_grace_period: 60s`, and `docs/operations/compose-stack-runbook.md`.
-Residuals remain P12 TLS/stream-drain/HA, production/S3 store, browser
-CSRF, and mid-turn lease heartbeat.
+Residuals remain P12 TLS/stream-drain/HA, browser CSRF, and mid-turn lease
+heartbeat (heartbeat closed under P7-06).
+
+P10-04 closure evidence (2026-07-28):
+`docs/_scratch/p10-04-minio-object-store-inventory.md` and
+`docs/_scratch/p10-04-minio-object-store-evidence.md`. Production path is one
+S3-compatible adapter (`S3ObjectStore` + `object_store_from_settings`) with
+closed `CE_OBJECT_STORE_KIND`; opt-in `compose.stack.minio.yml` (init/app/recon
+credential tiers; slim local root; default Compose stays filesystem); readiness
+put+delete through the composed factory; operator
+`stack_object_store_recon.py` verify/export/orphan-warn for P12-04; AE3 missing
+object → `503 document_content_unavailable`. Focused unit/compose-config suites
+green. Residuals: opt-in live MinIO smoke and combined live+MinIO matrix under
+P12-04; cloud/KMS/HA under P12-08.
 
 ### P9-P11 - User interface, deployable runtime, and governed context workflows
 
@@ -367,7 +379,7 @@ CSRF, and mid-turn lease heartbeat.
 | P10-01 | DONE | P8,P9 | Compose services and ingress-wired HTTP server configuration for PostgreSQL, migration, API, worker and frontend — evidence `docs/_scratch/p10-01-compose-config-evidence.md`; BFF/API/SSE smoke and storage readiness remain P10-02; drain runbook P10-03; TLS/direct-API denial P12 |
 | P10-02 | DONE | P10-01 | explicit migration/bootstrap plus BFF/API/SSE core-path smoke stack — evidence `docs/_scratch/p10-02-stack-smoke-evidence.md`; worker drain/runbook P10-03; TLS/direct-API denial P12; browser CSRF residual named |
 | P10-03 | DONE | P10-02 | startup/shutdown, worker claim recovery and deployment operator runbook — evidence `docs/_scratch/p10-03-worker-lifecycle-evidence.md`; TLS/stream-drain/HA/production store remain P12 |
-| P10-04 | NOT_STARTED | P10-03,P4-01 | local-production MinIO through one S3-compatible governed object-store adapter; readiness, range/delete/reconciliation, Compose wiring, and backup hooks; filesystem adapter remains development-only — plan `docs/plans/2026-07-28-011-feat-p10-04-minio-object-store-plan.md` |
+| P10-04 | DONE | P10-03,P4-01 | local-production MinIO through one S3-compatible governed object-store adapter; readiness, range/delete/reconciliation, Compose wiring, and backup hooks; filesystem adapter remains development-only — plan `docs/plans/2026-07-28-011-feat-p10-04-minio-object-store-plan.md`; evidence `docs/_scratch/p10-04-minio-object-store-evidence.md` |
 | P10-05 | NOT_STARTED | P4-03,P5-04,P6-02,P7-03,P10-03 | production-real parser/provider pipeline: characterize and package Docling/Reducto, resolve bounded URL/assets and killable parser timeouts, bind immutable OpenAI/Bedrock embedding profiles for both index/query, prove long-block marker survival, and run a gated real-source→canonical blocks→LightRAG→mapped Evidence path; CI stays no-network and unsupported profiles remain fail-closed — plan `docs/plans/2026-07-28-012-feat-p10-05-provider-packaging-plan.md` |
 | P10-06 | NOT_STARTED | P4-05,P9-03,P10-04 | deterministic governed PDF preview generation for supported non-PDF sources with private renderer/version/page-map/checksum metadata, atomic publication, safe range delivery, anchor fallback/remapping, and cleanup/recovery; original formats never reach the inline PDF renderer — plan `docs/plans/2026-07-28-017-feat-p10-06-governed-preview-generation-plan.md` |
 | P11-01 | DONE | P6 | prompt_templates/composer_ref_tokens/accepted-ref schema and seeds for source/evidence/template refs — evidence `docs/_scratch/p11-01-composer-ref-schema-evidence.md`; discover/consume remain P11-02 (DRIFT-26); assembly/fingerprint P11-03 |

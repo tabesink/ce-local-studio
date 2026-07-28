@@ -21,6 +21,7 @@ from context_engine.adapters.object_storage import (
     ObjectStorageError,
     new_object_key,
     object_store_from_root,
+    object_store_from_settings,
 )
 from context_engine.adapters.parsers import (
     DocumentParser,
@@ -198,7 +199,10 @@ class SourceStorage:
 
 
 def storage_from_settings(settings: Settings) -> SourceStorage:
-    return SourceStorage(settings.source_storage_root)
+    return SourceStorage(
+        settings.source_storage_root,
+        store=object_store_from_settings(settings),
+    )
 
 
 def sanitize_original_filename(filename: str | None) -> str:

@@ -72,7 +72,7 @@ def test_worker_readiness_rejects_store_probe_failure(
 ) -> None:
     settings = Settings(testing=True, source_storage_root=str(tmp_path / "source-storage"))
 
-    def _fail(_root: object) -> None:
+    def _fail(_settings: object) -> None:
         raise ObjectStorageError("Object unavailable.")
 
     monkeypatch.setattr(readiness_module, "probe_object_store", _fail)

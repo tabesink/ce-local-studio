@@ -14,6 +14,7 @@ DOCKERFILE = APP_ROOT / "Dockerfile"
 DOCKERIGNORE = APP_ROOT / ".dockerignore"
 COMPOSE = APP_ROOT / "compose.stack.yml"
 COMPOSE_LIVE = APP_ROOT / "compose.stack.live.yml"
+COMPOSE_MINIO = APP_ROOT / "compose.stack.minio.yml"
 ENV_EXAMPLE = APP_ROOT / ".env.stack.example"
 VERIFY_SH = REPO_ROOT / "scripts" / "verify.sh"
 
@@ -163,7 +164,11 @@ def test_env_example_documents_live_docker_native_lane() -> None:
     assert "local/local" in text or "stays local/local" in text
 
 
-def _compose_config_env(*, live_runtime_root: str | None = None) -> dict[str, str]:
+def _compose_config_env(
+    *,
+    live_runtime_root: str | None = None,
+    minio: bool = False,
+) -> dict[str, str]:
     env = os.environ.copy()
     env.update(
         {
@@ -182,6 +187,18 @@ def _compose_config_env(*, live_runtime_root: str | None = None) -> dict[str, st
     if live_runtime_root is not None:
         env["CE_STACK_LIVE_RUNTIME_ROOT"] = live_runtime_root
         env["CE_DOMAIN_CONTROLLER_IMAGE"] = "context-engine-live:local"
+    if minio:
+        env.update(
+            {
+                "MINIO_ROOT_USER": "minio-root",
+                "MINIO_ROOT_PASSWORD": "minio-root-password-min-8",
+                "CE_S3_BUCKET": "ce-objects",
+                "CE_S3_ACCESS_KEY": "ce-app-access",
+                "CE_S3_SECRET_KEY": "ce-app-secret-key-min",
+                "CE_S3_RECON_ACCESS_KEY": "ce-recon-access",
+                "CE_S3_RECON_SECRET_KEY": "ce-recon-secret-key",
+            }
+        )
     return env
 
 
@@ -247,3 +264,106 @@ def test_compose_live_overlay_fails_closed_without_runtime_root() -> None:
     assert result.returncode != 0
     combined = f"{result.stdout}\n{result.stderr}".lower()
     assert "ce_stack_live_runtime_root" in combined
+
+
+def test_minio_overlay_exists_and_pins_s3_kind() -> None:
+    assert COMPOSE_MINIO.is_file()
+    text = COMPOSE_MINIO.read_text(encoding="utf-8")
+    assert "CE_OBJECT_STORE_KIND: s3" in text
+    assert "CE_STACK_OBJECT_STORE_IMAGE" in text
+    assert "minio-init" in text
+    assert "MINIO_ROOT_USER" in text
+    assert "CE_S3_RECON_ACCESS_KEY" in text
+    assert "stack-source-local" in text
+
+
+def test_env_example_documents_minio_overlay() -> None:
+    text = ENV_EXAMPLE.read_text(encoding="utf-8")
+    assert "compose.stack.minio.yml" in text
+    assert "CE_OBJECT_STORE_KIND=s3" in text or "CE_OBJECT_STORE_KIND" in text
+    assert "MINIO_ROOT_USER" in text
+    assert "CE_S3_RECON_ACCESS_KEY" in text
+    assert "CE_STACK_OBJECT_STORE_IMAGE" in text
+
+
+def test_compose_config_default_has_no_minio() -> None:
+    result = subprocess.run(
+        ["docker", "compose", "-f", str(COMPOSE), "config"],
+        cwd=str(APP_ROOT),
+        env=_compose_config_env(),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "CE_OBJECT_STORE_KIND: s3" not in result.stdout
+    assert "image: minio/minio" not in result.stdout
+    assert "stack-source-storage" in result.stdout
+
+
+def test_compose_minio_overlay_config_resolves_s3() -> None:
+    result = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "-f",
+            str(COMPOSE),
+            "-f",
+            str(COMPOSE_MINIO),
+            "config",
+        ],
+        cwd=str(APP_ROOT),
+        env=_compose_config_env(minio=True),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "CE_OBJECT_STORE_KIND: s3" in result.stdout
+    assert "CE_S3_ENDPOINT: http://minio:9000" in result.stdout
+    assert "CE_STACK_OBJECT_STORE_IMAGE" in result.stdout or "object-store" in result.stdout.lower() or "CE_STACK_OBJECT_STORE_IMAGE: \"1\"" in result.stdout or 'CE_STACK_OBJECT_STORE_IMAGE: "1"' in result.stdout or "CE_STACK_OBJECT_STORE_IMAGE: '1'" in result.stdout or "CE_STACK_OBJECT_STORE_IMAGE: 1" in result.stdout
+    # App secrets on api/worker; root + recon must not appear on frontend.
+    assert "MINIO_ROOT_PASSWORD" not in _service_env_block(result.stdout, "frontend")
+    assert "CE_S3_SECRET_KEY" not in _service_env_block(result.stdout, "frontend")
+    assert "CE_S3_RECON_SECRET_KEY" not in _service_env_block(result.stdout, "api")
+    assert "CE_S3_RECON_SECRET_KEY" not in _service_env_block(result.stdout, "worker")
+    assert "MINIO_ROOT_PASSWORD" not in _service_env_block(result.stdout, "api")
+    assert "stack-source-local" in result.stdout
+
+
+def test_compose_minio_overlay_fails_closed_without_bucket() -> None:
+    env = _compose_config_env(minio=True)
+    env.pop("CE_S3_BUCKET", None)
+    result = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "-f",
+            str(COMPOSE),
+            "-f",
+            str(COMPOSE_MINIO),
+            "config",
+        ],
+        cwd=str(APP_ROOT),
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    combined = f"{result.stdout}\n{result.stderr}".lower()
+    assert "ce_s3_bucket" in combined
+
+
+def _service_env_block(compose_config: str, service: str) -> str:
+    """Best-effort extract of a service stanza from `docker compose config` YAML."""
+    marker = f"  {service}:\n"
+    start = compose_config.find(marker)
+    if start < 0:
+        return ""
+    rest = compose_config[start + len(marker) :]
+    # Next top-level service under services: is indented with two spaces then name.
+    next_service = re.search(r"\n  [a-z0-9_-]+:\n", rest)
+    if next_service:
+        return rest[: next_service.start()]
+    return rest

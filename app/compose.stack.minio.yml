@@ -1,0 +1,133 @@
+# Opt-in P10-04 MinIO object-store lane (not default CI / verify).
+# Local-production S3-compatible store behind CE_OBJECT_STORE_KIND=s3.
+#
+#   docker compose --env-file .env.stack.local \
+#     -f compose.stack.yml -f compose.stack.minio.yml up --build -d
+#
+# Credential tiers:
+#   MINIO_ROOT_*     — minio + minio-init only (never api/worker/frontend)
+#   CE_S3_*          — least-privilege app Put/Get/Delete/Head (no ListBucket)
+#   CE_S3_RECON_*    — operator recon/export scripts only (not mounted on api/worker)
+#
+# Combined live+MinIO three-file matrix is deferred to P12-04.
+
+services:
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    networks: [ce_stack]
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER locally}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD locally}
+    volumes:
+      - stack-minio-data:/data
+    # Optional ops loopback only — not required for api/worker:
+    # ports:
+    #   - "127.0.0.1:9000:9000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  minio-init:
+    image: minio/mc:RELEASE.2024-11-17T19-35-56Z
+    networks: [ce_stack]
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER locally}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD locally}
+      CE_S3_BUCKET: ${CE_S3_BUCKET:?set CE_S3_BUCKET locally}
+      CE_S3_ACCESS_KEY: ${CE_S3_ACCESS_KEY:?set CE_S3_ACCESS_KEY locally}
+      CE_S3_SECRET_KEY: ${CE_S3_SECRET_KEY:?set CE_S3_SECRET_KEY locally}
+      CE_S3_RECON_ACCESS_KEY: ${CE_S3_RECON_ACCESS_KEY:?set CE_S3_RECON_ACCESS_KEY locally}
+      CE_S3_RECON_SECRET_KEY: ${CE_S3_RECON_SECRET_KEY:?set CE_S3_RECON_SECRET_KEY locally}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "local/$$CE_S3_BUCKET"
+        mc anonymous set none "local/$$CE_S3_BUCKET"
+        cat >/tmp/ce-app.json <<EOF
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:GetBucketLocation"],
+              "Resource": ["arn:aws:s3:::$$CE_S3_BUCKET", "arn:aws:s3:::$$CE_S3_BUCKET/*"]
+            }
+          ]
+        }
+        EOF
+        cat >/tmp/ce-recon.json <<EOF
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": ["s3:GetObject", "s3:ListBucket", "s3:GetBucketLocation", "s3:GetObjectVersion"],
+              "Resource": ["arn:aws:s3:::$$CE_S3_BUCKET", "arn:aws:s3:::$$CE_S3_BUCKET/*"]
+            }
+          ]
+        }
+        EOF
+        mc admin policy create local ce-app /tmp/ce-app.json || true
+        mc admin policy create local ce-recon /tmp/ce-recon.json || true
+        mc admin user add local "$$CE_S3_ACCESS_KEY" "$$CE_S3_SECRET_KEY" || true
+        mc admin user add local "$$CE_S3_RECON_ACCESS_KEY" "$$CE_S3_RECON_SECRET_KEY" || true
+        mc admin policy attach local ce-app --user "$$CE_S3_ACCESS_KEY" || true
+        mc admin policy attach local ce-recon --user "$$CE_S3_RECON_ACCESS_KEY" || true
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CE_STACK_OBJECT_STORE_IMAGE: "1"
+    environment:
+      CE_OBJECT_STORE_KIND: s3
+      CE_S3_ENDPOINT: http://minio:9000
+      CE_S3_BUCKET: ${CE_S3_BUCKET:?set CE_S3_BUCKET locally}
+      CE_S3_ACCESS_KEY: ${CE_S3_ACCESS_KEY:?set CE_S3_ACCESS_KEY locally}
+      CE_S3_SECRET_KEY: ${CE_S3_SECRET_KEY:?set CE_S3_SECRET_KEY locally}
+      CE_S3_REGION: ${CE_S3_REGION:-us-east-1}
+      CE_S3_FORCE_PATH_STYLE: "true"
+      CE_SOURCE_STORAGE_ROOT: /data/source-storage
+    volumes:
+      # Slim local root for legacy domain paths — not the governed object-bytes store.
+      - stack-source-local:/data/source-storage
+      - stack-domain-runtimes:/data/domain-runtimes
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CE_STACK_OBJECT_STORE_IMAGE: "1"
+    environment:
+      CE_OBJECT_STORE_KIND: s3
+      CE_S3_ENDPOINT: http://minio:9000
+      CE_S3_BUCKET: ${CE_S3_BUCKET:?set CE_S3_BUCKET locally}
+      CE_S3_ACCESS_KEY: ${CE_S3_ACCESS_KEY:?set CE_S3_ACCESS_KEY locally}
+      CE_S3_SECRET_KEY: ${CE_S3_SECRET_KEY:?set CE_S3_SECRET_KEY locally}
+      CE_S3_REGION: ${CE_S3_REGION:-us-east-1}
+      CE_S3_FORCE_PATH_STYLE: "true"
+      CE_SOURCE_STORAGE_ROOT: /data/source-storage
+    volumes:
+      - stack-source-local:/data/source-storage
+      - stack-domain-runtimes:/data/domain-runtimes
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+
+volumes:
+  stack-minio-data:
+  stack-source-local:

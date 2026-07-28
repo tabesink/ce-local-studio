@@ -272,6 +272,33 @@ def test_get_document_content_serves_pdf_ranges_from_object_store(
     assert exc_info.value.code == "range_not_satisfiable"
 
 
+def test_get_document_content_missing_object_is_safe_503(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """AE3: missing referenced object fails closed without leaking keys."""
+    source = _source()
+    source.original_object_key = "obj_missing_referenced_key_zzzz"
+    source.original_size_bytes = 12
+    settings = Settings(
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'docs-missing.db'}",
+        testing=True,
+        source_storage_root=str(tmp_path / "source-root"),
+    )
+    monkeypatch.setattr(
+        documents_module,
+        "_resolve_library_source",
+        lambda *_args, **_kwargs: (source, _domain()),
+    )
+    with pytest.raises(DocumentError) as exc_info:
+        get_document_content(_ScalarSession(), settings, source.public_ref)
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.code == "document_content_unavailable"
+    body = f"{exc_info.value.code} {exc_info.value.message}"
+    assert "obj_missing" not in body
+    assert source.original_object_key not in body
+
+
 def test_get_document_content_rejects_non_pdf_original(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

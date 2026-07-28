@@ -1,7 +1,8 @@
 # Compose Stack Operator Runbook (Development Matrix)
 
 **Altitude:** local Compose / development matrix only.  
-**Not** TLS, `testing=false` HTTPS, production HA, production object-store, or P12-05 stream-drain evidence.  
+**Not** TLS, `testing=false` HTTPS, production HA, or P12-05 stream-drain evidence.  
+Local-production MinIO object store: opt-in `compose.stack.minio.yml` (P10-04).  
 Production incident/HA recovery: P12-04 / P12-08.
 
 ## Boot order
@@ -10,8 +11,11 @@ Production incident/HA recovery: P12-04 / P12-08.
 2. `migrate` (`python -m context_engine.migrate_release`) completed — Path 1 preflight accepts only empty DB or exact current catalog/head, then upgrades and re-verifies  
 3. `bootstrap` (insert-only admin; `CE_ADMIN_*` only here) completed  
 4. `api` `/health/ready` → `{status:ready}`  
-5. `worker` internal readiness (DB + exact Alembic head + catalog match + filesystem object-store) then claim loop; Compose `healthy` = heartbeat after ready  
+5. `worker` internal readiness (DB + exact Alembic head + catalog match + object-store probe) then claim loop; Compose `healthy` = heartbeat after ready  
 6. `frontend` `/login` healthy (not BFF trust proof)
+
+**Default profile** uses filesystem object store (`CE_SOURCE_STORAGE_ROOT` / `stack-source-storage`).  
+**MinIO profile** (opt-in): after postgres/migrate/bootstrap, `minio` healthy → `minio-init` completed → api/worker with `CE_OBJECT_STORE_KIND=s3`.
 
 ### Migrate refuse codes (Path 1)
 
@@ -32,16 +36,27 @@ cd app
 docker compose --env-file .env.stack.local -f compose.stack.yml up --build -d
 ```
 
-Recreate `.env.stack.local` from `.env.stack.example` for the ingress-wired HTTP profile (`CONTEXT_ENGINE_TESTING=true` + full `CE_*`).
+**MinIO local-production overlay (P10-04; not default CI):**
+
+```bash
+cd app
+docker compose --env-file .env.stack.local \
+  -f compose.stack.yml -f compose.stack.minio.yml up --build -d
+```
+
+Recreate `.env.stack.local` from `.env.stack.example` for the ingress-wired HTTP profile (`CONTEXT_ENGINE_TESTING=true` + full `CE_*`). MinIO overlay also requires `MINIO_ROOT_*`, `CE_S3_*`, and `CE_S3_RECON_*` (recon keys stay off api/worker).
 
 ## Readiness probes
 
 | Probe | Meaning |
 | --- | --- |
 | `GET /health/live` | Process up only |
-| `GET /health/ready` | DB + schema head + catalog match + enabled admin + filesystem store |
+| `GET /health/ready` (default) | DB + schema head + catalog match + enabled admin + filesystem store put+delete |
+| `GET /health/ready` (MinIO overlay) | Same aggregate, but object-store probe uses S3 adapter against MinIO |
 | Worker Compose `healthy` | Heartbeat file fresh **after** internal worker readiness |
 | Worker claim-ready | In-process gate before first claim (not the heartbeat alone) |
+
+Ready proves **capability** (ephemeral put+delete), not referential integrity. P12-04 recon is a separate gate.
 
 ## Smokes
 
@@ -92,7 +107,8 @@ This drill is single-worker Compose-matrix reclaim — not P12-04 HA/incident re
 | --- | --- |
 | TLS / `testing=false` HTTPS / deployed API denial | P12 |
 | Deployed ingress stream-drain | P12-05 |
-| Production / S3 object-store readiness | P12 |
+| Cloud AWS-only / KMS / HA object-store | P12-04 / P12-08 |
+| Combined live + MinIO three-file stack matrix | P12-04 |
 | Production HA / backup / incident drills | P12-04 / P12-08 |
 | Browser CSRF product fix | P9-05 residual |
 | Completed synthesis without live provider | needs credentials / later proof |

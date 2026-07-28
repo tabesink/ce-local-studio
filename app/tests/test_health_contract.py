@@ -181,7 +181,7 @@ def test_readiness_bootstrap_incomplete_without_enabled_administrator() -> None:
 def test_readiness_object_store_unavailable_when_probe_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     settings = Settings(testing=True, source_storage_root=str(tmp_path / "source-storage"))
 
-    def _fail(_root: object) -> None:
+    def _fail(_settings: object) -> None:
         raise ObjectStorageError("Object unavailable.")
 
     monkeypatch.setattr(readiness_module, "probe_object_store", _fail)
@@ -217,7 +217,7 @@ def test_ready_http_object_store_failure_is_safe_503(tmp_path: Path, monkeypatch
         create_user(db, "store-admin@example.test", "Password123!", role=ROLE_ADMINISTRATOR)
         db.commit()
 
-    def _fail(_root: object) -> None:
+    def _fail(_settings: object) -> None:
         raise ObjectStorageError("Object unavailable.")
 
     monkeypatch.setattr(readiness_module, "probe_object_store", _fail)

@@ -61,3 +61,7 @@ tests/.pytest-tmp/
 *.pyc
 *.sqlite3
 *.egg-info/
+
+# P10-04 / P12-04 operator object-store export manifests (secret-class)
+*.object-store-export.json
+**/object-store-exports/

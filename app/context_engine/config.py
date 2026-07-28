@@ -80,6 +80,13 @@ class Settings:
     )
     domain_lifecycle_lease_seconds: int = field(default_factory=lambda: _env_int("CE_DOMAIN_LIFECYCLE_LEASE_SECONDS", 60))
     source_storage_root: str = field(default_factory=lambda: _env("CE_SOURCE_STORAGE_ROOT", ".data/source-storage") or ".data/source-storage")
+    object_store_kind: str = field(default_factory=lambda: _env("CE_OBJECT_STORE_KIND", "filesystem") or "filesystem")
+    s3_endpoint: str | None = field(default_factory=lambda: _env("CE_S3_ENDPOINT"))
+    s3_bucket: str | None = field(default_factory=lambda: _env("CE_S3_BUCKET"))
+    s3_access_key: str | None = field(default_factory=lambda: _env("CE_S3_ACCESS_KEY"), repr=False)
+    s3_secret_key: str | None = field(default_factory=lambda: _env("CE_S3_SECRET_KEY"), repr=False)
+    s3_region: str = field(default_factory=lambda: _env("CE_S3_REGION", "us-east-1") or "us-east-1")
+    s3_force_path_style: bool = field(default_factory=lambda: _env_bool("CE_S3_FORCE_PATH_STYLE", True))
     domain_storage_limit_bytes: int = field(default_factory=lambda: _env_int("CE_DOMAIN_STORAGE_LIMIT_BYTES", 5 * 1024 * 1024 * 1024))
     source_prep_worker_id: str = field(default_factory=lambda: _env("CE_SOURCE_PREP_WORKER_ID", "source-prep-worker") or "source-prep-worker")
     source_prep_lease_seconds: int = field(default_factory=lambda: _env_int("CE_SOURCE_PREP_LEASE_SECONDS", 180))
@@ -141,6 +148,19 @@ class Settings:
             raise ValueError("login_throttle_max_failures must be positive.")
         if self.login_throttle_block_seconds <= 0:
             raise ValueError("login_throttle_block_seconds must be positive.")
+        kind = self.object_store_kind.strip().lower()
+        if kind not in {"filesystem", "s3"}:
+            raise ValueError("object_store_kind must be one of 'filesystem' or 's3'.")
+        object.__setattr__(self, "object_store_kind", kind)
+        if kind == "s3":
+            if not (self.s3_endpoint or "").strip():
+                raise ValueError("s3_endpoint is required when object_store_kind='s3'.")
+            if not (self.s3_bucket or "").strip():
+                raise ValueError("s3_bucket is required when object_store_kind='s3'.")
+            if not (self.s3_access_key or "").strip():
+                raise ValueError("s3_access_key is required when object_store_kind='s3'.")
+            if not (self.s3_secret_key or "").strip():
+                raise ValueError("s3_secret_key is required when object_store_kind='s3'.")
         if self.domain_storage_limit_bytes <= 0:
             raise ValueError("domain_storage_limit_bytes must be positive.")
         if self.source_prep_lease_seconds <= 0:
