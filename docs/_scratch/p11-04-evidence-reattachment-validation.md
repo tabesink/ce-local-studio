@@ -2,80 +2,88 @@
 
 Date: 2026-07-28
 
-Status: **pending product-owner review** — not APPROVED; not FAILED/DEFER.  
-U2+ contract amendment and UI must not start until Status is **APPROVED**.
+Status: **DEFER** — not APPROVED.  
+Umbrella plan U2+ contract amendment and suggestion UI must not start.  
+Master-build-plan tracker status for this task is **`DEFERRED`** (see sign-off and `docs/plans/2026-07-28-001-feat-p11-04-evidence-attach-deferral-plan.md`).
 
-Authority: `docs/master-build-plan.md` P11-04; `docs/plans/2026-07-22-002-feat-lean-agent-shell-umbrella-plan.md` (R6–R13, KTD1–KTD2); `docs/prd.md#closed-phase-1-chat-capability-manifest`.
+Authority: `docs/master-build-plan.md` P11-04; `docs/plans/2026-07-22-002-feat-lean-agent-shell-umbrella-plan.md` (R6–R13, KTD1–KTD2); `docs/plans/2026-07-28-001-feat-p11-04-evidence-attach-deferral-plan.md`; `docs/prd.md#closed-phase-1-chat-capability-manifest`.
 
-## Decision under review
+## Decision
 
-Whether Phase 1 should add **Evidence suggest-and-confirm carry-forward**: after a completed grounded turn with eligible Evidence, offer unconfirmed composer suggestions that become ordered attached refs only after an explicit member accept; dismissals are tab-local compose-epoch only.
+Phase 1 will **not** add Evidence suggest-and-confirm carry-forward or prioritize Evidence attach-chip unlock.
+Members rely on per-turn domain RAG until reopen criteria are met.
+Sealed baseline (P7/P9/P11-01..03) stays Done.
 
-### Recommended APPROVED package (if the three axes below are satisfied)
+### Deferred package (not shipping)
 
-1. Treat suggestions as a **confirm-gated UI over existing FR-07 / M-09** governed-ref attach authority — not a new competing closed-capability-manifest bullet, and not a tool/memory/fat-agent expansion (plan KTD2).
-2. Unconfirmed suggestions use a **tokenless or mint-on-accept** projection; do not reuse eager `POST /composer-refs:discover` minting for browse/refetch (plan KTD3).
-3. Candidate set defaults to **eligible Evidence on the latest completed grounded turn** for the selected next-turn domain; ranking by citation/display order; hard cap **5**; multi-accept order = member accept order (plan KTD4 / KTD10).
-4. Dismissals are **compose-epoch tab memory only** — never server, localStorage, sessionStorage, or cross-tab sync (R12 / KTD6).
-5. Suggestion loading/empty/failure **never blocks** draft or send without suggestions (R11).
-6. **References picker unlock** remains a separate residual unless this decision explicitly bundles it (KTD5).
-7. Sealed SSE, grounded-terminal, and Evidence/Refs/Source workbench acceptance **remain independently Done**; suggestions must not reopen or weaken that baseline.
+The former recommended APPROVED package (confirm-gated UI over FR-07/M-09; tokenless/mint-on-accept; latest-turn cap 5; compose-epoch dismissals; References residual; sealed baseline intact) remains the candidate if/when reopened — it is **not** authorized for contract or UI work now.
 
-### Rejected alternatives (for the APPROVED path)
+### Rejected for now
 
+- Shipping suggestion UI or inventing public DTO fields without APPROVED reopen.
+- Treating domain-switch carry-forward as the primary job for Evidence attach.
 - Auto-attach / ambient memory / second chat-RAG store.
-- Shipping suggestion UI or inventing public DTO fields before this decision is APPROVED.
-- Treating the lean-agent-shell Product Contract alone as HTTP/DTO authority without amending versioned catalogs.
 - Weakening sealed-chat acceptance to make room for suggestions.
 
-### FAILED / DEFER path (if any required axis fails)
+### DEFER path (executed)
 
-- Leave P11-04 deferred/BLOCKED.
+- Set tracker P11-04 to **`DEFERRED`** (not DONE; not pending BLOCKED).
 - Do not amend HTTP/DTO/interaction/component/accessibility contracts for suggestions.
-- Do not unlock suggestion UI.
+- Do not unlock suggestion UI or prioritize Evidence attach chips (References / inspector pin).
 - Sealed baseline (P7/P9/P11-01..03) stays Done.
+- Server composer-ref plumbing may remain dormant behind unavailable browser attach.
 
 ---
 
 ## Required evidence axes
 
-All three axes must be filled before Status can become **APPROVED**.  
-Partial fill → Status stays pending or becomes **FAILED/DEFER**.
+All three axes are addressed for this **DEFER** outcome.
 
 ### Axis 1 — Repeated Evidence reattachment need
 
 **Question:** Is there a real, repeated need for members to reattach prior-turn Evidence into a later compose that justifies the contract and UX risk?
 
-**PO response:** _(fill)_
+**PO response:** No — not observed. Hypothesis only; not worth shipping attach/suggest UX yet.
 
-**Evidence / notes:** _(observation, demo transcript, explicit PO statement, or “hypothesis not worth the risk”)_
+**Evidence / notes:** Session brainstorm (2026-07-28): “we haven’t hit this yet; it’s a hypothesis.” Per-turn domain RAG already re-retrieves; pin/suggest is convenience, not a Phase 1 prerequisite.
 
 ### Axis 2 — Comprehension of explicit accept / dismiss
 
 **Question:** Does the product owner accept that a suggestion is **not** an ordered composer ref until the member explicitly accepts; that dismiss is epoch-local and non-durable; and that ignore/dismiss must leave draft/send fully usable?
 
-**PO response:** _(fill — yes/no + any conditions)_
+**PO response:** Yes — those rules stand if/when the feature is reopened. No suggestion UI ships under DEFER, so there is no surface that can violate them.
 
-**Evidence / notes:** _(fill)_
+**Evidence / notes:** Confirmed in brainstorm; deferred package retains suggest ≠ attach and epoch-local dismiss.
 
 ### Axis 3 — No pressure to weaken the sealed-chat baseline
 
 **Question:** Will suggestions remain a dependent convenience that cannot block or reopen sealed SSE, grounded-terminal, or workbench acceptance? If validation fails, does the product owner accept leaving suggestions unimplemented while the baseline stays Done?
 
-**PO response:** _(fill — yes/no)_
+**PO response:** Yes.
 
-**Evidence / notes:** _(fill)_
+**Evidence / notes:** Explicit DEFER of all Evidence attach UX; sealed baseline remains independently Done; reopen requires observed pain and/or grounding-quality gap (retrieval-first), not schedule pressure.
 
 ---
 
 ## Manifest disposition (required when APPROVED)
 
-Per plan KTD2, choose one:
+N/A — Status is **DEFER**, not APPROVED. No closed-capability-manifest change.
 
-- [ ] **UI over FR-07/M-09** (recommended) — suggestions are confirm-gated composer UI over existing governed-ref attach; no new closed-capability bullet; optional one-line PRD clarify only if non-expansive.
-- [ ] **Named capability-manifest bullet** — requires coordinated `docs/prd.md` amend that still forbids tools/plugins/memory/fat-agent surfaces and preserves the sole-manifest rule.
+- [ ] **UI over FR-07/M-09** (recommended) — unchecked; not selected under DEFER.
+- [ ] **Named capability-manifest bullet** — unchecked; not selected under DEFER.
 
-**PO selection:** _(fill)_
+**PO selection:** N/A (DEFER)
+
+---
+
+## Reopen criteria
+
+Resume only with a fresh **APPROVED** validation (or successor brief) when either:
+
+1. **Observed pain** — members re-ask / copy excerpts / cannot pin a prior citation; or
+2. **Grounding-quality gap** — same-domain retrieval repeatedly misses a passage already shown as Evidence, and retrieval/ranking fixes are evaluated before pin UX.
+
+Domain change alone is not a reopen trigger for Evidence carry-forward.
 
 ---
 
@@ -83,10 +91,11 @@ Per plan KTD2, choose one:
 
 | Field | Value |
 | --- | --- |
-| Status | `pending product-owner review` |
-| Decided by | _(name / role)_ |
-| Date | _(YYYY-MM-DD)_ |
-| Outcome | APPROVED / FAILED / DEFER |
+| Status | `DEFER` |
+| Decided by | Product owner (session confirmation of brainstorm + plan scoping) |
+| Date | `2026-07-28` |
+| Outcome | `DEFER` |
+| Tracker status | `DEFERRED` |
+| Plan | `docs/plans/2026-07-28-001-feat-p11-04-evidence-attach-deferral-plan.md` |
 
-When Status becomes **APPROVED**, cite this file at the top of `docs/_scratch/p11-04-evidence-reattachment-inventory.md` and proceed to plan U2.  
-When Status becomes **FAILED** or **DEFER**, record U6 deferral evidence only — no contract or UI suggestion work.
+When Status is **DEFER**, record deferral evidence only — no contract or UI suggestion work. Umbrella U2–U5 remain unstarted until reopen.
