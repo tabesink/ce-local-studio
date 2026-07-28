@@ -66,6 +66,13 @@ class Settings:
     domain_runtime_controller_kind: str = field(default_factory=lambda: _env("CE_DOMAIN_RUNTIME_CONTROLLER_KIND", "docker") or "docker")
     domain_controller_command: str | None = field(default_factory=lambda: _env("CE_DOMAIN_CONTROLLER_COMMAND"))
     domain_controller_timeout_seconds: int = field(default_factory=lambda: _env_int("CE_DOMAIN_CONTROLLER_TIMEOUT_SECONDS", 30))
+    domain_controller_image: str = field(
+        default_factory=lambda: _env("CE_DOMAIN_CONTROLLER_IMAGE", "alpine:3.20") or "alpine:3.20"
+    )
+    domain_controller_network: str = field(
+        default_factory=lambda: _env("CE_DOMAIN_CONTROLLER_NETWORK", "ce-domain-runtimes") or "ce-domain-runtimes"
+    )
+    domain_lightrag_port: int = field(default_factory=lambda: _env_int("CE_DOMAIN_LIGHTRAG_PORT", 9621))
     domain_delete_worker_id: str = field(default_factory=lambda: _env("CE_DOMAIN_DELETE_WORKER_ID", "domain-delete-worker") or "domain-delete-worker")
     domain_delete_lease_seconds: int = field(default_factory=lambda: _env_int("CE_DOMAIN_DELETE_LEASE_SECONDS", 60))
     domain_lifecycle_worker_id: str = field(
