@@ -71,8 +71,11 @@ def _domain() -> Domain:
     )
 
 
-def _source(*, content_type: str = "application/pdf") -> SourceDocument:
-    return SourceDocument(
+def _source(*, content_type: str = "application/pdf", preview_ready: bool | None = None) -> SourceDocument:
+    from context_engine.models import SOURCE_PREVIEW_STATE_READY
+
+    ready = preview_ready if preview_ready is not None else content_type == "application/pdf"
+    source = SourceDocument(
         id=str(uuid4()),
         public_ref=new_document_public_ref(),
         domain_id="domain-manuals",
@@ -90,6 +93,18 @@ def _source(*, content_type: str = "application/pdf") -> SourceDocument:
         created_at=datetime(2026, 7, 25, 12, 0, 0),
         updated_at=datetime(2026, 7, 25, 12, 5, 0),
     )
+    if ready:
+        source.preview_state = SOURCE_PREVIEW_STATE_READY
+        source.preview_generation = 1
+        source.preview_version = 1
+        source.preview_object_key = source.original_object_key
+        source.preview_sha256 = source.original_sha256
+        source.preview_size_bytes = source.original_size_bytes
+        source.preview_page_count = 24
+        source.preview_reuses_original = True
+        source.preview_renderer_version = "ce-preview-pdf-passthrough-v1"
+        source.preview_source_sha256 = source.original_sha256
+    return source
 
 
 def test_safe_document_summary_matches_closed_dto_without_private_fields() -> None:
@@ -226,6 +241,9 @@ def test_get_document_content_serves_pdf_ranges_from_object_store(
     source = _source()
     source.original_object_key = key
     source.original_size_bytes = len(pdf_bytes)
+    source.preview_object_key = key
+    source.preview_size_bytes = len(pdf_bytes)
+    source.preview_sha256 = source.original_sha256
     settings = Settings(
         database_url=f"sqlite+pysqlite:///{tmp_path / 'docs-content.db'}",
         testing=True,
@@ -280,6 +298,8 @@ def test_get_document_content_missing_object_is_safe_503(
     source = _source()
     source.original_object_key = "obj_missing_referenced_key_zzzz"
     source.original_size_bytes = 12
+    source.preview_object_key = "obj_missing_referenced_key_zzzz"
+    source.preview_size_bytes = 12
     settings = Settings(
         database_url=f"sqlite+pysqlite:///{tmp_path / 'docs-missing.db'}",
         testing=True,
@@ -752,9 +772,16 @@ def test_get_evidence_location_non_pdf_preview_unavailable(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    from context_engine.models import SOURCE_PREVIEW_STATE_NOT_REQUESTED
+
     domain, source, block, conversation, turn, evidence = _location_graph()
     source.content_type = "text/markdown"
     source.original_filename = "notes.md"
+    source.preview_state = SOURCE_PREVIEW_STATE_NOT_REQUESTED
+    source.preview_generation = 0
+    source.preview_version = 0
+    source.preview_object_key = None
+    source.preview_page_count = None
     settings = Settings(
         database_url=f"sqlite+pysqlite:///{tmp_path / 'loc-nonpdf.db'}",
         testing=True,

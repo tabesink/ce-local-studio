@@ -34,8 +34,12 @@ from context_engine.services.domains import (
     domain_available,
     safe_member_domain,
 )
-from context_engine.services.evidence import project_persisted_evidence_anchor
+from context_engine.services.evidence import (
+    project_persisted_evidence_anchor,
+    remap_anchor_through_page_map,
+)
 from context_engine.services.indexing import source_has_current_index_identity, source_is_query_eligible
+from context_engine.services.preview import preview_is_ready
 from context_engine.services.sources import (
     SourceStorageError,
     sanitize_original_filename,
@@ -77,12 +81,15 @@ class DocumentContentResult:
 
 
 def preview_kind_for_source(source: SourceDocument) -> str:
-    return "pdf" if source.content_type == PDF_CONTENT_TYPE else "unavailable"
+    return "pdf" if preview_is_ready(source) else "unavailable"
 
 
 def preview_etag(source: SourceDocument) -> str:
     """Strong opaque ETag derived from governed preview identity (never the raw object key)."""
-    material = f"ce-preview:{source.original_sha256}:{source.version}:{source.original_size_bytes}"
+    checksum = source.preview_sha256 or source.original_sha256
+    version = int(source.preview_version or 0)
+    size = int(source.preview_size_bytes or source.original_size_bytes)
+    material = f"ce-preview:{checksum}:{version}:{size}"
     digest = hashlib.sha256(material.encode("utf-8")).hexdigest()
     return f'"{digest}"'
 
@@ -98,6 +105,8 @@ def content_disposition_for_label(label: str) -> str:
 
 
 def document_page_count(db: Session, source: SourceDocument) -> int | None:
+    if preview_is_ready(source) and source.preview_page_count is not None and int(source.preview_page_count) >= 1:
+        return int(source.preview_page_count)
     maximum = db.scalar(
         select(func.max(func.coalesce(SourceBlock.page_end, SourceBlock.page_start))).where(
             SourceBlock.source_document_id == source.id
@@ -370,22 +379,17 @@ def get_document_content(
     if_range: str | None = None,
 ) -> DocumentContentResult:
     source, _domain = _resolve_library_source(db, settings, document_ref)
-    if preview_kind_for_source(source) != "pdf":
+    if preview_kind_for_source(source) != "pdf" or not source.preview_object_key:
         raise DocumentError(
             409,
             "document_preview_unavailable",
             "A governed PDF preview is not available for this document.",
         )
-    if not source.original_object_key:
-        raise DocumentError(
-            503,
-            "document_content_unavailable",
-            "Document content is temporarily unavailable.",
-        )
 
     etag = preview_etag(source)
     disposition = content_disposition_for_label(source.original_filename)
-    total_size = int(source.original_size_bytes)
+    total_size = int(source.preview_size_bytes or source.original_size_bytes)
+    preview_key = source.preview_object_key
     effective_range = range_header
     if if_range is not None and if_range.strip() and if_range.strip() != etag:
         # Stale/mismatched If-Range → ignore Range and return full entity (HTTP semantics).
@@ -395,7 +399,7 @@ def get_document_content(
     storage = storage_from_settings(settings)
     try:
         if byte_range is None:
-            body = storage.store.get(source.original_object_key)
+            body = storage.store.get(preview_key)
             return DocumentContentResult(
                 status_code=200,
                 body=body,
@@ -404,7 +408,7 @@ def get_document_content(
                 content_disposition=disposition,
             )
         start, end = byte_range
-        body = storage.store.get_range(source.original_object_key, start, end)
+        body = storage.store.get_range(preview_key, start, end)
         return DocumentContentResult(
             status_code=206,
             body=body,
@@ -477,6 +481,20 @@ def get_evidence_location(
         image_pages = {int(page) for page in pages if page is not None}
 
     anchor = project_persisted_evidence_anchor(block, image_pages=image_pages)
+    page_map: dict[str, Any] | None = None
+    if source.preview_page_map_object_key:
+        try:
+            raw_map = storage_from_settings(settings).store.get(source.preview_page_map_object_key)
+            loaded = json.loads(raw_map.decode("utf-8"))
+            if isinstance(loaded, dict):
+                page_map = loaded
+        except (ObjectStorageError, SourceStorageError, OSError, UnicodeDecodeError, json.JSONDecodeError):
+            page_map = None
+    anchor = remap_anchor_through_page_map(
+        anchor,
+        page_map=page_map,
+        page_count=document_page_count(db, source),
+    )
     if evidence_ref_row.citation_label is None or anchor is None:
         raise DocumentError(410, "evidence_unavailable", "Evidence is no longer available.")
 

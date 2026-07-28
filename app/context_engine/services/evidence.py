@@ -411,6 +411,76 @@ def project_persisted_evidence_anchor(
     return anchor
 
 
+def remap_anchor_through_page_map(
+    anchor: dict[str, object] | None,
+    *,
+    page_map: dict[str, object] | None,
+    page_count: int | None,
+) -> dict[str, object] | None:
+    """Reproject a persisted anchor through the committed preview page map.
+
+    Identity maps retain region/page when in range. Non-identity maps keep page
+    only when the page number is within the committed preview; unprovable exact
+    regions degrade to section/page rather than fabricating coordinates.
+    """
+    if anchor is None:
+        return None
+    resolved_count = int(page_count or 0)
+    if resolved_count < 1:
+        return None
+
+    page_number = anchor.get("pageNumber")
+    if not isinstance(page_number, int) or page_number < 1:
+        return {
+            "pageNumber": 1,
+            "region": None,
+            "fallback": "page",
+        }
+
+    if page_number > resolved_count:
+        # Page unprovable in current preview — open at page 1 without guessing.
+        return {
+            "pageNumber": 1,
+            "region": None,
+            "fallback": "page",
+        }
+
+    section_label = anchor.get("sectionLabel")
+    if not isinstance(section_label, str) or not section_label.strip():
+        section_label = None
+
+    # Missing map (or identity page entries) retain the persisted projection.
+    # Explicit non-identity maps degrade unproven regions.
+    identity = True
+    if isinstance(page_map, dict):
+        pages = page_map.get("pages")
+        if isinstance(pages, list) and pages:
+            identity = False
+            if 0 < page_number <= len(pages):
+                entry = pages[page_number - 1]
+                if isinstance(entry, dict) and entry.get("identity") is True:
+                    identity = True
+
+    region = anchor.get("region") if identity else None
+    if isinstance(region, dict) and identity:
+        fallback = "region"
+    elif section_label:
+        fallback = "section"
+        region = None
+    else:
+        fallback = "page"
+        region = None
+
+    out: dict[str, object] = {
+        "pageNumber": page_number,
+        "region": region if isinstance(region, dict) else None,
+        "fallback": fallback,
+    }
+    if section_label:
+        out["sectionLabel"] = section_label
+    return out
+
+
 def _evidence_anchor(
     block: SourceBlock,
     *,
