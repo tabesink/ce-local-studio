@@ -106,3 +106,15 @@ class FilesystemObjectStore:
 
 def object_store_from_root(root: str | Path) -> FilesystemObjectStore:
     return FilesystemObjectStore(Path(root) / "objects")
+
+
+def object_store_from_settings(settings: object) -> ObjectStorage:
+    """Compose the product object store from Settings (filesystem or S3)."""
+    kind = str(getattr(settings, "object_store_kind", "filesystem")).strip().lower()
+    if kind == "filesystem":
+        return object_store_from_root(getattr(settings, "source_storage_root"))
+    if kind == "s3":
+        from context_engine.adapters.s3_object_store import S3ObjectStore
+
+        return S3ObjectStore.from_settings(settings)  # type: ignore[arg-type]
+    raise ValueError("object_store_kind must be one of 'filesystem' or 's3'.")
