@@ -1,0 +1,3 @@
+Governed preview plain text fixture.
+
+Line two confirms deterministic markdown and text checksums for identical retries.

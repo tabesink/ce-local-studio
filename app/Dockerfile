@@ -3,6 +3,7 @@ FROM python:3.12-slim AS runtime
 ARG CE_STACK_LIVE_IMAGE=0
 ARG CE_STACK_OBJECT_STORE_IMAGE=0
 ARG CE_STACK_PARSERS_IMAGE=0
+ARG CE_STACK_PREVIEW_IMAGE=0
 
 ENV PIP_NO_CACHE_DIR=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -20,6 +21,7 @@ COPY vendor ./vendor
 # Live overlay (CE_STACK_LIVE_IMAGE=1): Docker CLI + LightRAG runtime + embedding extras.
 # MinIO overlay (CE_STACK_OBJECT_STORE_IMAGE=1): boto3 object-store extra.
 # Parsers overlay (CE_STACK_PARSERS_IMAGE=1): Docling/Reducto + synthesis extras for API/worker.
+# Preview overlay (CE_STACK_PREVIEW_IMAGE=1): DOCX governed-preview renderer extra.
 RUN python -m pip install --no-cache-dir uv==0.8.9 \
     && if [ "$CE_STACK_LIVE_IMAGE" = "1" ]; then \
          apt-get update \
@@ -35,6 +37,9 @@ RUN python -m pip install --no-cache-dir uv==0.8.9 \
        fi \
     && if [ "$CE_STACK_PARSERS_IMAGE" = "1" ]; then \
          EXTRA_ARGS="$EXTRA_ARGS --extra parsers --extra synthesis"; \
+       fi \
+    && if [ "$CE_STACK_PREVIEW_IMAGE" = "1" ]; then \
+         EXTRA_ARGS="$EXTRA_ARGS --extra preview-renderer"; \
        fi \
     && uv sync --frozen --no-dev $EXTRA_ARGS
 

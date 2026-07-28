@@ -504,6 +504,9 @@ parsers = [
     { name = "httpx" },
     { name = "reductoai" },
 ]
+preview-renderer = [
+    { name = "python-docx" },
+]
 synthesis = [
     { name = "openai" },
 ]
@@ -533,6 +536,7 @@ requires-dist = [
     { name = "openai", marker = "extra == 'synthesis'", specifier = ">=1.40.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.2.0" },
+    { name = "python-docx", marker = "extra == 'preview-renderer'", specifier = ">=1.1.0" },
     { name = "python-dotenv", marker = "extra == 'lightrag-runtime'", specifier = ">=1.0.0" },
     { name = "reductoai", marker = "extra == 'parsers'", specifier = ">=0.1.0" },
     { name = "ruff", marker = "extra == 'test'", specifier = ">=0.5.0" },
@@ -540,7 +544,7 @@ requires-dist = [
     { name = "tiktoken", marker = "extra == 'lightrag-runtime'", specifier = ">=0.7.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
 ]
-provides-extras = ["lightrag-runtime", "object-store", "parsers", "synthesis", "embeddings", "test"]
+provides-extras = ["lightrag-runtime", "object-store", "parsers", "synthesis", "embeddings", "preview-renderer", "test"]
 
 [[package]]
 name = "cryptography"
