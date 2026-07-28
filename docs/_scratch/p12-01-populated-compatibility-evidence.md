@@ -66,13 +66,13 @@ Mutation-zero proof: pre/post `(alembic_revision, catalog fingerprint)` equality
 
 ## Operator altitude
 
-Compose/dev matrix Path 1 gate only. Not backup/restore drills (P12-04), not Path 2 supported upgrade, not production HA/TLS.
+Compose/dev matrix Path 1 gate only. Backup/restore drills cite-closed under P12-04. Not Path 2 supported upgrade, not production HA/TLS.
 
 ## Residuals
 
 | Residual | Owner |
 | --- | --- |
 | Path 2 supported populated upgrade / contraction | deferred product decision |
-| Backup/restore, image rollback, failed-worker incident drills | P12-04 |
+| Backup/restore, image rollback, failed-worker incident drills | Cite-closed under P12-04 (`docs/_scratch/p12-04-backup-restore-evidence.md`); Compose live digests residual |
 | Full suite / contract snapshot convergence | P12-02 |
 | Shared disposable-PG harness extract | optional follow-up |

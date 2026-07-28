@@ -111,7 +111,7 @@ P5-03 closure evidence (2026-07-25): `docs/_scratch/p5-03-index-eligibility-inve
 
 P5 was reopened on 2026-07-28 after comparing the current implementation with the approved per-domain runtime contract and the read-only legacy Context Engine reference. P5-01 through P5-03 remain valid proof of the PostgreSQL state machine, handoff, local adapter, and Evidence boundary, but they do not prove the production runtime: Compose selects local stubs, the Docker controller launches a placeholder container, and the native client uses synthetic providers behind a process-wide lock. P5-04 must adapt the legacy real-runtime patterns without restoring its competing JSON manifest, Redis/RQ locking, public runtime URLs, direct vendor upload authority, or heuristic Evidence mapping.
 
-P5-04 closure evidence (2026-07-28): `docs/_scratch/p5-04-lightrag-real-runtime-inventory.md` and `docs/_scratch/p5-04-lightrag-real-runtime-evidence.md`. Production path is one private vendored LightRAG container per Knowledge Domain (`docker` controller + `native` HTTP client via CE shim), sealed embedding bootstrap, worker running/healthy submit gate, and opt-in `compose.stack.live.yml`. Live lane proves submit→ready→schema-v2 retrieve, delete/absence, warm restart, and parallel two-domain isolation with no host-published ports. Default Compose/CI stay `local`/`local`. DRIFT-27 concurrency closed for the production path by per-container isolation; in-process synthetic remains residual/dev only. Residuals: P12-04 rebuild drills, P12-05 ingress SSE, P12-06 SBOM digests, P12-07 capacity/E2E; P10-05 provider packaging closed.
+P5-04 closure evidence (2026-07-28): `docs/_scratch/p5-04-lightrag-real-runtime-inventory.md` and `docs/_scratch/p5-04-lightrag-real-runtime-evidence.md`. Production path is one private vendored LightRAG container per Knowledge Domain (`docker` controller + `native` HTTP client via CE shim), sealed embedding bootstrap, worker running/healthy submit gate, and opt-in `compose.stack.live.yml`. Live lane proves submit→ready→schema-v2 retrieve, delete/absence, warm restart, and parallel two-domain isolation with no host-published ports. Default Compose/CI stay `local`/`local`. DRIFT-27 concurrency closed for the production path by per-container isolation; in-process synthetic remains residual/dev only. Empty-volume rebuild / backup-restore drills cite-closed under P12-04 (`docs/_scratch/p12-04-backup-restore-evidence.md`; Compose live rebuild digests residual). Residuals: P12-05 ingress SSE, P12-06 SBOM digests, P12-07 capacity/E2E; P10-05 provider packaging closed.
 | P4-01 | DONE | P3 | source_documents/preparation_operations schema, opaque public document refs and secure storage adapter |
 | P4-02 | DONE | P4-01 | upload validation, domain deduplication and parser-kind freeze |
 | P4-03 | DONE | P4-02 | Docling/Reducto adapters and canonical blocks/images transaction |
@@ -362,8 +362,9 @@ credential tiers; slim local root; default Compose stays filesystem); readiness
 put+delete through the composed factory; operator
 `stack_object_store_recon.py` verify/export/orphan-warn for P12-04; AE3 missing
 object → `503 document_content_unavailable`. Focused unit/compose-config suites
-green. Residuals: opt-in live MinIO smoke and combined live+MinIO matrix under
-P12-04; cloud/KMS/HA under P12-08.
+green. Opt-in live MinIO smoke and three-file live+MinIO matrix drills cite-closed
+under P12-04 (`docs/_scratch/p12-04-backup-restore-evidence.md`; Compose live
+operator digests residual). Residuals: cloud/KMS/HA under P12-08.
 
 P10-05 closure evidence (2026-07-28):
 `docs/_scratch/p10-05-provider-packaging-inventory.md` and
@@ -374,8 +375,8 @@ LightRAG shim binds sealed OpenAI embeddings (Bedrock/Ollama fail-closed;
 synthetic only with explicit allow); credential-gated
 `provider_staging_smoke.py` refuses without `CE_PROVIDER_STAGING_SMOKE=1`; CI
 proves multi-block marker survival and marker-free discard. No kind labeled
-production-supported without operator live digest. Residuals: live+MinIO matrix
-P12-04; SBOM pins P12-06; browser/capacity P12-07.
+production-supported without operator live digest. Residuals: SBOM pins P12-06;
+browser/capacity P12-07; live+MinIO matrix operator digests under P12-04 residual.
 
 ### P9-P11 - User interface, deployable runtime, and governed context workflows
 
@@ -405,10 +406,10 @@ The 2026-07-28 parser-to-retrieval pipeline review is dispositioned without rest
 
 | Task | Status | Depends on | Deliverable |
 | --- | --- | --- | --- |
-| P12-01 | DONE | P0-P11 | Path 1 unsupported populated-legacy upgrade: fresh-install + catalog preflight/refusal + startup catalog match on PostgreSQL 16 — evidence `docs/_scratch/p12-01-populated-compatibility-evidence.md`; Path 2 contraction and P12-04 backup drills remain |
+| P12-01 | DONE | P0-P11 | Path 1 unsupported populated-legacy upgrade: fresh-install + catalog preflight/refusal + startup catalog match on PostgreSQL 16 — evidence `docs/_scratch/p12-01-populated-compatibility-evidence.md`; Path 2 contraction remains; backup drills cite-closed under P12-04 |
 | P12-02 | DONE | P0-P11 | full backend/frontend/adapter/Docker suite and contract snapshot convergence — evidence `docs/_scratch/p12-02-suite-contract-convergence-evidence.md`; CI `verify-postgresql` + default `scripts/verify.sh` green; Playwright/live Compose smoke remain P12-07 / P10 evidence-owned |
-| P12-03 | DONE | P8-P11 | authz, secret/content leakage, deletion/redaction and adversarial retrieval review at API/service altitude (SQLite gap suite + prior PG credit barriers) — evidence `docs/_scratch/p12-03-adversarial-security-evidence.md`; inventory `docs/_scratch/p12-03-adversarial-security-inventory.md`; ingress TLS/direct-API P12-05; browser/M-11 panel P12-07 |
-| P12-04 | NOT_STARTED | P5-04,P10-04,P10-06,P12-01 | backup/restore, image rollback, failed-worker recovery and incident drills, including MinIO original/preview/derived-object consistency and rebuild/reconciliation of private per-domain LightRAG derivatives — plan `docs/plans/2026-07-28-005-feat-p12-04-backup-restore-drills-plan.md` |
+| P12-03 | DONE | P8-P11 | authz, secret/content leakage, deletion/redaction and adversarial retrieval review at API/service altitude (SQLite gap suite + prior PG credit barriers) — evidence `docs/_scratch/p12-03-adversarial-security-evidence.md`; inventory `docs/_scratch/p12-03-adversarial-security-inventory.md`; ingress TLS/direct-API P12-05; browser/M-11 panel P12-07; redaction/audit-after-backup cite-closed under P12-04 |
+| P12-04 | DONE | P5-04,P10-04,P10-06,P12-01 | backup/restore, image rollback, failed-worker recovery and incident drills, including MinIO original/preview/derived-object consistency and rebuild/reconciliation of private per-domain LightRAG derivatives — plan `docs/plans/2026-07-28-005-feat-p12-04-backup-restore-drills-plan.md`; evidence `docs/_scratch/p12-04-backup-restore-evidence.md`; runbook `docs/operations/backup-restore-incident-runbook.md`; DONE at scripted unit altitude + runbook; residual: opt-in three-file live capture/restore/rebuild matrix operator digests; Path 2 / KMS/HA/RPO-RTO remain P12-08 |
 | P12-05 | NOT_STARTED | P5-04,P7-06,P9,P12-02 | deployed-ingress incremental domain-RAG SSE, reconnect/replay, graceful shutdown and stream-drain proof through the real private LightRAG runtime — plan `docs/plans/2026-07-28-013-feat-p12-05-deployed-ingress-sse-drain-plan.md` |
 | P12-06 | NOT_STARTED | P0,P5-04,P10-04,P10-05,P10-06,P12-02 | immutable artifact manifest with pinned parser/provider/renderer and vendored LightRAG runtime images, MinIO/provider/runtime locks, schema and contract versions, SBOM and provenance — plan `docs/plans/2026-07-28-014-feat-p12-06-immutable-artifact-manifest-plan.md` |
 | P12-07 | NOT_STARTED | P5-04,P9-07,P10-04,P10-05,P10-06,P12-02,P12-03 | accessibility, browser E2E, CSRF product path, two-user cache isolation, real parser→embedding→retrieval→Evidence behavior, governed preview navigation, runtime/provider failure, capacity/isolation, deterministic fixture materialization, and minimum operational-safety evidence — plan `docs/plans/2026-07-28-015-feat-p12-07-browser-e2e-capacity-plan.md` |

@@ -68,7 +68,7 @@ not support.
 | Item | Owner |
 | --- | --- |
 | Operator-recorded live smoke digests elevating a kind to production-supported | operator / matrix update |
-| Combined `live.yml` + `minio.yml` three-file matrix | P12-04 |
+| Combined `live.yml` + `minio.yml` three-file matrix | Cite-closed under P12-04 (`docs/_scratch/p12-04-backup-restore-evidence.md`); live matrix operator digests residual |
 | Immutable SBOM/digest pins for parser/provider/runtime images | P12-06 |
 | Browser/capacity/failure on real pipeline | P12-07 |
 | Bedrock/Ollama production packaging | fail-closed until approved profile + smoke |

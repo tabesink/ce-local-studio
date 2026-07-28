@@ -77,7 +77,7 @@ Result (2026-07-28): `2 passed` — always-on dual-lane skip guard + live submit
 
 | Residual | Owner |
 | --- | --- |
-| Empty-volume rebuild / backup-restore drills | P12-04 |
+| Empty-volume rebuild / backup-restore drills | Cite-closed under P12-04 (`docs/_scratch/p12-04-backup-restore-evidence.md`); Compose live rebuild digests residual |
 | Deployed-ingress SSE through real runtime | P12-05 |
 | SBOM / immutable digest pin for runtime image | P12-06 |
 | Browser E2E / capacity beyond two-domain isolation | P12-07 |

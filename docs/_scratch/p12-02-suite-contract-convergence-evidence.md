@@ -74,7 +74,7 @@ Observed: live compare PASS; adversarial fixtures PASS; generated contract/SSE t
 | SBOM / provenance / immutable release manifest | P12-06 |
 | Broader handwritten response-DTO adoption | DRIFT-01 (vertical slices) |
 | Adversarial security review | P12-03 |
-| Backup/restore drills | P12-04 |
+| Backup/restore drills | Cite-closed under P12-04 (`docs/_scratch/p12-04-backup-restore-evidence.md`); Compose live digests residual |
 | Production acceptance | P12-08 |
 
 ## Tracker updates

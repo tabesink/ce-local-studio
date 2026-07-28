@@ -55,8 +55,8 @@ fields. If versioning is enabled later, `versionId` populates without schema cha
 
 | Item | Owner |
 | --- | --- |
-| Opt-in live MinIO put/get/range smoke against running overlay | operator evidence / P12-04 drills |
-| Combined `live.yml` + `minio.yml` three-file matrix | P12-04 (Open Question) |
+| Opt-in live MinIO put/get/range smoke against running overlay | Cite-closed under P12-04 drills (`docs/_scratch/p12-04-backup-restore-evidence.md`); live operator digests residual |
+| Combined `live.yml` + `minio.yml` three-file matrix | Cite-closed under P12-04 procedures; live matrix operator digests residual |
 | Private endpoint CIDR allowlist in Settings | deferred (Compose network isolation) |
 | Cloud AWS-only / KMS / HA | P12-08 |
 | Upload orphan compensation worker | deferred follow-up |

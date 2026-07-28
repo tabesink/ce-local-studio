@@ -94,7 +94,7 @@ Observed in this slice: **not re-run** (credit citations from prior P1/P6/P7-05 
 | --- | --- |
 | Deployed-ingress TLS / Host/Origin / direct-API denial / stream-drain | P12-05 |
 | Playwright / browser storage / BFCache / two-user cache / M-11 open-panel | P12-07 |
-| Backup/restore of redactions + audit continuity | P12-04 |
+| Backup/restore of redactions + audit continuity | Cite-closed under P12-04 U3 continuity (`docs/_scratch/p12-04-backup-restore-evidence.md`); Compose live digests residual |
 | SBOM / provenance | P12-06 |
 | Production acceptance aggregation | P12-08 |
 | P11-04 Evidence attach UX | product DEFER |

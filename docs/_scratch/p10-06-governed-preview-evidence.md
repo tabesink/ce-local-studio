@@ -62,10 +62,10 @@ uv run --extra preview-renderer --extra test pytest \
 | Residual | Owner |
 | --- | --- |
 | Renderer/image SBOM pin | P12-06 |
-| Backup/restore of preview derivatives | P12-04 |
+| Backup/restore of preview derivatives | Cite-closed under P12-04 (`docs/_scratch/p12-04-backup-restore-evidence.md`); live preview/range digests residual |
 | Browser E2E governed preview navigation | P12-07 |
 | Operator live DOCX digest → production-supported | P12-06 / ops |
-| Combined live+minio+preview overlay matrix | P12-04 |
+| Combined live+minio+preview overlay matrix | Cite-closed under P12-04 procedures; live matrix operator digests residual |
 
 ## Privacy
 

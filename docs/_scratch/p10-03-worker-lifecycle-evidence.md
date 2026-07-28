@@ -58,7 +58,7 @@ Kill+reclaim: cite PostgreSQL `test_postgres_turn_leases.py` / domain/index recl
 | TLS / `testing=false` HTTPS / deployed direct-API denial | P12 |
 | Deployed ingress stream-drain / API stop-new-turns | P12-05 |
 | Production / S3 object-store readiness | not Compose filesystem matrix |
-| Production HA / incident drills | P12-04 / P12-08 |
+| Multi-failure / restore-coupled incident drills | Cite-closed under P12-04 (`docs/_scratch/p12-04-backup-restore-evidence.md`); HA → P12-08 only |
 | Browser CSRF product fix | P9-05 residual |
 | Mid-turn DB lease heartbeat for turns | follow-up |
 | Provider-failure terminal ≠ completed synthesis | named residual |

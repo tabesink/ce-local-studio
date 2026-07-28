@@ -1,7 +1,7 @@
 # P12-04 Backup Restore Inventory
 
 Date: 2026-07-28  
-Status: complete for U1 inventory only — **not** P12-04 DONE.  
+Status: U1 inventory complete; P12-04 tracker closure under `docs/_scratch/p12-04-backup-restore-evidence.md` (unit altitude + runbook; Compose live digests residual).  
 Plan: `docs/plans/2026-07-28-005-feat-p12-04-backup-restore-drills-plan.md`  
 Authority: `docs/master-build-plan.md` P12-04; FR-11; `docs/architecture/deployment-topology.md` (backup/DR; topology precedence: LightRAG/runtime disk is not backup authority); prerequisite evidence revisions below.
 

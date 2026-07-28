@@ -7,7 +7,8 @@ Parser/provider packaging and support matrix: `docs/operations/provider-deployme
 Governed preview (DOCX/Markdown/text→PDF): worker preview slot after prepare; optional image gate `CE_STACK_PREVIEW_IMAGE=1` / `--extra preview-renderer` (P10-06).  
 Credential-gated provider staging smoke: `scripts/provider_staging_smoke.py` with `CE_PROVIDER_STAGING_SMOKE=1` (never default verify).  
 Full upload→Evidence Compose live path: opt-in `CE_P10_05_PIPELINE_LIVE=1` plus live/minio overlays; P5-04 remains topology credit only.  
-Production incident/HA recovery: P12-04 / P12-08.
+Backup/restore/incident drills (Compose matrix): [`backup-restore-incident-runbook.md`](./backup-restore-incident-runbook.md) (P12-04).  
+Production KMS/escrow/HA/RPO-RTO acceptance: **P12-08 only**.
 
 ## Boot order
 
@@ -29,11 +30,11 @@ Closed stderr reason → action. Do **not** run bare `alembic upgrade head` on a
 | --- | --- |
 | `empty_ok` / `current_target_ok` (success line) | Continue bootstrap |
 | `legacy_database_refused` | Decommission / export outside product; provision fresh DB |
-| `partial_schema` / `renamed_object` / `unknown_object` / `catalog_mismatch` | Restore current-head backup or recreate empty volume |
-| `revision_behind` / `revision_ahead` / `unknown_history` | Restore current-head backup; do not force upgrade |
+| `partial_schema` / `renamed_object` / `unknown_object` / `catalog_mismatch` | Restore via [`backup-restore-incident-runbook.md`](./backup-restore-incident-runbook.md) (F1–F2) or recreate empty volume |
+| `revision_behind` / `revision_ahead` / `unknown_history` | Restore via [`backup-restore-incident-runbook.md`](./backup-restore-incident-runbook.md) (F1–F2); do not force upgrade |
 | `extension_refused` / `snapshot_head_mismatch` | Fix cluster extensions / ship matching snapshot+head; recreate if unsure |
 
-Path 2 supported legacy upgrade is **not** available. Backup/restore drills: P12-04.
+Path 2 supported legacy upgrade is **not** available. Backup/restore drills: [`backup-restore-incident-runbook.md`](./backup-restore-incident-runbook.md).
 
 ```bash
 cd app
@@ -103,16 +104,17 @@ Busy drain finishes the current `run_once_pass` only; hung work may be SIGKILLed
 4. Confirm a new worker claims/reclaims work; stale generation completions are no-ops.
 
 Algorithm authority: PostgreSQL suites `test_postgres_turn_leases.py`, domain/index reclaim tests.  
-This drill is single-worker Compose-matrix reclaim — not P12-04 HA/incident recovery.
+This drill is single-worker Compose-matrix reclaim — not multi-failure / restore-coupled incident recovery (see [`backup-restore-incident-runbook.md`](./backup-restore-incident-runbook.md) F5).
 
 ## Residuals (do not claim from this runbook)
 
 | Concern | Owner |
 | --- | --- |
-| TLS / `testing=false` HTTPS / deployed API denial | P12 |
+| TLS / `testing=false` HTTPS / deployed API denial | P12-05 |
 | Deployed ingress stream-drain | P12-05 |
-| Cloud AWS-only / KMS / HA object-store | P12-04 / P12-08 |
-| Combined live + MinIO three-file stack matrix | P12-04 |
-| Production HA / backup / incident drills | P12-04 / P12-08 |
+| Cloud AWS-only / KMS / HA object-store | **P12-08 only** |
+| Combined live + MinIO three-file stack matrix (operator digests) | P12-04 residual / operator attach |
+| Compose backup/restore/incident drill procedures | P12-04 — [`backup-restore-incident-runbook.md`](./backup-restore-incident-runbook.md) |
+| Production HA / RPO-RTO / KMS/escrow acceptance | **P12-08 only** |
 | Browser CSRF product fix | P9-05 residual |
 | Completed synthesis without live provider | needs credentials / later proof |
