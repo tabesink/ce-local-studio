@@ -76,6 +76,8 @@ services:
       CONTEXT_ENGINE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?set POSTGRES_USER locally}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD locally}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB locally}
       CE_SESSION_COOKIE_SECURE: ${CE_SESSION_COOKIE_SECURE:-false}
       CONTEXT_ENGINE_TESTING: ${CONTEXT_ENGINE_TESTING:-true}
+      # Unset → inline follows testing. Set false for worker-path smoke (Compose-dev only).
+      CE_INLINE_TURN_WORKERS: ${CE_INLINE_TURN_WORKERS:-}
       CE_PUBLIC_ORIGIN: ${CE_STACK_PUBLIC_ORIGIN:-}
       CE_INTERNAL_HOSTS: ${CE_INTERNAL_HOSTS:-}
       CE_TRUSTED_BFF_PEERS: ${CE_TRUSTED_BFF_PEERS:-}
@@ -123,6 +125,8 @@ services:
       CE_SOURCE_STORAGE_ROOT: /data/source-storage
       CE_DOMAIN_RUNTIME_ROOT: /data/domain-runtimes
       CE_WORKER_IDLE_SECONDS: ${CE_WORKER_IDLE_SECONDS:-2}
+      # Distinct turn worker id for Compose leased-path smoke ownership asserts.
+      CE_TURN_WORKER_ID: ${CE_TURN_WORKER_ID:-compose-turn-worker}
     volumes:
       - stack-source-storage:/data/source-storage
       - stack-domain-runtimes:/data/domain-runtimes
@@ -131,8 +135,13 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      bootstrap:
+        condition: service_completed_successfully
+    # Bound for SIGTERM drain of one run_once_pass; hung work falls to kill + lease reclaim.
+    stop_grace_period: 60s
     healthcheck:
-      # Heartbeat file is touched each loop iteration under CE_DOMAIN_RUNTIME_ROOT.
+      # Heartbeat is touched only after internal readiness and each loop iteration.
+      # Compose healthy ≠ claim-ready until the worker has passed readiness (see runbook).
       # Stale if mtime older than 30s; start_period covers first boot / long run_once.
       test:
         [

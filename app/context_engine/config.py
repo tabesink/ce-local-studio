@@ -25,6 +25,14 @@ def _env_bool(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _env_optional_bool(name: str) -> bool | None:
+    """Return None when unset so callers can fall back to another default."""
+    value = _env(name)
+    if value is None:
+        return None
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass(frozen=True)
 class Settings:
     database_url: str = field(
@@ -38,6 +46,8 @@ class Settings:
     admin_password: str | None = field(default_factory=lambda: _env("CE_ADMIN_PASSWORD"), repr=False)
     config_encryption_key: str | None = field(default_factory=lambda: _env("CONFIG_ENCRYPTION_KEY"), repr=False)
     testing: bool = field(default_factory=lambda: _env_bool("CONTEXT_ENGINE_TESTING", False))
+    # Tri-state: unset → follow testing when testing=true; never inline when testing=false.
+    inline_turn_workers: bool | None = field(default_factory=lambda: _env_optional_bool("CE_INLINE_TURN_WORKERS"))
     session_cookie_name: str = "ce_session"
     csrf_cookie_name: str = "ce_csrf"
     session_cookie_secure: bool = field(default_factory=lambda: _env_bool("CE_SESSION_COOKIE_SECURE", True))
@@ -161,6 +171,14 @@ class Settings:
             raise ValueError("turn_tail_poll_milliseconds must be positive.")
         if self.turn_tail_idle_seconds <= 0:
             raise ValueError("turn_tail_idle_seconds must be positive.")
+
+    def inline_turn_workers_enabled(self) -> bool:
+        """API may inline turn workers only under testing with the inline flag on."""
+        if not self.testing:
+            return False
+        if self.inline_turn_workers is None:
+            return True
+        return bool(self.inline_turn_workers)
 
     @classmethod
     def from_env(cls) -> Settings:

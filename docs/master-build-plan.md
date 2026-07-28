@@ -24,7 +24,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | P7 | Durable grounded streaming chat | DONE | P6 | conversation ownership, intent gate, bounded RAG, SSE, idempotent replay, redaction pass |
 | P8 | Operational safety and Phase 1 gate | DONE | P1-P7 | transactional audit writes, allowlisted logs, request/trace correlation, health, privacy scans, and resilience evidence pass |
 | P9 | Thin Next.js frontend | DONE | P1-P8 | login/chat/documents/settings and the reserved graph state use only versioned APIs and pass parity/accessibility checks — P9-01..P9-05 DONE; P12 owns deployed-ingress / visual-matrix residuals |
-| P10 | Deployable application stack | IN_PROGRESS | P8-P9 | runnable Compose stack, explicit migrations/bootstrap, worker lifecycle, smoke path, and operator runbook pass |
+| P10 | Deployable application stack | DONE | P8-P9 | runnable Compose stack, explicit migrations/bootstrap, worker lifecycle, smoke path, and operator runbook pass |
 | P11 | Governed context assembly | NOT_STARTED | P6-P7 | opaque refs for sources/evidence/templates, private bounded assembly, replay fingerprint and invalidation pass |
 | P12 | Production release and recovery | NOT_STARTED | P0-P11 | immutable artifacts, deployed-path streaming, migration/rollback, security/load/backup/restore and runbooks pass |
 
@@ -327,6 +327,17 @@ proof). Residuals remain P10-03 worker-path smoke/drain and worker
 readiness, P12 TLS/direct-API denial, browser CSRF product fix, and
 production/S3 store readiness.
 
+P10-03 closure evidence (2026-07-27):
+`docs/_scratch/p10-03-worker-lifecycle-inventory.md` and
+`docs/_scratch/p10-03-worker-lifecycle-evidence.md` record worker
+readiness before claim (no admin), SIGTERM/SIGINT stop-claim with
+interruptible idle sleep (`stack_worker.stop_claim`),
+`CE_INLINE_TURN_WORKERS` split for Compose-leased BFF smoke
+(`stack_smoke_worker.py`), Compose worker bootstrap depends_on +
+`stop_grace_period: 60s`, and `docs/operations/compose-stack-runbook.md`.
+Residuals remain P12 TLS/stream-drain/HA, production/S3 store, browser
+CSRF, and mid-turn lease heartbeat.
+
 ### P9-P11 - User interface, deployable runtime, and governed context workflows
 
 | Task | Status | Depends on | Deliverable |
@@ -338,7 +349,7 @@ production/S3 store readiness.
 | P9-05 | DONE | P9-01 | import-direction, thin-route, server/browser boundary and contract/barrel CI validators — evidence `docs/_scratch/p9-05-ci-validators-evidence.md`; FE-01 mega-kit demolition, Compose public-origin topology, and two-user/BFCache E2E remain FE-01/P10/P12 |
 | P10-01 | DONE | P8,P9 | Compose services and ingress-wired HTTP server configuration for PostgreSQL, migration, API, worker and frontend — evidence `docs/_scratch/p10-01-compose-config-evidence.md`; BFF/API/SSE smoke and storage readiness remain P10-02; drain runbook P10-03; TLS/direct-API denial P12 |
 | P10-02 | DONE | P10-01 | explicit migration/bootstrap plus BFF/API/SSE core-path smoke stack — evidence `docs/_scratch/p10-02-stack-smoke-evidence.md`; worker drain/runbook P10-03; TLS/direct-API denial P12; browser CSRF residual named |
-| P10-03 | NOT_STARTED | P10-02 | startup/shutdown, worker claim recovery and deployment operator runbook |
+| P10-03 | DONE | P10-02 | startup/shutdown, worker claim recovery and deployment operator runbook — evidence `docs/_scratch/p10-03-worker-lifecycle-evidence.md`; TLS/stream-drain/HA/production store remain P12 |
 | P11-01 | NOT_STARTED | P6 | prompt_templates/composer_ref_tokens/accepted-ref schema and seeds for source/evidence/template refs |
 | P11-02 | NOT_STARTED | P11-01 | discovery, opaque-token validation, domain compatibility and expiry |
 | P11-03 | NOT_STARTED | P11-02,P7 | private context assembly, turn fingerprint, replay/conflict and redaction |

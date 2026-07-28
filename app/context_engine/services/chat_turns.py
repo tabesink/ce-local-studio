@@ -2017,10 +2017,11 @@ def _tail_turn_events(
     terminal_replay: bool = False,
 ) -> Iterator[TurnStreamEvent]:
     cursor = after
-    # Tests already run the worker to completion before tailing; keep the idle
-    # bound short so suites do not wait on production reconnect windows.
-    idle_seconds = 0.5 if settings.testing else float(settings.turn_tail_idle_seconds)
-    poll_seconds = 0.01 if settings.testing else settings.turn_tail_poll_milliseconds / 1000
+    # Short idle only when testing *and* API inlined the turn workers. When
+    # inline is off, Compose workers need the normal reconnect window.
+    use_short_idle = settings.inline_turn_workers_enabled()
+    idle_seconds = 0.5 if use_short_idle else float(settings.turn_tail_idle_seconds)
+    poll_seconds = 0.01 if use_short_idle else settings.turn_tail_poll_milliseconds / 1000
     idle_deadline = time.monotonic() + idle_seconds
     while True:
         db.expire_all()
@@ -2073,7 +2074,7 @@ def stream_turn_events(
         retrieval_port=retrieval_port,
         request_id=request_id,
     )
-    if settings.testing:
+    if settings.inline_turn_workers_enabled():
         run_turn_workers_until_idle(
             db,
             settings,

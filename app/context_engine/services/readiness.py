@@ -24,14 +24,39 @@ def probe_object_store(source_storage_root: str) -> None:
     store.delete(stored.key)
 
 
-def check_readiness(db: Session, settings: Settings | None = None) -> None:
-    resolved = settings if settings is not None else Settings()
+def check_database_schema(db: Session) -> None:
+    """DB reachable and exact Alembic head — shared by API and worker readiness."""
     try:
         db.execute(text("SELECT 1"))
         revision = db.scalar(text("SELECT version_num FROM alembic_version"))
         if revision != SUPPORTED_ALEMBIC_HEAD:
             raise ReadinessError("schema_incompatible")
+    except ReadinessError:
+        raise
+    except Exception as exc:
+        raise ReadinessError("database_unavailable") from exc
 
+
+def check_object_store_ready(settings: Settings) -> None:
+    try:
+        probe_object_store(settings.source_storage_root)
+    except (ObjectStorageError, OSError, TypeError, ValueError) as exc:
+        raise ReadinessError("object_store_unavailable") from exc
+    except Exception as exc:
+        raise ReadinessError("object_store_unavailable") from exc
+
+
+def check_worker_readiness(db: Session, settings: Settings | None = None) -> None:
+    """Internal worker readiness: schema + store. Does not require an administrator."""
+    resolved = settings if settings is not None else Settings()
+    check_database_schema(db)
+    check_object_store_ready(resolved)
+
+
+def check_readiness(db: Session, settings: Settings | None = None) -> None:
+    resolved = settings if settings is not None else Settings()
+    check_database_schema(db)
+    try:
         administrator_exists = db.scalar(
             select(User.id)
             .where(
@@ -47,9 +72,4 @@ def check_readiness(db: Session, settings: Settings | None = None) -> None:
     except Exception as exc:
         raise ReadinessError("database_unavailable") from exc
 
-    try:
-        probe_object_store(resolved.source_storage_root)
-    except (ObjectStorageError, OSError, TypeError, ValueError) as exc:
-        raise ReadinessError("object_store_unavailable") from exc
-    except Exception as exc:
-        raise ReadinessError("object_store_unavailable") from exc
+    check_object_store_ready(resolved)

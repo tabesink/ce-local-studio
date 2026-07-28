@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import logging
+import signal
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -12,10 +14,11 @@ from context_engine.db import create_db_engine, create_session_factory
 from context_engine.services.domains import DomainDeleteWorker
 from context_engine.services.chat_turns import ConversationTurnWorker
 from context_engine.services.indexing import SourceIndexWorker
+from context_engine.services.metrics import safe_increment
+from context_engine.services.readiness import ReadinessError, check_worker_readiness
 from context_engine.services.runtime_config import validate_config_encryption_key
 from context_engine.services.sources import SourceDeleteWorker, SourcePreparationWorker
 from context_engine.services.structured_logging import configure_json_logging, safe_log
-from context_engine.services.metrics import safe_increment
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +45,15 @@ def touch_worker_heartbeat(path: Path | str) -> None:
     heartbeat = Path(path)
     heartbeat.parent.mkdir(parents=True, exist_ok=True)
     heartbeat.touch()
+
+
+def clear_worker_heartbeat(path: Path | str) -> None:
+    """Remove a stale heartbeat so Compose cannot report healthy before claim-ready."""
+    heartbeat = Path(path)
+    try:
+        heartbeat.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def run_once_pass(
@@ -138,6 +150,41 @@ def main(argv: list[str] | None = None) -> int:
     session_factory = create_session_factory(engine)
     workers = build_workers(settings)
     heartbeat_path = Path(settings.domain_runtime_root) / WORKER_HEARTBEAT_FILENAME
+    clear_worker_heartbeat(heartbeat_path)
+
+    db = session_factory()
+    try:
+        check_worker_readiness(db, settings)
+    except ReadinessError as exc:
+        safe_log(
+            logger,
+            "stack_worker.readiness_failed",
+            safe_error_code=exc.reason,
+            outcome="failed",
+        )
+        engine.dispose()
+        return 1
+    finally:
+        close = getattr(db, "close", None)
+        if callable(close):
+            close()
+
+    stop = threading.Event()
+
+    def _handle_signal(signum: int, frame: object) -> None:
+        del signum, frame
+        stop.set()
+        safe_log(logger, "stack_worker.stop_claim", outcome="succeeded")
+
+    signal.signal(signal.SIGTERM, _handle_signal)
+    signal.signal(signal.SIGINT, _handle_signal)
+
+    def should_continue() -> bool:
+        return not stop.is_set()
+
+    def interruptible_sleep(seconds: float) -> None:
+        stop.wait(timeout=seconds)
+
     safe_log(logger, "stack_worker.started", outcome="succeeded")
     try:
         run_loop(
@@ -147,6 +194,8 @@ def main(argv: list[str] | None = None) -> int:
             turn_worker=workers["turn"],
             delete_worker=workers["delete"],
             idle_seconds=float(settings.worker_idle_seconds),
+            sleep_fn=interruptible_sleep,
+            should_continue=should_continue,
             heartbeat_path=heartbeat_path,
         )
     finally:

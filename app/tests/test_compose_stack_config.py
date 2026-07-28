@@ -84,6 +84,17 @@ def test_compose_bootstrap_before_api_with_admin_secrets_only_on_bootstrap() -> 
     assert "CE_ADMIN_PASSWORD" not in worker_block
     assert "bootstrap:" in api_block
     assert "service_completed_successfully" in api_block
+    assert "bootstrap:" in worker_block
+    assert "service_completed_successfully" in worker_block
+    assert "stop_grace_period: 60s" in worker_block
+    assert "CE_TURN_WORKER_ID:" in worker_block
+
+
+def test_env_example_documents_worker_path_inline_split() -> None:
+    text = ENV_EXAMPLE.read_text(encoding="utf-8")
+    assert "CE_INLINE_TURN_WORKERS" in text
+    assert "worker-path smoke" in text.casefold() or "worker path smoke" in text.casefold()
+    assert "compose-stack-runbook" in text or "compose-stack-runbook.md" in text
 
 
 def test_env_example_primary_is_ingress_wired_http_not_bypass() -> None:

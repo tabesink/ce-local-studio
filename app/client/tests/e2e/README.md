@@ -12,7 +12,7 @@ Settings domains production-boundary acceptance (F3 / R12 / AE1) is **P12-07** (
    docker compose --env-file .env.stack.local -f compose.stack.yml up --build -d
    ```
 
-   Recreate `.env.stack.local` from `app/.env.stack.example` for the ingress-wired HTTP profile: set `CE_STACK_PUBLIC_ORIGIN=http://127.0.0.1:<STACK_FRONTEND_PORT>` (use `127.0.0.1`, not `localhost`). Compose maps that value to both FastAPI `CE_PUBLIC_ORIGIN` and BFF `CONTEXT_ENGINE_PUBLIC_ORIGIN`. Frontend health on `/login` is not BFF trust-path proof — use `python app/scripts/stack_smoke_core.py --env-file app/.env.stack.local` for the P10-02 core path.
+   Recreate `.env.stack.local` from `app/.env.stack.example` for the ingress-wired HTTP profile: set `CE_STACK_PUBLIC_ORIGIN=http://127.0.0.1:<STACK_FRONTEND_PORT>` (use `127.0.0.1`, not `localhost`). Compose maps that value to both FastAPI `CE_PUBLIC_ORIGIN` and BFF `CONTEXT_ENGINE_PUBLIC_ORIGIN`. Frontend health on `/login` is not BFF trust-path proof — use `python app/scripts/stack_smoke_core.py --env-file app/.env.stack.local` for the P10-02 core path. Worker-leased path: set `CE_INLINE_TURN_WORKERS=false`, recreate api, then `python app/scripts/stack_smoke_worker.py --env-file app/.env.stack.local`. Operator steps: `docs/operations/compose-stack-runbook.md` (Compose-dev matrix only — not P12).
 
 2. Ensure `.env.stack.local` has `CE_ADMIN_USERNAME` / `CE_ADMIN_PASSWORD` (Compose `bootstrap` one-shot only; not api/worker env).
 3. Optional: `PLAYWRIGHT_BASE_URL` (default `http://127.0.0.1:3000`; must match `CE_STACK_PUBLIC_ORIGIN`).
