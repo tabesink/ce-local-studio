@@ -211,10 +211,13 @@ cannot un-redact. Public omission is proven for DTO, sanitized ledger,
 unit/service tests and 1 PostgreSQL 16 barrier test passing.
 `docs/_scratch/p7-05-delete-redaction-evidence.md` records commands and keeps
 P8 privacy/audit breadth, P9 UI/reducer, P9-03 location/content routes (M-11
-open-panel half), P11 composer depth, and P12-03 adversarial deletion as
-residuals. DRIFT-29 chat-redaction half is closed; full DRIFT-29 remains
-P8-01 for audit/privacy breadth. P7 phase exit is complete for Phase 1 chat
-backend tasks P7-01–P7-05.
+open-panel half), and P11 composer depth as residuals. Deployed-ingress
+adversarial deletion is owned by P12-05; API/service adversarial security
+review closed under P12-03
+(`docs/_scratch/p12-03-adversarial-security-evidence.md`). DRIFT-29
+chat-redaction half is closed; full DRIFT-29 remains open for the browser
+M-11 half (P12-07). P7 phase exit is complete for Phase 1 chat backend
+tasks P7-01–P7-05.
 
 P7-04 closure evidence (2026-07-27):
 `docs/_scratch/p7-04-sse-pipeline-inventory.md` records retain/modify/defer for
@@ -362,7 +365,7 @@ CSRF, and mid-turn lease heartbeat.
 | --- | --- | --- | --- |
 | P12-01 | DONE | P0-P11 | Path 1 unsupported populated-legacy upgrade: fresh-install + catalog preflight/refusal + startup catalog match on PostgreSQL 16 — evidence `docs/_scratch/p12-01-populated-compatibility-evidence.md`; Path 2 contraction and P12-04 backup drills remain |
 | P12-02 | DONE | P0-P11 | full backend/frontend/adapter/Docker suite and contract snapshot convergence — evidence `docs/_scratch/p12-02-suite-contract-convergence-evidence.md`; CI `verify-postgresql` + default `scripts/verify.sh` green; Playwright/live Compose smoke remain P12-07 / P10 evidence-owned |
-| P12-03 | NOT_STARTED | P8-P11 | authz, secret/content leakage, deletion/redaction and adversarial retrieval review |
+| P12-03 | DONE | P8-P11 | authz, secret/content leakage, deletion/redaction and adversarial retrieval review at API/service/PG altitude — evidence `docs/_scratch/p12-03-adversarial-security-evidence.md`; inventory `docs/_scratch/p12-03-adversarial-security-inventory.md`; ingress TLS/direct-API P12-05; browser/M-11 panel P12-07 |
 | P12-04 | NOT_STARTED | P12-01 | backup/restore, image rollback, failed-worker recovery and incident drills |
 | P12-05 | NOT_STARTED | P7,P9,P12-02 | deployed-ingress incremental SSE, reconnect/replay, graceful shutdown and stream-drain proof |
 | P12-06 | NOT_STARTED | P0,P12-02 | immutable artifact manifest with pinned runtimes, locks, schema and contract versions, SBOM and provenance |
