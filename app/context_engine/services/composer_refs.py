@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -31,11 +31,11 @@ from context_engine.services.domains import controller_from_settings, domain_ava
 from context_engine.services.indexing import source_is_query_eligible
 from context_engine.services.prompt_templates import safe_prompt_template_ref
 
-MAX_COMPOSER_REFS = 10
+MAX_COMPOSER_REFS = 25
 MAX_COMPOSER_REFS_PER_KIND = 4
 COMPOSER_REF_TOKEN_TTL_SECONDS = 15 * 60
 MAX_DISCOVERY_QUERY_CHARS = 200
-MAX_DISCOVERY_LIMIT = 50
+MAX_DISCOVERY_LIMIT = 25
 PHASE_ONE_COMPOSER_REF_KINDS = (
     COMPOSER_REF_KIND_SOURCE,
     COMPOSER_REF_KIND_EVIDENCE,
@@ -93,8 +93,9 @@ def _issue_ref_token(
     domain_id: str | None,
     label: str,
     description: str | None,
-) -> str:
+) -> tuple[str, datetime]:
     token = secrets.token_urlsafe(32)
+    expires_at = utc_now() + timedelta(seconds=COMPOSER_REF_TOKEN_TTL_SECONDS)
     db.add(
         ComposerRefToken(
             token_hash=_token_hash(token),
@@ -104,10 +105,10 @@ def _issue_ref_token(
             domain_id=domain_id,
             safe_label=label,
             safe_description=description,
-            expires_at=utc_now() + timedelta(seconds=COMPOSER_REF_TOKEN_TTL_SECONDS),
+            expires_at=expires_at,
         )
     )
-    return token
+    return token, expires_at
 
 
 def _safe_result(
@@ -120,19 +121,21 @@ def _safe_result(
     label: str,
     description: str | None,
 ) -> dict[str, Any]:
+    token, expires_at = _issue_ref_token(
+        db,
+        owner=owner,
+        kind=kind,
+        target_id=target_id,
+        domain_id=domain_id,
+        label=label,
+        description=description,
+    )
     return {
-        "refToken": _issue_ref_token(
-            db,
-            owner=owner,
-            kind=kind,
-            target_id=target_id,
-            domain_id=domain_id,
-            label=label,
-            description=description,
-        ),
+        "token": token,
         "kind": kind,
         "label": label,
         "description": description,
+        "expiresAt": expires_at,
     }
 
 
@@ -397,7 +400,39 @@ def _token_row_by_hash(db: Session, *, owner: User, token: str) -> ComposerRefTo
         raise _composer_ref_unavailable()
     if row.expires_at <= utc_now():
         raise _composer_ref_unavailable()
+    if row.consumed_at is not None:
+        raise _composer_ref_unavailable()
     return row
+
+
+def consume_composer_ref_tokens(
+    db: Session,
+    *,
+    owner: User,
+    tokens: tuple[str, ...],
+) -> None:
+    """Mark validated tokens consumed under row locks. Call only on new-turn insert."""
+    if not tokens:
+        return
+    hashes = [_token_hash(token) for token in tokens]
+    rows = list(
+        db.scalars(
+            select(ComposerRefToken)
+            .where(
+                ComposerRefToken.token_hash.in_(hashes),
+                ComposerRefToken.owner_user_id == owner.id,
+            )
+            .order_by(ComposerRefToken.token_hash)
+            .with_for_update()
+        )
+    )
+    by_hash = {row.token_hash: row for row in rows}
+    now = utc_now()
+    for token_hash in hashes:
+        row = by_hash.get(token_hash)
+        if row is None or row.expires_at <= now or row.consumed_at is not None:
+            raise _composer_ref_unavailable()
+        row.consumed_at = now
 
 
 def _validate_template_ref(db: Session, row: ComposerRefToken, order: int) -> ValidatedComposerRef:

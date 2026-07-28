@@ -25,6 +25,7 @@ from context_engine.api.catalog_schemas import (
     AdminDomainDto,
     AdminSourceDto,
     CONVERSATION_PUBLIC_REF_PATTERN,
+    ComposerRefDto,
     ConversationDetailResponseDto,
     ConversationSummaryDto,
     DocumentSummaryDto,
@@ -40,6 +41,7 @@ from context_engine.api.catalog_schemas import (
     TURN_PUBLIC_REF_PATTERN,
     TurnDto,
 )
+from context_engine.api.conventions import format_utc_timestamp
 from context_engine.api.dependencies import (
     CurrentSession,
     get_db,
@@ -355,6 +357,12 @@ class ComposerRefDiscoverRequest(BaseModel):
         return stripped or None
 
 
+class ComposerRefDiscoverResponse(BaseModel):
+    refs: list[ComposerRefDto]
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
 class ConversationTitleRequest(BaseModel):
     title: str | None = None
 
@@ -653,7 +661,20 @@ def _reject_unknown_query(request: Request, allowed: set[str] | None = None) -> 
 
 
 def _composer_ref_api_error(exc: ComposerRefError) -> ApiError:
-    return ApiError(exc.status_code, exc.code, exc.message)
+    # Discover projector: only approved ErrorCodes escape (mirror turn-start allowlist).
+    failures = {
+        "validation_error": (422, "validation_error", "Request validation failed."),
+        "composer_ref_unavailable": (
+            409,
+            "operation_conflict",
+            "Composer reference is unavailable.",
+        ),
+    }
+    status_code, code, message = failures.get(
+        exc.code,
+        (503, "dependency_unavailable", "Composer references are temporarily unavailable."),
+    )
+    return ApiError(status_code, code, message)
 
 
 def _chat_turn_api_error(exc: ChatTurnError) -> ApiError:
@@ -742,13 +763,13 @@ def _content_length_too_large(request: Request) -> bool:
         return False
 
 
-@api_router.post("/composer-refs:discover")
+@api_router.post("/composer-refs:discover", response_model=ComposerRefDiscoverResponse)
 def post_composer_refs_discover(
     payload: ComposerRefDiscoverRequest,
     current: CurrentSession = Depends(require_current_session),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> dict[str, object]:
+) -> ComposerRefDiscoverResponse:
     try:
         refs = discover_composer_refs(
             db,
@@ -762,7 +783,18 @@ def post_composer_refs_discover(
         )
     except ComposerRefError as exc:
         raise _composer_ref_api_error(exc) from exc
-    return {"refs": refs}
+    return ComposerRefDiscoverResponse(
+        refs=[
+            ComposerRefDto(
+                token=ref["token"],
+                kind=ref["kind"],
+                label=ref["label"],
+                description=ref.get("description"),
+                expiresAt=format_utc_timestamp(ref["expiresAt"]),
+            )
+            for ref in refs
+        ]
+    )
 
 
 @api_router.get("/conversations", response_model=ConversationListResponse)

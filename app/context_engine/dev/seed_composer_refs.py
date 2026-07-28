@@ -74,6 +74,7 @@ TOKEN_FIXTURE_KEYS = (
     "token_mina_wrong_domain",
     "token_mina_deleted_target",
     "token_mina_disabled_template",
+    RESERVED_CONSUMED_TOKEN_KEY,
 )
 
 
@@ -94,6 +95,7 @@ class TokenFixture:
     domain_id: str | None
     safe_label: str
     expires_at: datetime
+    consumed_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -196,6 +198,17 @@ def _token_fixtures(*, now: datetime) -> tuple[TokenFixture, ...]:
             domain_id=None,
             safe_label="Disabled template",
             expires_at=valid_expiry,
+        ),
+        TokenFixture(
+            fixture_key=RESERVED_CONSUMED_TOKEN_KEY,
+            token_id="b1111111-1111-4111-8111-token0000009",
+            owner_user_id=USER_MINA_ID,
+            ref_kind=COMPOSER_REF_KIND_SOURCE,
+            target_id=SOURCE_PUMP_ID,
+            domain_id=DOMAIN_MANUALS_ID,
+            safe_label="Consumed source",
+            expires_at=valid_expiry,
+            consumed_at=now - timedelta(minutes=5),
         ),
     )
 
@@ -466,6 +479,7 @@ def _upsert_tokens(db: Session, *, now: datetime) -> None:
                     safe_label=entry.safe_label,
                     safe_description=entry.fixture_key,
                     expires_at=entry.expires_at,
+                    consumed_at=entry.consumed_at,
                     created_at=SEED_CLOCK,
                 )
             )
@@ -478,6 +492,7 @@ def _upsert_tokens(db: Session, *, now: datetime) -> None:
         token.safe_label = entry.safe_label
         token.safe_description = entry.fixture_key
         token.expires_at = entry.expires_at
+        token.consumed_at = entry.consumed_at
 
 
 def _upsert_accepted_refs(db: Session) -> None:

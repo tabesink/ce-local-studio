@@ -566,8 +566,8 @@
             "title": "Kinds"
           },
           "limit": {
-            "default": 10,
-            "maximum": 50.0,
+            "default": 25,
+            "maximum": 25.0,
             "minimum": 1.0,
             "title": "Limit",
             "type": "integer"
@@ -586,6 +586,23 @@
           }
         },
         "title": "ComposerRefDiscoverRequest",
+        "type": "object"
+      },
+      "ComposerRefDiscoverResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "refs": {
+            "items": {
+              "$ref": "#/components/schemas/ComposerRefDto"
+            },
+            "title": "Refs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "refs"
+        ],
+        "title": "ComposerRefDiscoverResponse",
         "type": "object"
       },
       "ComposerRefDto": {
@@ -2476,7 +2493,7 @@
             "items": {
               "type": "string"
             },
-            "maxItems": 10,
+            "maxItems": 25,
             "title": "Composerreftokens",
             "type": "array"
           },
@@ -3754,9 +3771,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Post Composer Refs Discover Api V1 Composer Refs Discover Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ComposerRefDiscoverResponse"
                 }
               }
             },

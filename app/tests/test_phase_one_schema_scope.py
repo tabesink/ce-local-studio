@@ -120,12 +120,13 @@ def test_phase_one_composer_ref_tables_match_schema_contract() -> None:
         "safe_label",
         "safe_description",
         "expires_at",
+        "consumed_at",
         "created_at",
     }
     assert "token" not in tokens.columns
     assert "raw_token" not in tokens.columns
     assert "used_at" not in tokens.columns
-    assert "consumed_at" not in tokens.columns
+    assert tokens.columns["consumed_at"].nullable is True
     assert set(accepted.columns.keys()) == {
         "id",
         "public_ref",

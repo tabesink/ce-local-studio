@@ -112,6 +112,7 @@ Provider output is keyed by normalized request fixture, not arbitrary prompt mat
 | `token_mina_wrong_domain` | source | wrong-domain denial |
 | `token_mina_deleted_target` | source | deleted-target denial |
 | `token_mina_disabled_template` | template | disabled-template denial |
+| `token_mina_consumed_source` | source | already-consumed denial (`consumed_at` set; still unexpired) |
 
 | Accepted-ref public ref | Kind | Turn | Purpose |
 | --- | --- | --- | --- |
@@ -120,7 +121,7 @@ Provider output is keyed by normalized request fixture, not arbitrary prompt mat
 | `accepted_mina_template_01` | template | `turn_mina_figure` | durable accepted template projection |
 | `accepted_mina_redacted_01` | source | `turn_mina_redacted` | redacted labels cleared |
 
-Composer discovery returns one source, evidence, and template ref with fixed safe labels. Durable seeds persist token hashes only (`safe_description` holds the fixture key). Raw token plaintext is generated deterministically only in ephemeral tests, never committed under `expected/` or seed modules. Include expired, wrong-owner, wrong-domain, deleted-target, and disabled-template tokens. `already-consumed` tokens are reserved for P11-02 / DRIFT-26 (`token_mina_consumed_source`) and are not part of the P11-01 durable seed world.
+Composer discovery returns one source, evidence, and template ref with fixed safe labels. Durable seeds persist token hashes only (`safe_description` holds the fixture key). Raw token plaintext is generated deterministically only in ephemeral tests, never committed under `expected/` or seed modules. Include expired, wrong-owner, wrong-domain, deleted-target, disabled-template, and already-consumed (`token_mina_consumed_source`) tokens.
 
 Demo prompt templates and composer-ref parents install only through the gated composer seed entry (`CE_ENVIRONMENT=development|test` and `CE_ALLOW_TEST_SEED=true`). API lifespan must not upsert demo templates.
 
