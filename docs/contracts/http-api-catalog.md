@@ -14,7 +14,7 @@ This catalog is the production v1 browser contract. Paths are relative to `/api/
 | IDs/time | opaque case-sensitive refs; RFC 3339 UTC timestamps use `Z` at whole-second precision |
 | Pagination | `limit` default 50, max 100; opaque `cursor`; stable `(createdAt,id)` ordering; `{items,nextCursor}` naming may be capability-specific |
 | Concurrency | mutable records may return strong `ETag`; `If-Match` is required only where the endpoint row explicitly lists it; when required, missing is `428` and stale is `409 stale_revision` |
-| Idempotency | chat uses `clientRequestId`; create/operation routes use `Idempotency-Key` only where explicitly listed; same key+fingerprint reuses result, mismatch is `409 idempotency_conflict`; conversation creation is explicitly deferred pending the shared durable create-idempotency record contract |
+| Idempotency | chat uses `clientRequestId`; create/operation routes use `Idempotency-Key` only where explicitly listed; same key+fingerprint reuses result, mismatch is `409 idempotency_conflict`; durable HTTP create/operation claims are stored by `(principal_user_id, route_class, key_hash)` |
 | Caching | authenticated JSON, SSE, preview bytes, and errors are `private, no-store`; health may be `no-store` |
 | Content | JSON bodies default 1 MiB; turn 4,000 chars; query 2,000; upload limit is configured and never below the accepted fixture size |
 
@@ -85,7 +85,7 @@ Document/evidence DTOs and byte-range behavior are normative in `document-and-ev
 | --- | --- | --- | --- |
 | `POST /domains/{domainId}/evidence` | M | `200 RetrievalEvidenceResponseDto` | `RetrievalEvidenceRequestDto`; authenticated membership plus current query eligibility; bounded safe projection; no mutation |
 | `GET /conversations` | O | `200 {conversations,nextCursor}` | current user's rows only |
-| `POST /conversations` | M | `201 {conversation}` | optional `{title}`; `Idempotency-Key` deferred pending the shared durable create-idempotency record contract |
+| `POST /conversations` | M | `201 {conversation}` | optional `{title}`; optional `Idempotency-Key` |
 | `GET /conversations/{conversationId}` | O | `200 ConversationDetailResponseDto` | nested `{conversation,turns}`; redacted projections omit answer/evidence |
 | `PATCH /conversations/{conversationId}` | O | `200 {conversation}` | `If-Match`; `{title}` |
 | `DELETE /conversations/{conversationId}` | O | `204` | `If-Match`; serialize against submit; M-08 |

@@ -1424,7 +1424,10 @@ export type $defs = Record<string, never>;
 export interface operations {
     admin_list_domains_api_v1_admin_domains_get: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1440,12 +1443,23 @@ export interface operations {
                     "application/json": components["schemas"]["AdminDomainListResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     admin_create_domain_api_v1_admin_domains_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1511,6 +1525,7 @@ export interface operations {
             query?: never;
             header: {
                 "If-Match": string;
+                "Idempotency-Key"?: string | null;
             };
             path: {
                 domainId: string;
@@ -1541,7 +1556,10 @@ export interface operations {
     };
     admin_domain_operations_api_v1_admin_domains__domainId__operations_get: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
             header?: never;
             path: {
                 domainId: string;
@@ -1572,7 +1590,10 @@ export interface operations {
     };
     admin_list_sources_api_v1_admin_domains__domainId__sources_get: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
             header?: never;
             path: {
                 domainId: string;
@@ -1604,7 +1625,9 @@ export interface operations {
     admin_upload_source_api_v1_admin_domains__domainId__sources_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 domainId: string;
             };
@@ -1678,6 +1701,7 @@ export interface operations {
             query?: never;
             header: {
                 "If-Match": string;
+                "Idempotency-Key"?: string | null;
             };
             path: {
                 domainId: string;
@@ -1776,7 +1800,9 @@ export interface operations {
     admin_retry_source_index_api_v1_admin_domains__domainId__sources__sourceId__index_retry_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 domainId: string;
                 sourceId: string;
@@ -1807,7 +1833,10 @@ export interface operations {
     };
     admin_source_operations_api_v1_admin_domains__domainId__sources__sourceId__operations_get: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
             header?: never;
             path: {
                 domainId: string;
@@ -1872,7 +1901,9 @@ export interface operations {
     admin_retry_source_api_v1_admin_domains__domainId__sources__sourceId__retry_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 domainId: string;
                 sourceId: string;
@@ -1904,7 +1935,9 @@ export interface operations {
     admin_start_domain_api_v1_admin_domains__domainId__start_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 domainId: string;
             };
@@ -1966,7 +1999,9 @@ export interface operations {
     admin_stop_domain_api_v1_admin_domains__domainId__stop_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 domainId: string;
             };
@@ -2052,7 +2087,9 @@ export interface operations {
     admin_create_model_profile_api_v1_admin_runtime_settings_model_profiles_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2187,7 +2224,10 @@ export interface operations {
     };
     admin_users_api_v1_admin_users_get: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2200,9 +2240,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2370,7 +2417,9 @@ export interface operations {
     post_conversation_api_v1_conversations_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };

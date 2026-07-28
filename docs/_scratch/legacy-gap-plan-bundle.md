@@ -36,7 +36,7 @@ Tier 3 (release)
 | Gap | Task | Plan | Prerequisites | Required evidence | Tail / deferred |
 | --- | --- | --- | --- | --- | --- |
 | Real LightRAG runtime | P5-04 | `docs/plans/2026-07-28-006-feat-p5-04-real-lightrag-runtime-plan.md` | P3-03,P5-03,P6-01,P10-03 | `docs/_scratch/p5-04-lightrag-real-runtime-{inventory,evidence}.md`; DRIFT-27 concurrency | P12-04/05/06/07 |
-| Create-idempotency + pagination | P1-07 | `docs/plans/2026-07-28-007-feat-p1-07-idempotency-pagination-plan.md` | P1-06,P0-03 | `docs/_scratch/p1-07-idempotency-pagination-{inventory,evidence}.md` | UI residual none |
+| Create-idempotency + pagination | P1-07 | `docs/plans/2026-07-28-007-feat-p1-07-idempotency-pagination-plan.md` | P1-06,P0-03 | `docs/_scratch/p1-07-idempotency-pagination-{inventory,evidence}.md` — DONE | UI residual none; documents ordering residual named |
 | Region provenance / M-04 | P4-05 | `docs/plans/2026-07-28-008-feat-p4-05-region-provenance-plan.md` | P4-03,P6-02,P9-03 | `docs/_scratch/p4-05-region-provenance-{inventory,evidence}.md` | P12-07 visual |
 | Synthesis isolation + heartbeat | P7-06 | `docs/plans/2026-07-28-009-feat-p7-06-synthesis-isolation-heartbeat-plan.md` | P7-03,P7-04 | `docs/_scratch/p7-06-synthesis-isolation-heartbeat-{inventory,evidence}.md` | P12-05 drain |
 | Contracted browser workflows | P9-07 | `docs/plans/2026-07-28-010-feat-p9-07-contracted-browser-workflows-plan.md` | P9-02..04,P4-05,P11-02 | `docs/_scratch/p9-07-contracted-browser-workflows-{inventory,evidence}.md` | P12-07 Playwright |

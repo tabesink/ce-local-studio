@@ -15,7 +15,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | ID | Phase/outcome | Status | Depends on | Exit gate |
 | --- | --- | --- | --- | --- |
 | P0 | Contract and repository spine | DONE | - | governance, vocabulary, ADRs, API/data/SSE conventions, CI skeleton approved |
-| P1 | Trusted app foundation | IN_PROGRESS | P0 | migrated Postgres, seeded admin, cookie auth, owner/admin guards, health and safe errors, append-only transactional audit pass — P1-01..P1-06 DONE; P1-07 durable create-idempotency + keyset pagination open |
+| P1 | Trusted app foundation | DONE | P0 | migrated Postgres, seeded admin, cookie auth, owner/admin guards, health and safe errors, append-only transactional audit, durable HTTP create-idempotency + keyset pagination — P1-01..P1-07 DONE; evidence `docs/_scratch/p1-07-idempotency-pagination-evidence.md` |
 | P2 | Trusted runtime configuration | DONE | P1 | encrypted credentials, model profiles, parser/synthesis defaults, admin contract tests pass |
 | P3 | Knowledge Domain runtime | DONE | P2 | per-domain runtime boundary, lifecycle operations, leases/generations, readiness proven |
 | P4 | Source preparation | IN_PROGRESS | P3 | upload/storage/parser adapters produce canonical blocks and support retry/cancel/delete — P4-01..P4-04 DONE; P4-05 figure/table region provenance open |
@@ -56,8 +56,10 @@ P0-06 closure evidence (2026-07-24): deterministic generation now emits and byte
 | P1-04 | DONE | P1-01 | request IDs, safe errors/logging, live/ready endpoints |
 | P1-05 | DONE | P1-02,P1-03 | Origin/Host and CSRF policy, session rotation/revocation/TTL, login throttling and ingress auth tests; security persistence/config contract approved 2026-07-24 |
 | P1-06 | DONE | P1-01 | append-only audit schema, transactional AuditService and protected-mutation helper |
-| P1-07 | NOT_STARTED | P1-06,P0-03 | durable HTTP create-idempotency records plus opaque keyset pagination for cataloged list routes — plan `docs/plans/2026-07-28-007-feat-p1-07-idempotency-pagination-plan.md` |
+| P1-07 | DONE | P1-06,P0-03 | durable HTTP create-idempotency records plus opaque keyset pagination for cataloged list routes — plan `docs/plans/2026-07-28-007-feat-p1-07-idempotency-pagination-plan.md`; evidence `docs/_scratch/p1-07-idempotency-pagination-evidence.md` |
 | P2-01 | DONE | P1 | provider_configs, model_profiles, runtime_settings migrations and services |
+
+P1-07 closure evidence (2026-07-28): `docs/_scratch/p1-07-idempotency-pagination-inventory.md` and `docs/_scratch/p1-07-idempotency-pagination-evidence.md`. Shared `http_idempotency_records` (Alembic `a2c7e9f14b80`) backs optional `Idempotency-Key` on ten cataloged create/operation routes including conversation create; five admin lists gain opaque keyset pagination; conversations/documents keyset credited. Focused suite 26 passed; PostgreSQL 16 race suite 3 passed; generated contracts PASS. Residuals: documents `(updatedAt,id)` ordering, claim retention/TTL, browser list UX (P9/P12). P1 phase exit complete.
 | P2-02 | DONE | P2-01 | credential encryption/rotation and safe DTO projection |
 | P2-03 | DONE | P2-01 | synthesis/embedding validation, immutable dimension rules and defaults |
 
