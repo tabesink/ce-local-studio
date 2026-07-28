@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 from pathlib import Path
 
 
@@ -11,6 +13,7 @@ REPO_ROOT = APP_ROOT.parent
 DOCKERFILE = APP_ROOT / "Dockerfile"
 DOCKERIGNORE = APP_ROOT / ".dockerignore"
 COMPOSE = APP_ROOT / "compose.stack.yml"
+COMPOSE_LIVE = APP_ROOT / "compose.stack.live.yml"
 ENV_EXAMPLE = APP_ROOT / ".env.stack.example"
 VERIFY_SH = REPO_ROOT / "scripts" / "verify.sh"
 
@@ -130,3 +133,117 @@ def test_verify_sh_compose_check_supplies_ingress_placeholders() -> None:
     assert "CE_INTERNAL_HOSTS=" in text
     assert "CE_TRUSTED_BFF_PEERS=" in text
     assert "CE_CSRF_SIGNING_KEY=" in text
+
+
+def test_default_compose_keeps_local_controller_and_client() -> None:
+    text = COMPOSE.read_text(encoding="utf-8")
+    assert "CE_DOMAIN_RUNTIME_CONTROLLER_KIND: local" in text
+    assert "CE_LIGHTRAG_CLIENT_KIND: local" in text
+    assert "CE_DOMAIN_RUNTIME_CONTROLLER_KIND: docker" not in text
+    assert "CE_LIGHTRAG_CLIENT_KIND: native" not in text
+
+
+def test_live_overlay_exists_and_pins_docker_native() -> None:
+    assert COMPOSE_LIVE.is_file()
+    text = COMPOSE_LIVE.read_text(encoding="utf-8")
+    assert "CE_DOMAIN_RUNTIME_CONTROLLER_KIND: docker" in text
+    assert "CE_LIGHTRAG_CLIENT_KIND: native" in text
+    assert "CE_STACK_LIVE_IMAGE" in text
+    assert "ce-domain-runtimes" in text
+    assert "/var/run/docker.sock" in text
+    assert "CE_STACK_LIVE_RUNTIME_ROOT" in text
+
+
+def test_env_example_documents_live_docker_native_lane() -> None:
+    text = ENV_EXAMPLE.read_text(encoding="utf-8")
+    assert "compose.stack.live.yml" in text
+    assert "CE_DOMAIN_RUNTIME_CONTROLLER_KIND=docker" in text or "CONTROLLER_KIND=docker" in text
+    assert "CE_LIGHTRAG_CLIENT_KIND=native" in text or "CLIENT_KIND=native" in text
+    assert "CE_STACK_LIVE_RUNTIME_ROOT" in text
+    assert "local/local" in text or "stays local/local" in text
+
+
+def _compose_config_env(*, live_runtime_root: str | None = None) -> dict[str, str]:
+    env = os.environ.copy()
+    env.update(
+        {
+            "POSTGRES_DB": "ce",
+            "POSTGRES_USER": "ce",
+            "POSTGRES_PASSWORD": "ce-password",
+            "CONFIG_ENCRYPTION_KEY": "test-encryption-key-32-bytes-min!",
+            "CE_ADMIN_USERNAME": "admin",
+            "CE_ADMIN_PASSWORD": "admin-password-for-compose-config",
+            "CE_STACK_PUBLIC_ORIGIN": STACK_PUBLIC_ORIGIN,
+            "CE_INTERNAL_HOSTS": "api",
+            "CE_TRUSTED_BFF_PEERS": FRONTEND_PEER,
+            "CE_CSRF_SIGNING_KEY": "test-csrf-signing-key-32-bytes-min!!",
+        }
+    )
+    if live_runtime_root is not None:
+        env["CE_STACK_LIVE_RUNTIME_ROOT"] = live_runtime_root
+        env["CE_DOMAIN_CONTROLLER_IMAGE"] = "context-engine-live:local"
+    return env
+
+
+def test_compose_config_default_resolves_local_kinds() -> None:
+    result = subprocess.run(
+        ["docker", "compose", "-f", str(COMPOSE), "config"],
+        cwd=str(APP_ROOT),
+        env=_compose_config_env(),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "CE_DOMAIN_RUNTIME_CONTROLLER_KIND: local" in result.stdout
+    assert "CE_LIGHTRAG_CLIENT_KIND: local" in result.stdout
+
+
+def test_compose_live_overlay_config_resolves_docker_native() -> None:
+    live_root = "/tmp/ce-p5-04-live-runtime-config"
+    result = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "-f",
+            str(COMPOSE),
+            "-f",
+            str(COMPOSE_LIVE),
+            "config",
+        ],
+        cwd=str(APP_ROOT),
+        env=_compose_config_env(live_runtime_root=live_root),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "CE_DOMAIN_RUNTIME_CONTROLLER_KIND: docker" in result.stdout
+    assert "CE_LIGHTRAG_CLIENT_KIND: native" in result.stdout
+    assert "context-engine-live:local" in result.stdout
+    assert "ce-domain-runtimes" in result.stdout
+    assert live_root in result.stdout
+
+
+def test_compose_live_overlay_fails_closed_without_runtime_root() -> None:
+    env = _compose_config_env()
+    env.pop("CE_STACK_LIVE_RUNTIME_ROOT", None)
+    result = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "-f",
+            str(COMPOSE),
+            "-f",
+            str(COMPOSE_LIVE),
+            "config",
+        ],
+        cwd=str(APP_ROOT),
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    combined = f"{result.stdout}\n{result.stderr}".lower()
+    assert "ce_stack_live_runtime_root" in combined

@@ -1,0 +1,60 @@
+# Opt-in P5-04 real LightRAG runtime lane (not default CI / verify).
+# Requires Docker daemon + host-absolute CE_STACK_LIVE_RUNTIME_ROOT bind-mounted
+# identically into api/worker so sibling domain containers see the same path.
+#
+#   mkdir -p "$CE_STACK_LIVE_RUNTIME_ROOT"
+#   docker compose --env-file .env.stack.local \
+#     -f compose.stack.yml -f compose.stack.live.yml up --build -d
+#
+# Socket mount is local single-operator evidence only — never production /
+# shared multi-tenant. Domain containers use private network ce-domain-runtimes
+# with no host-published ports.
+
+networks:
+  ce_domain_runtimes:
+    name: ce-domain-runtimes
+    driver: bridge
+    internal: true
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CE_STACK_LIVE_IMAGE: "1"
+    image: ${CE_DOMAIN_CONTROLLER_IMAGE:-context-engine-live:local}
+    networks:
+      - ce_stack
+      - ce_domain_runtimes
+    environment:
+      CE_DOMAIN_RUNTIME_CONTROLLER_KIND: docker
+      CE_LIGHTRAG_CLIENT_KIND: native
+      CE_LIGHTRAG_INPROCESS_SYNTHETIC: "false"
+      CE_DOMAIN_CONTROLLER_IMAGE: ${CE_DOMAIN_CONTROLLER_IMAGE:-context-engine-live:local}
+      CE_DOMAIN_CONTROLLER_NETWORK: ce-domain-runtimes
+      CE_DOMAIN_RUNTIME_ROOT: ${CE_STACK_LIVE_RUNTIME_ROOT:?set CE_STACK_LIVE_RUNTIME_ROOT to a host-absolute path}
+    volumes:
+      - ${CE_STACK_LIVE_RUNTIME_ROOT:?set CE_STACK_LIVE_RUNTIME_ROOT to a host-absolute path}:${CE_STACK_LIVE_RUNTIME_ROOT:?set CE_STACK_LIVE_RUNTIME_ROOT to a host-absolute path}
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CE_STACK_LIVE_IMAGE: "1"
+    image: ${CE_DOMAIN_CONTROLLER_IMAGE:-context-engine-live:local}
+    networks:
+      - ce_stack
+      - ce_domain_runtimes
+    environment:
+      CE_DOMAIN_RUNTIME_CONTROLLER_KIND: docker
+      CE_LIGHTRAG_CLIENT_KIND: native
+      CE_LIGHTRAG_INPROCESS_SYNTHETIC: "false"
+      CE_DOMAIN_CONTROLLER_IMAGE: ${CE_DOMAIN_CONTROLLER_IMAGE:-context-engine-live:local}
+      CE_DOMAIN_CONTROLLER_NETWORK: ce-domain-runtimes
+      CE_DOMAIN_RUNTIME_ROOT: ${CE_STACK_LIVE_RUNTIME_ROOT:?set CE_STACK_LIVE_RUNTIME_ROOT to a host-absolute path}
+    volumes:
+      - ${CE_STACK_LIVE_RUNTIME_ROOT:?set CE_STACK_LIVE_RUNTIME_ROOT to a host-absolute path}:${CE_STACK_LIVE_RUNTIME_ROOT:?set CE_STACK_LIVE_RUNTIME_ROOT to a host-absolute path}
+      - /var/run/docker.sock:/var/run/docker.sock
