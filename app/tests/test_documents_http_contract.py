@@ -276,3 +276,47 @@ def test_evidence_location_http_success_projection(
     assert response.json() == payload
     assert "sourceDocumentId" not in response.text
     assert "originalObjectKey" not in response.text
+
+
+def test_evidence_location_http_success_with_region(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = {
+        "evidence": {"id": "ev_locationref000000000001", "citationLabel": "[1]", "kind": "figure"},
+        "document": {
+            "ref": "doc_libraryref00000000000001",
+            "label": "pump-service-manual.pdf",
+            "previewKind": "pdf",
+            "pageCount": 24,
+        },
+        "anchor": {
+            "pageNumber": 18,
+            "region": {"x": 0.12, "y": 0.24, "width": 0.66, "height": 0.41},
+            "sectionLabel": "4.2 Relief valve",
+            "fallback": "region",
+        },
+    }
+    monkeypatch.setattr(routes_module, "get_evidence_location", lambda *_a, **_k: payload)
+    app = _http_app(tmp_path)
+    with TestClient(app) as client:
+        response = client.get(f"{CANONICAL_API_PREFIX}/evidence/ev_locationref000000000001/location")
+
+    assert response.status_code == 200
+    assert response.json() == payload
+    for forbidden in ("sourceDocumentId", "originalObjectKey", "block_valve", "region_x"):
+        assert forbidden not in response.text
+
+
+@pytest.mark.parametrize("query", ["x=0.1", "region=1", "y=0&width=1"])
+def test_evidence_location_http_rejects_coordinate_query_params(
+    tmp_path: Path,
+    query: str,
+) -> None:
+    app = _http_app(tmp_path)
+    with TestClient(app) as client:
+        response = client.get(
+            f"{CANONICAL_API_PREFIX}/evidence/ev_locationref000000000001/location?{query}"
+        )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"

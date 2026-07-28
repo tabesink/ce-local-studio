@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from context_engine.adapters.object_storage import ObjectStorageError
 from context_engine.config import Settings
 from context_engine.models import (
+    SOURCE_BLOCK_KIND_FIGURE,
     SOURCE_INDEX_STATE_READY,
     SOURCE_STATE_DELETING,
     SOURCE_STATE_PREPARED,
@@ -25,6 +26,7 @@ from context_engine.models import (
     Domain,
     SourceBlock,
     SourceDocument,
+    SourceImage,
 )
 from context_engine.services.auth import iso_utc
 from context_engine.services.domains import (
@@ -32,7 +34,7 @@ from context_engine.services.domains import (
     domain_available,
     safe_member_domain,
 )
-from context_engine.services.evidence import safe_section_label
+from context_engine.services.evidence import project_persisted_evidence_anchor
 from context_engine.services.indexing import source_has_current_index_identity, source_is_query_eligible
 from context_engine.services.sources import (
     SourceStorageError,
@@ -464,10 +466,20 @@ def get_evidence_location(
             "A governed PDF preview is not available for this document.",
         )
 
-    if evidence_ref_row.citation_label is None or block.page_start is None:
+    image_pages: set[int] = set()
+    if block.kind == SOURCE_BLOCK_KIND_FIGURE and block.page_start is None:
+        pages = db.scalars(
+            select(SourceImage.page_number).where(
+                SourceImage.source_block_id == block.id,
+                SourceImage.page_number.is_not(None),
+            )
+        ).all()
+        image_pages = {int(page) for page in pages if page is not None}
+
+    anchor = project_persisted_evidence_anchor(block, image_pages=image_pages)
+    if evidence_ref_row.citation_label is None or anchor is None:
         raise DocumentError(410, "evidence_unavailable", "Evidence is no longer available.")
 
-    section_label = safe_section_label(block.section_path)
     return {
         "evidence": {
             "id": evidence_ref_row.public_ref,
@@ -481,9 +493,9 @@ def get_evidence_location(
             "pageCount": document_page_count(db, source),
         },
         "anchor": {
-            "pageNumber": block.page_start,
-            "region": None,
-            "sectionLabel": section_label,
-            "fallback": "section" if section_label else "page",
+            "pageNumber": anchor["pageNumber"],
+            "region": anchor.get("region"),
+            "sectionLabel": anchor.get("sectionLabel"),
+            "fallback": anchor["fallback"],
         },
     }

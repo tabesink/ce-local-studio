@@ -13,6 +13,7 @@ from context_engine.api.catalog_schemas import DocumentSummaryDto, EvidenceLocat
 from context_engine.config import Settings
 from context_engine.db import Base
 from context_engine.models import (
+    SOURCE_BLOCK_KIND_FIGURE,
     SOURCE_BLOCK_KIND_TEXT,
     SOURCE_INDEX_STATE_READY,
     SOURCE_STATE_DELETING,
@@ -28,6 +29,10 @@ from context_engine.models import (
     ProviderConfig,
     SourceBlock,
     SourceDocument,
+)
+from context_engine.services.evidence import (
+    project_persisted_evidence_anchor,
+    safe_section_label,
 )
 from context_engine.services import documents as documents_module
 from context_engine.services.documents import (
@@ -288,6 +293,14 @@ def test_get_document_content_rejects_non_pdf_original(
     assert exc_info.value.code == "document_preview_unavailable"
 
 
+class _ScalarsResult:
+    def __init__(self, values: list[object]) -> None:
+        self._values = values
+
+    def all(self) -> list[object]:
+        return list(self._values)
+
+
 class _LocationSession:
     """Minimal session stub that exercises get_evidence_location ownership fences."""
 
@@ -301,9 +314,11 @@ class _LocationSession:
         block: SourceBlock | None = None,
         domain: Domain | None = None,
         page_count: int | None = 18,
+        image_pages: list[int] | None = None,
     ) -> None:
         self._evidence = evidence
         self._page_count = page_count
+        self._image_pages = list(image_pages or [])
         self._by_key: dict[tuple[type, str], object] = {}
         for entity in (turn, conversation, source, block, domain):
             if entity is not None:
@@ -319,23 +334,40 @@ class _LocationSession:
             return self._evidence
         return self._page_count
 
+    def scalars(self, statement):  # noqa: ANN001
+        return _ScalarsResult(self._image_pages)
+
     def get(self, model, key):  # noqa: ANN001
         return self._by_key.get((model, key))
 
 
-def _location_graph(*, owner_user_id: str = "user-owner"):
+def _location_graph(
+    *,
+    owner_user_id: str = "user-owner",
+    kind: str = SOURCE_BLOCK_KIND_TEXT,
+    page_start: int | None = 18,
+    section_path: str | None = "4.2 Relief valve",
+    region: tuple[float, float, float, float] | None = None,
+):
     domain = _domain()
     source = _source()
+    region_x = region_y = region_width = region_height = None
+    if region is not None:
+        region_x, region_y, region_width, region_height = region
     block = SourceBlock(
         id=str(uuid4()),
         source_document_id=source.id,
         domain_id=domain.id,
         source_order=1,
-        kind=SOURCE_BLOCK_KIND_TEXT,
+        kind=kind,
         canonical_markdown="private body",
-        page_start=18,
-        page_end=18,
-        section_path="4.2 Relief valve",
+        page_start=page_start,
+        page_end=page_start,
+        section_path=section_path,
+        region_x=region_x,
+        region_y=region_y,
+        region_width=region_width,
+        region_height=region_height,
         created_at=datetime(2026, 7, 25, 12, 0, 0),
     )
     conversation = Conversation(
@@ -401,9 +433,135 @@ def test_get_evidence_location_success_for_owner(monkeypatch: pytest.MonkeyPatch
     assert dto.document.ref == source.public_ref
     assert dto.anchor.page_number == 18
     assert dto.anchor.section_label == "4.2 Relief valve"
+    assert dto.anchor.region is None
+    assert dto.anchor.fallback == "section"
     assert "private body" not in str(payload)
     assert source.id not in str(payload)
     assert block.id not in str(payload)
+
+
+def test_get_evidence_location_figure_region_for_owner(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # M-04: seeded figure region projects through authorized location.
+    domain, source, block, conversation, turn, evidence = _location_graph(
+        kind=SOURCE_BLOCK_KIND_FIGURE,
+        section_path='["4.2 Relief valve"]',
+        region=(0.12, 0.24, 0.66, 0.41),
+    )
+    settings = Settings(
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'loc-region.db'}",
+        testing=True,
+        source_storage_root=str(tmp_path / "source-root"),
+    )
+    monkeypatch.setattr(documents_module, "source_is_query_eligible", lambda *_a, **_k: True)
+    session = _LocationSession(
+        evidence=evidence,
+        turn=turn,
+        conversation=conversation,
+        source=source,
+        block=block,
+        domain=domain,
+    )
+
+    payload = get_evidence_location(
+        session,
+        settings,
+        owner_user_id="user-owner",
+        evidence_ref=evidence.public_ref,
+    )
+    dto = EvidenceLocationResponseDto.model_validate(payload)
+    assert dto.evidence.kind == "figure"
+    assert dto.anchor.page_number == 18
+    assert dto.anchor.section_label == "4.2 Relief valve"
+    assert dto.anchor.fallback == "region"
+    assert dto.anchor.region is not None
+    assert dto.anchor.region.model_dump() == {
+        "x": 0.12,
+        "y": 0.24,
+        "width": 0.66,
+        "height": 0.41,
+    }
+    rendered = str(payload)
+    for forbidden in (
+        block.id,
+        source.id,
+        source.original_object_key,
+        "private body",
+        "canonical_markdown",
+        "region_x",
+    ):
+        assert forbidden not in rendered
+
+
+def test_get_evidence_location_figure_page_join_when_page_start_null(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    domain, source, block, conversation, turn, evidence = _location_graph(
+        kind=SOURCE_BLOCK_KIND_FIGURE,
+        page_start=None,
+        section_path=None,
+        region=(0.10, 0.30, 0.80, 0.34),
+    )
+    settings = Settings(
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'loc-page-join.db'}",
+        testing=True,
+        source_storage_root=str(tmp_path / "source-root"),
+    )
+    monkeypatch.setattr(documents_module, "source_is_query_eligible", lambda *_a, **_k: True)
+    session = _LocationSession(
+        evidence=evidence,
+        turn=turn,
+        conversation=conversation,
+        source=source,
+        block=block,
+        domain=domain,
+        image_pages=[21],
+    )
+
+    payload = get_evidence_location(
+        session,
+        settings,
+        owner_user_id="user-owner",
+        evidence_ref=evidence.public_ref,
+    )
+    dto = EvidenceLocationResponseDto.model_validate(payload)
+    assert dto.anchor.page_number == 21
+    assert dto.anchor.fallback == "region"
+    assert dto.anchor.region is not None
+    assert dto.anchor.region.x == 0.10
+
+
+def test_project_persisted_evidence_anchor_and_section_label() -> None:
+    block = SourceBlock(
+        id=str(uuid4()),
+        source_document_id=str(uuid4()),
+        domain_id="domain-manuals",
+        source_order=1,
+        kind=SOURCE_BLOCK_KIND_FIGURE,
+        canonical_markdown="private",
+        page_start=None,
+        page_end=None,
+        section_path='["4.2 Relief valve"]',
+        region_x=0.12,
+        region_y=0.24,
+        region_width=0.66,
+        region_height=0.41,
+        created_at=datetime(2026, 7, 25, 12, 0, 0),
+    )
+    assert safe_section_label(block.section_path) == "4.2 Relief valve"
+    assert project_persisted_evidence_anchor(block, image_pages=set()) is None
+    anchor = project_persisted_evidence_anchor(block, image_pages={18})
+    assert anchor == {
+        "pageNumber": 18,
+        "region": {"x": 0.12, "y": 0.24, "width": 0.66, "height": 0.41},
+        "fallback": "region",
+        "sectionLabel": "4.2 Relief valve",
+    }
+    # Conflicting linked image pages leave page unprovable (no fabrication).
+    assert project_persisted_evidence_anchor(block, image_pages={18, 19}) is None
 
 
 def test_get_evidence_location_wrong_owner_is_404(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -448,6 +606,66 @@ def test_get_evidence_location_unknown_ref_is_404(tmp_path: Path) -> None:
         )
     assert exc_info.value.status_code == 404
     assert exc_info.value.code == "evidence_not_found"
+
+
+@pytest.mark.parametrize(
+    ("caller_id", "owner_id"),
+    [
+        ("user-other", "user-owner"),
+        ("user-admin", "user-owner"),
+    ],
+)
+def test_get_evidence_location_c04_stable_404_envelope(
+    caller_id: str,
+    owner_id: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # C-04: unknown, cross-owner, and admin-on-member share evidence_not_found.
+    domain, source, block, conversation, turn, evidence = _location_graph(
+        owner_user_id=owner_id,
+        kind=SOURCE_BLOCK_KIND_FIGURE,
+        region=(0.12, 0.24, 0.66, 0.41),
+    )
+    settings = Settings(
+        database_url=f"sqlite+pysqlite:///{tmp_path / f'loc-c04-{caller_id}.db'}",
+        testing=True,
+        source_storage_root=str(tmp_path / "source-root"),
+    )
+    monkeypatch.setattr(documents_module, "source_is_query_eligible", lambda *_a, **_k: True)
+    owned = _LocationSession(
+        evidence=evidence,
+        turn=turn,
+        conversation=conversation,
+        source=source,
+        block=block,
+        domain=domain,
+    )
+    missing = _LocationSession(evidence=None)
+
+    denied_owned = pytest.raises(DocumentError)
+    denied_missing = pytest.raises(DocumentError)
+    with denied_owned as owned_info:
+        get_evidence_location(
+            owned,
+            settings,
+            owner_user_id=caller_id,
+            evidence_ref=evidence.public_ref,
+        )
+    with denied_missing as missing_info:
+        get_evidence_location(
+            missing,
+            settings,
+            owner_user_id=caller_id,
+            evidence_ref="ev_" + "z" * 32,
+        )
+    assert owned_info.value.status_code == missing_info.value.status_code == 404
+    assert owned_info.value.code == missing_info.value.code == "evidence_not_found"
+    assert owned_info.value.message == missing_info.value.message == "Evidence not found."
+    for body in (str(owned_info.value), str(missing_info.value)):
+        assert "0.12" not in body
+        assert block.id not in body
+        assert source.original_object_key not in body
 
 
 @pytest.mark.parametrize(

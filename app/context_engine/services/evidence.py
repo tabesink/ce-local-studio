@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import threading
 import time
@@ -348,8 +349,66 @@ def safe_evidence_item(block: SourceBlock, source: SourceDocument) -> EvidenceIt
 def safe_section_label(section_path: str | None) -> str | None:
     if not section_path:
         return None
-    label = " ".join(section_path.split())[:160].rstrip()
+    raw = section_path.strip()
+    if raw.startswith("["):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, list) and parsed:
+            raw = str(parsed[-1])
+    label = " ".join(raw.split())[:160].rstrip()
     return label or None
+
+
+def resolve_block_page_number(block: SourceBlock, *, image_pages: set[int]) -> int | None:
+    page_number = block.page_start
+    if page_number is None and block.kind == SOURCE_BLOCK_KIND_FIGURE and len(image_pages) == 1:
+        page_number = next(iter(image_pages))
+    return page_number
+
+
+def _block_region_dto(block: SourceBlock) -> dict[str, float] | None:
+    if (
+        block.region_x is None
+        or block.region_y is None
+        or block.region_width is None
+        or block.region_height is None
+    ):
+        return None
+    return {
+        "x": float(block.region_x),
+        "y": float(block.region_y),
+        "width": float(block.region_width),
+        "height": float(block.region_height),
+    }
+
+
+def project_persisted_evidence_anchor(
+    block: SourceBlock,
+    *,
+    image_pages: set[int],
+) -> dict[str, object] | None:
+    """Location/turn/SSE anchor projection — may include optional region."""
+    page_number = resolve_block_page_number(block, image_pages=image_pages)
+    if page_number is None:
+        return None
+    section_label = safe_section_label(block.section_path)
+    region = _block_region_dto(block)
+    if region is not None:
+        fallback = "region"
+    elif section_label:
+        fallback = "section"
+    else:
+        fallback = "page"
+    anchor: dict[str, object] = {
+        "pageNumber": page_number,
+        "region": region,
+        "fallback": fallback,
+    }
+    if section_label:
+        anchor["sectionLabel"] = section_label
+    return anchor
 
 
 def _evidence_anchor(
@@ -357,9 +416,8 @@ def _evidence_anchor(
     *,
     image_pages: set[int],
 ) -> dict[str, object] | None:
-    page_number = block.page_start
-    if page_number is None and block.kind == SOURCE_BLOCK_KIND_FIGURE and len(image_pages) == 1:
-        page_number = next(iter(image_pages))
+    """Retrieval-list anchor — page/section only; never includes region."""
+    page_number = resolve_block_page_number(block, image_pages=image_pages)
     if page_number is None:
         return None
     section_label = safe_section_label(block.section_path)
