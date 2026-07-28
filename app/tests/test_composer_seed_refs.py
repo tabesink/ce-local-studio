@@ -15,12 +15,15 @@ from context_engine.dev.seed_composer_refs import (
     ACCEPTED_SOURCE_PUBLIC_REF,
     ACCEPTED_TEMPLATE_PUBLIC_REF,
     DOMAIN_POLICIES_ID,
+    FIGURE_BOUND_TOKEN_KEYS,
     RESERVED_CONSUMED_TOKEN_KEY,
     SEED_CLOCK,
     TOKEN_HASHES,
     TURN_FIGURE_ID,
     TURN_REDACTED_ID,
     USER_NOAH_ID,
+    figure_turn_composer_ref_fingerprint,
+    fixture_token_preimage,
     list_seeded_token_fixture_keys,
     public_accepted_ref_projection,
     seed_composer_ref_fixtures,
@@ -31,10 +34,13 @@ from context_engine.models import (
     COMPOSER_REF_KIND_EVIDENCE,
     COMPOSER_REF_KIND_SOURCE,
     COMPOSER_REF_KIND_TEMPLATE,
+    EMPTY_COMPOSER_REF_FINGERPRINT,
     ComposerRefToken,
+    ConversationTurn,
     ConversationTurnComposerRef,
     PromptTemplate,
 )
+from context_engine.services.composer_refs import composer_ref_fingerprint
 
 
 def _session(tmp_path: Path) -> Session:
@@ -65,6 +71,9 @@ def test_gated_composer_seed_covers_kinds_denials_and_accepted_refs(tmp_path: Pa
         valid = next(token for token in tokens if token.safe_description == "token_mina_source_valid")
         assert valid.expires_at > SEED_CLOCK
         assert valid.consumed_at is None
+        for key in ("token_mina_evidence_valid", "token_mina_template_valid"):
+            row = next(token for token in tokens if token.safe_description == key)
+            assert row.consumed_at is None
 
         consumed = next(token for token in tokens if token.safe_description == RESERVED_CONSUMED_TOKEN_KEY)
         assert consumed.consumed_at is not None
@@ -72,6 +81,24 @@ def test_gated_composer_seed_covers_kinds_denials_and_accepted_refs(tmp_path: Pa
         assert consumed.expires_at > SEED_CLOCK
         assert consumed.owner_user_id == valid.owner_user_id
         assert consumed.ref_kind == COMPOSER_REF_KIND_SOURCE
+
+        for key in FIGURE_BOUND_TOKEN_KEYS:
+            bound = next(token for token in tokens if token.safe_description == key)
+            assert bound.consumed_at is not None
+            assert bound.expires_at > SEED_CLOCK
+
+        figure_turn = db.get(ConversationTurn, TURN_FIGURE_ID)
+        assert figure_turn is not None
+        expected_fp = composer_ref_fingerprint(
+            tuple(fixture_token_preimage(key) for key in FIGURE_BOUND_TOKEN_KEYS)
+        )
+        assert figure_turn.composer_ref_fingerprint == expected_fp
+        assert figure_turn.composer_ref_fingerprint == figure_turn_composer_ref_fingerprint()
+        assert figure_turn.composer_ref_fingerprint != EMPTY_COMPOSER_REF_FINGERPRINT
+
+        redacted_turn = db.get(ConversationTurn, TURN_REDACTED_ID)
+        assert redacted_turn is not None
+        assert redacted_turn.composer_ref_fingerprint == EMPTY_COMPOSER_REF_FINGERPRINT
 
         noah = next(token for token in tokens if token.safe_description == "token_noah_wrong_owner")
         assert noah.owner_user_id == USER_NOAH_ID

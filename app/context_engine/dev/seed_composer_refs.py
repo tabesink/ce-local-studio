@@ -38,9 +38,20 @@ from context_engine.models import (
     SourceDocument,
     User,
 )
+from context_engine.services.composer_refs import composer_ref_fingerprint
 
 SEED_CLOCK = datetime(2026, 7, 17, 12, 0, 0)
 RESERVED_CONSUMED_TOKEN_KEY = "token_mina_consumed_source"
+# Dedicated consumed tokens that honestly fingerprint turn_mina_figure.
+# Do not reuse token_mina_*_valid — those must stay unconsumed for the denial matrix.
+FIGURE_BOUND_SOURCE_TOKEN_KEY = "token_mina_figure_bound_source"
+FIGURE_BOUND_EVIDENCE_TOKEN_KEY = "token_mina_figure_bound_evidence"
+FIGURE_BOUND_TEMPLATE_TOKEN_KEY = "token_mina_figure_bound_template"
+FIGURE_BOUND_TOKEN_KEYS = (
+    FIGURE_BOUND_SOURCE_TOKEN_KEY,
+    FIGURE_BOUND_EVIDENCE_TOKEN_KEY,
+    FIGURE_BOUND_TEMPLATE_TOKEN_KEY,
+)
 
 USER_MINA_ID = "a1111111-1111-4111-8111-user00000001"
 USER_NOAH_ID = "a1111111-1111-4111-8111-user00000002"
@@ -75,14 +86,24 @@ TOKEN_FIXTURE_KEYS = (
     "token_mina_deleted_target",
     "token_mina_disabled_template",
     RESERVED_CONSUMED_TOKEN_KEY,
+    *FIGURE_BOUND_TOKEN_KEYS,
 )
 
 
+def fixture_token_preimage(fixture_key: str) -> str:
+    return f"ce-p11-01:{fixture_key}"
+
+
 def fixture_token_hash(fixture_key: str) -> str:
-    return sha256(f"ce-p11-01:{fixture_key}".encode("utf-8")).hexdigest()
+    return sha256(fixture_token_preimage(fixture_key).encode("utf-8")).hexdigest()
 
 
 TOKEN_HASHES = {key: fixture_token_hash(key) for key in TOKEN_FIXTURE_KEYS}
+
+
+def figure_turn_composer_ref_fingerprint() -> str:
+    """Production helper over dedicated consumed figure-bound token preimages."""
+    return composer_ref_fingerprint(tuple(fixture_token_preimage(key) for key in FIGURE_BOUND_TOKEN_KEYS))
 
 
 @dataclass(frozen=True)
@@ -209,6 +230,39 @@ def _token_fixtures(*, now: datetime) -> tuple[TokenFixture, ...]:
             safe_label="Consumed source",
             expires_at=valid_expiry,
             consumed_at=now - timedelta(minutes=5),
+        ),
+        TokenFixture(
+            fixture_key=FIGURE_BOUND_SOURCE_TOKEN_KEY,
+            token_id="b1111111-1111-4111-8111-token0000010",
+            owner_user_id=USER_MINA_ID,
+            ref_kind=COMPOSER_REF_KIND_SOURCE,
+            target_id=SOURCE_PUMP_ID,
+            domain_id=DOMAIN_MANUALS_ID,
+            safe_label="Pump manual",
+            expires_at=valid_expiry,
+            consumed_at=SEED_CLOCK - timedelta(minutes=10),
+        ),
+        TokenFixture(
+            fixture_key=FIGURE_BOUND_EVIDENCE_TOKEN_KEY,
+            token_id="b1111111-1111-4111-8111-token0000011",
+            owner_user_id=USER_MINA_ID,
+            ref_kind=COMPOSER_REF_KIND_EVIDENCE,
+            target_id=EVIDENCE_FIGURE_ID,
+            domain_id=DOMAIN_MANUALS_ID,
+            safe_label="Relief valve figure",
+            expires_at=valid_expiry,
+            consumed_at=SEED_CLOCK - timedelta(minutes=10),
+        ),
+        TokenFixture(
+            fixture_key=FIGURE_BOUND_TEMPLATE_TOKEN_KEY,
+            token_id="b1111111-1111-4111-8111-token0000012",
+            owner_user_id=USER_MINA_ID,
+            ref_kind=COMPOSER_REF_KIND_TEMPLATE,
+            target_id=TEMPLATE_SAFETY_SUMMARY_ID,
+            domain_id=None,
+            safe_label="Safety summary",
+            expires_at=valid_expiry,
+            consumed_at=SEED_CLOCK - timedelta(minutes=10),
         ),
     )
 
@@ -391,6 +445,7 @@ def _upsert_conversation_graph(db: Session) -> None:
         conversation.title = "Mina manuals"
     db.flush()
 
+    figure_fingerprint = figure_turn_composer_ref_fingerprint()
     figure = db.get(ConversationTurn, TURN_FIGURE_ID)
     if figure is None:
         db.add(
@@ -404,7 +459,7 @@ def _upsert_conversation_graph(db: Session) -> None:
                 status=TURN_STATUS_COMPLETED,
                 user_message="Where is the relief valve?",
                 assistant_answer="The relief valve is downstream of the pump [1].",
-                composer_ref_fingerprint=EMPTY_COMPOSER_REF_FINGERPRINT,
+                composer_ref_fingerprint=figure_fingerprint,
                 created_at=SEED_CLOCK,
                 started_at=SEED_CLOCK,
                 completed_at=SEED_CLOCK,
@@ -415,6 +470,7 @@ def _upsert_conversation_graph(db: Session) -> None:
         figure.public_ref = TURN_FIGURE_PUBLIC_REF
         figure.status = TURN_STATUS_COMPLETED
         figure.domain_id = DOMAIN_MANUALS_ID
+        figure.composer_ref_fingerprint = figure_fingerprint
 
     redacted = db.get(ConversationTurn, TURN_REDACTED_ID)
     if redacted is None:
@@ -428,6 +484,7 @@ def _upsert_conversation_graph(db: Session) -> None:
                 status=TURN_STATUS_REDACTED,
                 user_message="Preserved redacted question.",
                 assistant_answer=None,
+                # Projection/redaction-only parent — not a fingerprint/replay demo.
                 composer_ref_fingerprint=EMPTY_COMPOSER_REF_FINGERPRINT,
                 created_at=SEED_CLOCK,
                 started_at=SEED_CLOCK,
@@ -439,6 +496,7 @@ def _upsert_conversation_graph(db: Session) -> None:
         redacted.public_ref = TURN_REDACTED_PUBLIC_REF
         redacted.status = TURN_STATUS_REDACTED
         redacted.assistant_answer = None
+        redacted.composer_ref_fingerprint = EMPTY_COMPOSER_REF_FINGERPRINT
     db.flush()
 
     evidence = db.get(ConversationTurnEvidenceRef, EVIDENCE_FIGURE_ID)

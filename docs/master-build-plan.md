@@ -25,7 +25,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | P8 | Operational safety and Phase 1 gate | DONE | P1-P7 | transactional audit writes, allowlisted logs, request/trace correlation, health, privacy scans, and resilience evidence pass |
 | P9 | Thin Next.js frontend | DONE | P1-P8 | login/chat/documents/settings and the reserved graph state use only versioned APIs and pass parity/accessibility checks — P9-01..P9-05 DONE; P12 owns deployed-ingress / visual-matrix residuals |
 | P10 | Deployable application stack | DONE | P8-P9 | runnable Compose stack, explicit migrations/bootstrap, worker lifecycle, smoke path, and operator runbook pass |
-| P11 | Governed context assembly | NOT_STARTED | P6-P7 | opaque refs for sources/evidence/templates, private bounded assembly, replay fingerprint and invalidation pass |
+| P11 | Governed context assembly | DONE | P6-P7 | opaque refs for sources/evidence/templates, private bounded assembly, replay fingerprint and invalidation pass — P11-01..P11-03 DONE; P11-04 remains product-gated BLOCKED |
 | P12 | Production release and recovery | NOT_STARTED | P0-P11 | immutable artifacts, deployed-path streaming, migration/rollback, security/load/backup/restore and runbooks pass |
 
 ## Detailed task register
@@ -352,7 +352,7 @@ CSRF, and mid-turn lease heartbeat.
 | P10-03 | DONE | P10-02 | startup/shutdown, worker claim recovery and deployment operator runbook — evidence `docs/_scratch/p10-03-worker-lifecycle-evidence.md`; TLS/stream-drain/HA/production store remain P12 |
 | P11-01 | DONE | P6 | prompt_templates/composer_ref_tokens/accepted-ref schema and seeds for source/evidence/template refs — evidence `docs/_scratch/p11-01-composer-ref-schema-evidence.md`; discover/consume remain P11-02 (DRIFT-26); assembly/fingerprint P11-03 |
 | P11-02 | DONE | P11-01 | discovery, opaque-token validation, domain compatibility, expiry, and one-use consume — evidence `docs/_scratch/p11-02-composer-ref-discover-consume-evidence.md`; assembly/fingerprint/replay P11-03; browser discover unlock later |
-| P11-03 | NOT_STARTED | P11-02,P7 | private context assembly, turn fingerprint, replay/conflict and redaction |
+| P11-03 | DONE | P11-02,P7 | private context assembly, turn fingerprint, replay/conflict and redaction — evidence `docs/_scratch/p11-03-assembly-fingerprint-replay-evidence.md`; browser discover unlock and P11-04 remain |
 | P11-04 | BLOCKED | P7-04,P9-02,P11-03 | require product-owner evidence of repeated Evidence reattachment need, comprehension of explicit accept/dismiss behavior, and no pressure to weaken the sealed-chat baseline; only after approval, amend HTTP, DTO, interaction-state, component, and accessibility contracts and implement compose-epoch, focus, touch, announcement, recovery, narrow-layout, and cross-tab rules |
 
 ### P12 - Production release and recovery
