@@ -4,7 +4,7 @@ Date: 2026-07-28
 
 Owner: P5-04
 
-Status: IN_PROGRESS — inventory frozen; implementation units U2–U7 pending
+Status: DONE — inventory frozen; U2–U7 implemented; evidence `docs/_scratch/p5-04-lightrag-real-runtime-evidence.md`
 
 Requirements and cases: FR-05; A-03/A-04/A-08/A-09/C-01; DRIFT-27 concurrency
 residual; `docs/master-build-plan.md` P5-04 reopen (2026-07-28);

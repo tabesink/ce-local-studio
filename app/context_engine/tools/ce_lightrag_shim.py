@@ -68,12 +68,21 @@ def create_app() -> FastAPI:
     import lightrag
     import numpy as np
     from lightrag import LightRAG
-    from lightrag.utils import wrap_embedding_func_with_attrs
+    from lightrag.utils import Tokenizer, wrap_embedding_func_with_attrs
 
     assert_vendored_lightrag_loaded(lightrag)
 
     embed_dim = int(os.environ.get("CE_EMBEDDING_DIMENSIONS", "8"))
     model_name = os.environ.get("CE_EMBEDDING_MODEL_NAME", "ce-domain-embedding")
+
+    class _OfflineCharTokenizer:
+        """Reversible char tokenizer — no tiktoken CDN (domain net is internal)."""
+
+        def encode(self, content: str) -> list[int]:
+            return [ord(char) for char in content]
+
+        def decode(self, tokens: list[int]) -> str:
+            return "".join(chr(token) for token in tokens if 0 <= int(token) <= 0x10FFFF)
 
     @wrap_embedding_func_with_attrs(embedding_dim=embed_dim, max_token_size=8192, model_name=model_name)
     async def embed(texts, **_kwargs):
@@ -93,7 +102,9 @@ def create_app() -> FastAPI:
         working_dir=str(WORKING_DIR),
         embedding_func=embed,
         llm_model_func=llm,
-        chunk_token_size=256,
+        tokenizer=Tokenizer(model_name="ce-offline", tokenizer=_OfflineCharTokenizer()),
+        # Char tokenizer: keep schema-v2 markers intact (256 would split mid-marker).
+        chunk_token_size=int(os.environ.get("CE_LIGHTRAG_CHUNK_TOKEN_SIZE", "16384")),
         chunk_overlap_token_size=0,
     )
 
