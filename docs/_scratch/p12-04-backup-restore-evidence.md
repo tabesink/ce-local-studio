@@ -6,7 +6,7 @@ Status: DONE at scripted **unit-test altitude** + operator runbook; **opt-in thr
 Plan: `docs/plans/2026-07-28-005-feat-p12-04-backup-restore-drills-plan.md`  
 Inventory: `docs/_scratch/p12-04-backup-restore-inventory.md`  
 Runbook: `docs/operations/backup-restore-incident-runbook.md`  
-Artifact revision at evidence write: `3ee1cad` (`feat/p12-04-backup-restore-drills`)
+Artifact revision at evidence write: `4e22d9b` (`feat/p12-04-backup-restore-drills`; U6 helpers in `9c7b20b`)
 
 ## Prerequisites cited (DONE — do not re-prove)
 
