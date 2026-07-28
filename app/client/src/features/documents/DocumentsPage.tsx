@@ -41,7 +41,7 @@ import {
   type DocumentSummary,
   type OutlineItem,
 } from "@/features/documents/api";
-import { PdfPreview } from "@/features/documents/PdfPreview";
+import { PdfPreview, type PdfPreviewAnchor } from "@/features/documents/PdfPreview";
 import {
   buildChatReturnHref,
   hasChatReturn,
@@ -50,8 +50,15 @@ import {
 
 type PreviewState =
   | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "pdf"; objectUrl: string; page: number; exactLocationUnavailable?: boolean }
+  | { kind: "loading"; locatingEvidence?: boolean }
+  | {
+      kind: "pdf";
+      objectUrl: string;
+      page: number;
+      exactLocationUnavailable?: boolean;
+      anchor?: PdfPreviewAnchor | null;
+      anchorGeneration?: number;
+    }
   | { kind: "unavailable"; message: string; requestId?: string | null }
   | { kind: "failed"; message: string; requestId?: string | null };
 
@@ -328,11 +335,18 @@ function DocumentsPageInner() {
   }, [adminSources, selectedRef]);
 
   const loadPdfContent = useCallback(
-    async (documentRef: string, page: number, generation: number, exactLocationUnavailable = false) => {
+    async (
+      documentRef: string,
+      page: number,
+      generation: number,
+      exactLocationUnavailable = false,
+      anchor: PdfPreviewAnchor | null = null,
+      anchorGeneration = 0,
+    ) => {
       contentAbortRef.current?.abort();
       const controller = new AbortController();
       contentAbortRef.current = controller;
-      setPreviewSafe({ kind: "loading" });
+      setPreviewSafe({ kind: "loading", locatingEvidence: Boolean(anchor) });
       try {
         const { blob } = await fetchDocumentContent(documentRef, { signal: controller.signal });
         if (selectionGenerationRef.current !== generation || controller.signal.aborted) return;
@@ -341,7 +355,14 @@ function DocumentsPageInner() {
           revokeObjectUrl(objectUrl);
           return;
         }
-        setPreviewSafe({ kind: "pdf", objectUrl, page, exactLocationUnavailable });
+        setPreviewSafe({
+          kind: "pdf",
+          objectUrl,
+          page,
+          exactLocationUnavailable,
+          anchor,
+          anchorGeneration,
+        });
       } catch (err) {
         if (controller.signal.aborted || selectionGenerationRef.current !== generation) return;
         setPreviewSafe(mapDocumentPreviewError(err));
@@ -351,21 +372,39 @@ function DocumentsPageInner() {
   );
 
   const openDocument = useCallback(
-    async (documentRef: string, options?: { page?: number | null; exactLocationUnavailable?: boolean }) => {
+    async (
+      documentRef: string,
+      options?: {
+        page?: number | null;
+        exactLocationUnavailable?: boolean;
+        anchor?: PdfPreviewAnchor | null;
+        anchorGeneration?: number;
+        preserveAnchorNotice?: boolean;
+      },
+    ) => {
       locationGenerationRef.current += 1;
       const generation = ++selectionGenerationRef.current;
       selectedRefRef.current = documentRef;
       setSelectedRef(documentRef);
       setDetail(null);
-      setAnchorNotice(null);
-      setPreviewSafe({ kind: "loading" });
+      if (!options?.preserveAnchorNotice) {
+        setAnchorNotice(null);
+      }
+      setPreviewSafe({ kind: "loading", locatingEvidence: Boolean(options?.anchor) });
       try {
         const doc = await getDocument(documentRef);
         if (selectionGenerationRef.current !== generation) return;
         setDetail(doc);
         const page = options?.page && options.page > 0 ? options.page : 1;
         if (doc.previewKind === "pdf") {
-          await loadPdfContent(documentRef, page, generation, options?.exactLocationUnavailable ?? false);
+          await loadPdfContent(
+            documentRef,
+            page,
+            generation,
+            options?.exactLocationUnavailable ?? false,
+            options?.anchor ?? null,
+            options?.anchorGeneration ?? 0,
+          );
         } else {
           setPreviewSafe({
             kind: "unavailable",
@@ -413,18 +452,34 @@ function DocumentsPageInner() {
     const generation = ++locationGenerationRef.current;
 
     if (evidenceRef) {
+      setAnchorNotice("Locating evidence…");
+      setPreviewSafe({ kind: "loading", locatingEvidence: true });
       void getEvidenceLocation(evidenceRef)
         .then((location) => {
           if (locationGenerationRef.current !== generation) return;
-          const page = location.anchor.pageNumber > 0 ? location.anchor.pageNumber : pageHint;
+          // Server page/region win over URL page hints (including page=99).
+          const page = location.anchor.pageNumber > 0 ? location.anchor.pageNumber : null;
           const exactUnavailable =
             location.anchor.fallback === "page" && location.anchor.region == null;
           if (exactUnavailable) {
             setAnchorNotice("Exact location unavailable — opened the nearest authorized page.");
+          } else if (location.anchor.fallback === "section" && location.anchor.sectionLabel) {
+            setAnchorNotice(`Opened section ${location.anchor.sectionLabel}.`);
+          } else {
+            setAnchorNotice(null);
           }
           void openDocument(location.document.ref, {
             page,
             exactLocationUnavailable: exactUnavailable,
+            preserveAnchorNotice: true,
+            anchorGeneration: generation,
+            anchor: {
+              pageNumber: location.anchor.pageNumber,
+              region: location.anchor.region,
+              sectionLabel: location.anchor.sectionLabel,
+              fallback: location.anchor.fallback,
+              evidenceKind: location.evidence.kind,
+            },
           });
         })
         .catch((err) => {
@@ -441,6 +496,7 @@ function DocumentsPageInner() {
                 : errorMessage(err),
             requestId: errorRequestId(err),
           });
+          // Do not open document content from URL hints after location denial.
           if (documentHint) {
             selectedRefRef.current = documentHint;
             setSelectedRef(documentHint);
@@ -829,7 +885,7 @@ function PreviewBody({ preview, filename }: { preview: PreviewState; filename: s
     return (
       <div data-testid="documents-preview-loading">
         <SettingsNotice tone="default" className="mb-4">
-          Loading document preview…
+          {preview.locatingEvidence ? "Locating evidence…" : "Loading document preview…"}
         </SettingsNotice>
       </div>
     );
@@ -842,7 +898,13 @@ function PreviewBody({ preview, filename }: { preview: PreviewState; filename: s
             Exact location unavailable.
           </SettingsNotice>
         ) : null}
-        <PdfPreview objectUrl={preview.objectUrl} filename={filename} initialPage={preview.page} />
+        <PdfPreview
+          objectUrl={preview.objectUrl}
+          filename={filename}
+          initialPage={preview.page}
+          anchor={preview.anchor}
+          anchorGeneration={preview.anchorGeneration ?? 0}
+        />
       </>
     );
   }

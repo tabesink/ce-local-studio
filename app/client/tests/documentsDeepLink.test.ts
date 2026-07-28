@@ -79,6 +79,19 @@ describe("documentsDeepLink outbound (P9-03 U6)", () => {
     expect(href).not.toMatch(/sourceBlockId/);
     expect(href).not.toMatch(/objectUrl|blob:/);
     expect(href).not.toMatch(/excerpt=/);
+    expect(href).not.toMatch(/[?&](x|y|width|height|region)=/);
+  });
+
+  it("never encodes region coordinates even when callers pass extras", () => {
+    const href = buildDocumentsDeepLinkHref({
+      documentRef: "doc_safe_7",
+      evidenceRef: "ev_safe_12",
+      page: 18,
+      // @ts-expect-error region must not become a query authority
+      region: { x: 0.12, y: 0.24, width: 0.66, height: 0.41 },
+      x: 0.12,
+    } as Parameters<typeof buildDocumentsDeepLinkHref>[0]);
+    expect(href).toBe("/documents?document=doc_safe_7&evidence=ev_safe_12&page=18");
   });
 });
 
@@ -125,5 +138,28 @@ describe("libraryDeepLink inbound + return (P9-03 U4)", () => {
     expect(parseLibraryDeepLink(new URLSearchParams({ page: "0" })).page).toBeNull();
     expect(parseLibraryDeepLink(new URLSearchParams({ page: "-2" })).page).toBeNull();
     expect(parseLibraryDeepLink(new URLSearchParams({ page: "abc" })).page).toBeNull();
+  });
+
+  it("drops region coordinate query keys from inbound authority", () => {
+    const link = parseLibraryDeepLink(
+      new URLSearchParams({
+        document: "doc_safe_7",
+        evidence: "ev_safe_12",
+        page: "99",
+        x: "0.12",
+        y: "0.24",
+        width: "0.66",
+        height: "0.41",
+        region: "1",
+      }),
+    );
+    expect(link).toEqual({
+      document: "doc_safe_7",
+      evidence: "ev_safe_12",
+      page: 99,
+      conversation: null,
+      turn: null,
+    });
+    expect(JSON.stringify(link)).not.toMatch(/0\.12|region/);
   });
 });
