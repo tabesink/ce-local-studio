@@ -24,13 +24,28 @@ def probe_object_store(source_storage_root: str) -> None:
     store.delete(stored.key)
 
 
+def check_catalog_compatibility(db: Session) -> None:
+    """Exact head catalog must match the versioned Path 1 snapshot."""
+    from context_engine.services.schema_compatibility import (
+        classify_inventory,
+        collect_inventory,
+    )
+
+    connection = db.connection()
+    inventory = collect_inventory(connection)
+    verdict = classify_inventory(inventory, policy="startup", supported_head=SUPPORTED_ALEMBIC_HEAD)
+    if not verdict.accepted:
+        raise ReadinessError("schema_incompatible")
+
+
 def check_database_schema(db: Session) -> None:
-    """DB reachable and exact Alembic head — shared by API and worker readiness."""
+    """DB reachable, exact Alembic head, and catalog match — API and worker readiness."""
     try:
         db.execute(text("SELECT 1"))
         revision = db.scalar(text("SELECT version_num FROM alembic_version"))
         if revision != SUPPORTED_ALEMBIC_HEAD:
             raise ReadinessError("schema_incompatible")
+        check_catalog_compatibility(db)
     except ReadinessError:
         raise
     except Exception as exc:
