@@ -27,7 +27,7 @@ python -m pytest tests/test_phase_one_schema_scope.py -q -k composer_ref
 # PASS
 
 python -m pytest tests/test_composer_seed_refs.py tests/test_composer_refs_discover_http_contract.py tests/test_composer_refs_consume.py tests/test_composer_refs_phase_one.py -q
-# PASS
+# PASS (includes turn-start consume/reuse/replay + turns:stream operation_conflict remap)
 ```
 
 Opt-in PostgreSQL schema/race suites require:
@@ -35,10 +35,8 @@ Opt-in PostgreSQL schema/race suites require:
 ```text
 CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS=1 \
   CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL=... \
-  python -m pytest tests/test_postgres_composer_ref_schema.py -q
+  python -m pytest tests/test_postgres_composer_ref_schema.py tests/test_postgres_composer_ref_consume_race.py -q
 ```
-
-Concurrent consume race under PostgreSQL locking is not yet a dedicated suite file; reuse denial + consume-once are proven at service boundary. Record full AE5 race run when disposable PG is available (residual note below).
 
 ## Privacy guarantees evidenced
 
@@ -53,7 +51,7 @@ Concurrent consume race under PostgreSQL locking is not yet a dedicated suite fi
 | --- | --- |
 | Private context assembly / fingerprint consistency | P11-03 |
 | Replay-without-token / deeper idempotency conflict matrix | P11-03 / DRIFT-26 remainder |
-| Dedicated opt-in PostgreSQL concurrent-consume race suite (AE5) | P11-02 follow-up or P11-03 when PG matrix next runs |
+| Opt-in PG AE5 race suite file exists (`test_postgres_composer_ref_consume_race.py`); live green run depends on disposable PG env | operator matrix |
 | Browser References discover UI unlock / E2E | later gates |
 | Per-kind cap catalog amendment (brownfield 4 retained) | contract change if desired |
 
