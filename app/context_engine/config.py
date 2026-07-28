@@ -101,6 +101,14 @@ class Settings:
     source_index_poll_backoff_seconds: int = field(
         default_factory=lambda: _env_int("CE_SOURCE_INDEX_POLL_BACKOFF_SECONDS", 5)
     )
+    source_preview_worker_id: str = field(
+        default_factory=lambda: _env("CE_SOURCE_PREVIEW_WORKER_ID", "source-preview-worker")
+        or "source-preview-worker"
+    )
+    source_preview_lease_seconds: int = field(default_factory=lambda: _env_int("CE_SOURCE_PREVIEW_LEASE_SECONDS", 180))
+    source_preview_timeout_seconds: int = field(
+        default_factory=lambda: _env_int("CE_SOURCE_PREVIEW_TIMEOUT_SECONDS", 60)
+    )
     retrieval_timeout_seconds: int = field(default_factory=lambda: _env_int("CE_RETRIEVAL_TIMEOUT_SECONDS", 30))
     retrieval_global_concurrency: int = field(default_factory=lambda: _env_int("CE_RETRIEVAL_GLOBAL_CONCURRENCY", 8))
     retrieval_per_domain_concurrency: int = field(
@@ -179,6 +187,12 @@ class Settings:
             raise ValueError("source_index_poll_backoff_seconds must be positive.")
         if self.source_index_poll_backoff_seconds >= self.source_index_lease_seconds:
             raise ValueError("source_index_poll_backoff_seconds must be less than source_index_lease_seconds.")
+        if self.source_preview_lease_seconds <= 0:
+            raise ValueError("source_preview_lease_seconds must be positive.")
+        if self.source_preview_timeout_seconds <= 0:
+            raise ValueError("source_preview_timeout_seconds must be positive.")
+        if self.source_preview_lease_seconds <= self.source_preview_timeout_seconds:
+            raise ValueError("source_preview_lease_seconds must exceed source_preview_timeout_seconds.")
         if self.retrieval_timeout_seconds <= 0:
             raise ValueError("retrieval_timeout_seconds must be positive.")
         if self.retrieval_global_concurrency <= 0:

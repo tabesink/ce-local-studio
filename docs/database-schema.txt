@@ -105,11 +105,24 @@ source_documents
   index_remote_document_id varchar(128)
   safe index_error_code/index_error_message; index lease owner/expiry
   index_accepted_at, index_ready_at, index_updated_at
+  preview_state CHECK IN ('not_requested','queued','running','ready','failed')
+  preview_generation integer DEFAULT 0 CHECK >=0
+  preview_version integer DEFAULT 0 CHECK >=0
+  preview_object_key varchar(128) NULL UNIQUE INDEX
+  preview_sha256 varchar(64); preview_size_bytes integer; preview_page_count integer
+  preview_renderer_version varchar(64); preview_source_sha256 varchar(64)
+  preview_page_map_object_key varchar(128) NULL UNIQUE INDEX
+  preview_page_map_sha256 varchar(64)
+  preview_reuses_original boolean DEFAULT false
+  safe preview_error_code/preview_error_message; preview lease owner/expiry
+  preview_ready_at, preview_updated_at
   version integer DEFAULT 1 CHECK >=1
   created_by_user_id FK users.id SET NULL; created_at, updated_at
   UNIQUE(domain_id, original_sha256)
   INDEX(domain_id, created_at DESC); INDEX(domain_id, index_state)
+  INDEX(domain_id, preview_state)
   note: public AdminSourceDto.indexState projects submitting/accepted->processing and cancelling->deleting
+  note: preview_* columns are private; member DTOs expose only previewKind/pageCount/ETag derived from ready preview
 
 source_preparation_operations
   id PK; source_document_id FK source_documents.id CASCADE

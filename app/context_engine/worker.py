@@ -17,6 +17,7 @@ from context_engine.services.indexing import SourceIndexWorker
 from context_engine.services.metrics import safe_increment
 from context_engine.services.readiness import ReadinessError, check_worker_readiness
 from context_engine.services.runtime_config import validate_config_encryption_key
+from context_engine.services.preview import SourcePreviewWorker
 from context_engine.services.sources import SourceDeleteWorker, SourcePreparationWorker
 from context_engine.services.structured_logging import configure_json_logging, safe_log
 
@@ -58,14 +59,16 @@ def clear_worker_heartbeat(path: Path | str) -> None:
 
 def run_once_pass(
     prep_worker: _RunOnceWorker,
+    preview_worker: _RunOnceWorker,
     index_worker: _RunOnceWorker,
     turn_worker: _RunOnceWorker,
     delete_worker: _RunOnceWorker,
     db: Any,
 ) -> bool:
-    """Claim at most one unit of work in prep → index → turn → delete order."""
+    """Claim at most one unit of work in prep → preview → index → turn → delete order."""
     return bool(
         prep_worker.run_once(db)
+        or preview_worker.run_once(db)
         or index_worker.run_once(db)
         or turn_worker.run_once(db)
         or delete_worker.run_once(db)
@@ -75,6 +78,7 @@ def run_once_pass(
 def build_workers(settings: Settings) -> dict[str, _RunOnceWorker]:
     return {
         "prep": SourcePreparationWorker(settings),
+        "preview": SourcePreviewWorker(settings),
         "index": SourceIndexWorker(settings),
         "turn": ConversationTurnWorker(settings),
         "delete": _CompositeDeleteWorker(settings),
@@ -85,6 +89,7 @@ def run_loop(
     *,
     session_factory: Callable[[], Any],
     prep_worker: _RunOnceWorker,
+    preview_worker: _RunOnceWorker,
     index_worker: _RunOnceWorker,
     turn_worker: _RunOnceWorker,
     delete_worker: _RunOnceWorker,
@@ -99,7 +104,9 @@ def run_loop(
         db = session_factory()
         did_work = False
         try:
-            did_work = run_once_pass(prep_worker, index_worker, turn_worker, delete_worker, db)
+            did_work = run_once_pass(
+                prep_worker, preview_worker, index_worker, turn_worker, delete_worker, db
+            )
         except Exception:
             safe_log(
                 logger,
@@ -190,6 +197,7 @@ def main(argv: list[str] | None = None) -> int:
         run_loop(
             session_factory=session_factory,
             prep_worker=workers["prep"],
+            preview_worker=workers["preview"],
             index_worker=workers["index"],
             turn_worker=workers["turn"],
             delete_worker=workers["delete"],

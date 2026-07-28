@@ -81,6 +81,7 @@ from context_engine.models import (
 from context_engine.services.audit import AuditContext, AuditService, commit_protected_mutation
 from context_engine.services.auth import iso_utc
 from context_engine.services.indexing import SourceIndexError, cleanup_index_before_source_delete, queue_source_index_after_publish
+from context_engine.services.preview import queue_source_preview_after_publish
 from context_engine.services.runtime_config import SecretCrypto, ensure_runtime_settings, is_provider_configured
 from context_engine.services.source_upload import (
     UploadValidationError,
@@ -1161,6 +1162,7 @@ def publish_prepared_source(
                 storage.delete_object_keys(written_image_keys)
             return False
         queue_source_index_after_publish(db, source)
+        queue_source_preview_after_publish(db, source)
         db.commit()
     except Exception:
         db.rollback()
