@@ -203,7 +203,7 @@ FRONTEND_PORT="$(resolve_dev_port "frontend" "$FRONTEND_PORT" "$FRONTEND_PORT_EX
 sync_api_base "$PREFERRED_BACKEND_PORT"
 
 echo "Migrating database..."
-(cd "$APP_DIR" && "$PYTHON_BIN" -m alembic upgrade head)
+(cd "$APP_DIR" && "$PYTHON_BIN" -m context_engine.migrate_release)
 (cd "$APP_DIR" && "$PYTHON_BIN" -m context_engine.bootstrap_admin)
 
 echo "Starting backend on http://$BACKEND_HOST:$BACKEND_PORT"

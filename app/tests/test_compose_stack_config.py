@@ -60,7 +60,8 @@ def test_compose_pins_frontend_peer_not_broad_private_cidr() -> None:
 
 def test_compose_keeps_one_shot_migrate_before_api_worker() -> None:
     text = COMPOSE.read_text(encoding="utf-8")
-    assert 'command: ["alembic", "upgrade", "head"]' in text
+    assert 'command: ["python", "-m", "context_engine.migrate_release"]' in text
+    assert 'command: ["alembic", "upgrade", "head"]' not in text
     assert 'condition: service_completed_successfully' in text
     assert 'restart: "no"' in text
 
