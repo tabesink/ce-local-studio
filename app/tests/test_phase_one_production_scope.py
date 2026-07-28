@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from tests.phase_one_deferred_recognition import WIKI_RECOGNITION_ALLOWLIST
+
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = APP_ROOT.parent
@@ -38,17 +40,6 @@ PRODUCTION_FILES = (
     REPO_ROOT / "scripts" / "dev.sh",
 )
 
-# Path 1 refusal recognition may name deferred tables; it is not Wiki implementation.
-_DEFERRED_MARKER_RECOGNITION_ALLOWLIST = frozenset(
-    {
-        "schema_deferred.py",
-        "schema_compatibility.py",
-        "generate_schema_snapshot.py",
-        "migrate_release.py",
-    }
-)
-
-
 def test_phase_one_physical_route_tree_is_exact() -> None:
     route_directories = {path.name for path in CLIENT_ROUTE_ROOT.iterdir() if path.is_dir()}
 
@@ -72,7 +63,7 @@ def test_phase_one_active_source_and_build_manifests_exclude_deferred_markers() 
     )
 
     for path in source_files:
-        if path.name in _DEFERRED_MARKER_RECOGNITION_ALLOWLIST:
+        if path.name in WIKI_RECOGNITION_ALLOWLIST:
             continue
         text = path.read_text(encoding="utf-8").casefold()
         assert not any(marker.casefold() in text for marker in DEFERRED_MARKERS), path
