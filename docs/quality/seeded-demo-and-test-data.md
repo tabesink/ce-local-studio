@@ -97,12 +97,32 @@ Provider output is keyed by normalized request fixture, not arbitrary prompt mat
 
 ## Composer data
 
-| Fixture | Owner/state | Purpose |
+| Fixture | Private id | Owner/state | Purpose |
 | --- | --- | --- |
-| `template_safety_summary` | approved | valid bounded template reference |
-| `template_disabled` | disabled | rejected target-state reference |
+| `template_safety_summary` | `c0ffee01-0001-4001-8001-000000000001` | approved | valid bounded template reference |
+| `template_disabled` | `c0ffee01-0001-4001-8001-000000000002` | disabled | rejected target-state reference |
 
-Composer discovery returns one source, evidence, and template ref with fixed safe labels. Raw token values are generated deterministically only in tests, persisted as hashes, owned by Mina, short-lived, and reset between cases. Include expired, already-consumed, wrong-owner, wrong-domain, deleted-target, and disabled-template tokens.
+| Token fixture key | Kind | Purpose |
+| --- | --- | --- |
+| `token_mina_source_valid` | source | valid Mina source token |
+| `token_mina_evidence_valid` | evidence | valid Mina evidence token |
+| `token_mina_template_valid` | template | valid Mina template token |
+| `token_mina_expired` | source | expired denial |
+| `token_noah_wrong_owner` | source | wrong-owner denial |
+| `token_mina_wrong_domain` | source | wrong-domain denial |
+| `token_mina_deleted_target` | source | deleted-target denial |
+| `token_mina_disabled_template` | template | disabled-template denial |
+
+| Accepted-ref public ref | Kind | Turn | Purpose |
+| --- | --- | --- | --- |
+| `accepted_mina_source_01` | source | `turn_mina_figure` | durable accepted source projection |
+| `accepted_mina_evidence_01` | evidence | `turn_mina_figure` | durable accepted evidence projection |
+| `accepted_mina_template_01` | template | `turn_mina_figure` | durable accepted template projection |
+| `accepted_mina_redacted_01` | source | `turn_mina_redacted` | redacted labels cleared |
+
+Composer discovery returns one source, evidence, and template ref with fixed safe labels. Durable seeds persist token hashes only (`safe_description` holds the fixture key). Raw token plaintext is generated deterministically only in ephemeral tests, never committed under `expected/` or seed modules. Include expired, wrong-owner, wrong-domain, deleted-target, and disabled-template tokens. `already-consumed` tokens are reserved for P11-02 / DRIFT-26 (`token_mina_consumed_source`) and are not part of the P11-01 durable seed world.
+
+Demo prompt templates and composer-ref parents install only through the gated composer seed entry (`CE_ENVIRONMENT=development|test` and `CE_ALLOW_TEST_SEED=true`). API lifespan must not upsert demo templates.
 
 ## Operations and fault fixtures
 

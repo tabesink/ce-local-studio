@@ -26,7 +26,6 @@ from context_engine.api.contract_app import (
 from context_engine.config import Settings
 from context_engine.db import create_db_engine, create_session_factory
 from context_engine.services.audit import AuditError
-from context_engine.services.prompt_templates import seed_prompt_templates
 from context_engine.services.runtime_config import seed_runtime_config, validate_config_encryption_key
 from context_engine.services.structured_logging import configure_json_logging, safe_log
 from context_engine.services.metrics import safe_increment, status_class_for
@@ -78,7 +77,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         db = session_factory()
         try:
             seed_runtime_config(db)
-            seed_prompt_templates(db)
         finally:
             db.close()
         try:

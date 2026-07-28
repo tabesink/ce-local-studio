@@ -67,7 +67,7 @@ DRIFT IDs 01 through 34 appear exactly once above as primary rows.
 | owner/admin query scaffolding | P1, P7 | P1-03 proves current-role/disabled rechecks, active admin-route guards, denial audits, administrator non-ownership and conversation indistinguishable-404 behavior; P7 turn/stream races remain | IN_PROGRESS |
 | request IDs, error translation and allowlisted logging | P0-03, P1, P8 | P0-03 proves the exact envelope/header; P1-04 proves safe no-store errors, bounded unclassified events and allowlisted logging fields; P8-02 proves log/metric sink privacy + bounded metrics; P8-03 proves cross-sink privacy + health/resilience gate | DONE |
 | generation and lease concepts | P3-P5 | owner/expiry/heartbeat/stale-completion PostgreSQL races | DONE — P3 domain leases, P4 prep/delete leases, P5-01 claim fences, and P5-03 index heartbeat/uncertain reconcile/backoff proven |
-| hashed composer tokens and safe accepted labels | P11 | one-use atomic consumption and replay tests | NOT_STARTED |
+| hashed composer tokens and safe accepted labels | P11 | one-use atomic consumption and replay tests | IN_PROGRESS — P11-01 schema/seed foundation done (`docs/_scratch/p11-01-composer-ref-schema-evidence.md`); consume/replay remain P11-02/P11-03 (DRIFT-26 NOT_STARTED) |
 | pinned frontend dependencies and themes | P9 | lockfile, build, dark/light token and storage-safety gates | NOT_STARTED |
 | shell and UI primitives | P9-01 | call-site inventory, canonical ownership, accessibility and parity evidence | DONE — five starters `FACTORY_READY` (Domain accordion via P9-04); residual mega-kit `defer-FE-01`; DRIFT-02 closed by P9-02 |
 
