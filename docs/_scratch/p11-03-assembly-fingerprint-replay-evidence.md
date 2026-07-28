@@ -36,7 +36,7 @@ python -m pytest tests/test_delete_redaction.py::test_m11_source_delete_clears_a
 
 ## Privacy guarantees evidenced
 
-- Assembled template/source/evidence bodies are worker-time only; turn columns do not store assembly markers.
+- Assembled template/source/evidence bodies are worker-time only; turn columns and durable event payloads do not store assembly markers / “Approved context” strings (assemble path + empty-event check; HTTP attach suites also omit raw tokens).
 - Attach/conflict HTTP envelopes do not echo raw composer tokens or token hashes.
 - Delete redaction clears accepted-ref public labels; expired-token validate errors omit target IDs and raw tokens.
 - Seed modules persist hashes / fixture keys only; figure-bound tokens are consumed provenance, not denial-matrix valid tokens.

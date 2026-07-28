@@ -573,6 +573,13 @@ def test_m11_source_delete_clears_accepted_refs_and_expires_composer_tokens(tmp_
         assert token_row is not None
         assert token_row.expires_at <= utc_now() + timedelta(seconds=1)
 
+        snapshot = _terminal_snapshot(db, settings, turn)
+        events = list(_stored_events(db, turn))
+        serialized = str(dto) + str(snapshot) + str([event.payload for event in events])
+        assert "SENTINEL_ACCEPTED_LABEL" not in serialized
+        assert "SENTINEL_ACCEPTED_DESC" not in serialized
+        assert "SENTINEL_ANSWER_MUST_OMIT" not in serialized
+
         with pytest.raises(ComposerRefError) as error:
             validate_composer_ref_tokens(
                 db,

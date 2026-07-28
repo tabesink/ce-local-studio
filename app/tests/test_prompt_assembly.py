@@ -311,8 +311,8 @@ def test_assemble_truncates_source_and_total_caps(tmp_path: Path) -> None:
         db.close()
 
 
-def test_assemble_bodies_not_persisted_on_turn_or_events(tmp_path: Path) -> None:
-    """Assembly is ephemeral — turn columns must not store snippet bodies."""
+def test_assemble_bodies_not_persisted_on_turn_columns(tmp_path: Path) -> None:
+    """Assembly is ephemeral — durable turn columns must not store snippet bodies."""
     db = _session(tmp_path)
     try:
         ids = _seed_parents(db)
@@ -349,5 +349,17 @@ def test_assemble_bodies_not_persisted_on_turn_or_events(tmp_path: Path) -> None
             if value is not None
         )
         assert marker not in dumped
+        # Durable events are not written by assemble(); worker/SSE non-persist is covered by
+        # chat orchestration privacy patterns + DRIFT-26 HTTP suites (no Approved-context leak).
+        from context_engine.models import ConversationTurnEvent
+
+        event_payloads = [
+            str(event.payload)
+            for event in db.scalars(
+                select(ConversationTurnEvent).where(ConversationTurnEvent.turn_id == turn.id)
+            )
+        ]
+        assert all(marker not in payload for payload in event_payloads)
+        assert all("Approved context" not in payload for payload in event_payloads)
     finally:
         db.close()
