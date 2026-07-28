@@ -18,7 +18,7 @@ This tracker is limited to the Phase 1 production build. `P0` through `P12` are 
 | P1 | Trusted app foundation | DONE | P0 | migrated Postgres, seeded admin, cookie auth, owner/admin guards, health and safe errors, append-only transactional audit, durable HTTP create-idempotency + keyset pagination — P1-01..P1-07 DONE; evidence `docs/_scratch/p1-07-idempotency-pagination-evidence.md` |
 | P2 | Trusted runtime configuration | DONE | P1 | encrypted credentials, model profiles, parser/synthesis defaults, admin contract tests pass |
 | P3 | Knowledge Domain runtime | DONE | P2 | per-domain runtime boundary, lifecycle operations, leases/generations, readiness proven |
-| P4 | Source preparation | IN_PROGRESS | P3 | upload/storage/parser adapters produce canonical blocks and support retry/cancel/delete — P4-01..P4-04 DONE; P4-05 figure/table region provenance open |
+| P4 | Source preparation | DONE | P3 | upload/storage/parser adapters produce canonical blocks and support retry/cancel/delete — P4-01..P4-05 DONE; evidence `docs/_scratch/p4-05-region-provenance-evidence.md` |
 | P5 | LightRAG indexing eligibility | DONE | P4 | real per-domain vendored LightRAG runtime proves immutable provider wiring, isolation, idempotent submit, readiness, retrieval provenance, delete/absence and recovery — P5-01..P5-04 DONE |
 | P6 | Scoped Evidence retrieval | DONE | P5 | single-domain authorized retrieval maps only valid local blocks to safe Evidence |
 | P7 | Durable grounded streaming chat | IN_PROGRESS | P6 | conversation ownership, intent gate, bounded RAG, SSE, idempotent replay, redaction pass — P7-01..P7-05 DONE; P7-06 synthesis isolation + turn-lease heartbeat open |
@@ -116,7 +116,7 @@ P5-04 closure evidence (2026-07-28): `docs/_scratch/p5-04-lightrag-real-runtime-
 | P4-02 | DONE | P4-01 | upload validation, domain deduplication and parser-kind freeze |
 | P4-03 | DONE | P4-02 | Docling/Reducto adapters and canonical blocks/images transaction |
 | P4-04 | DONE | P4-03 | outline, operation, retry/cancel and delete APIs |
-| P4-05 | NOT_STARTED | P4-03,P6-02,P9-03 | durable figure/table region provenance through canonical blocks, persisted Evidence, authorized location resolution, and governed viewer focus/fallback for M-04/M-05 — plan `docs/plans/2026-07-28-008-feat-p4-05-region-provenance-plan.md` |
+| P4-05 | DONE | P4-03,P6-02,P9-03 | durable figure/table region provenance through canonical blocks, persisted Evidence, authorized location resolution, and governed viewer focus/fallback for M-04/M-05 — evidence `docs/_scratch/p4-05-region-provenance-evidence.md`; plan `docs/plans/2026-07-28-008-feat-p4-05-region-provenance-plan.md` |
 | P5-01 | DONE | P4 | index state/generation fields and worker claim loop |
 | P5-02 | DONE | P5-01 | versioned canonical-block renderer and vendored LightRAG adapter |
 | P5-03 | DONE | P5-02 | submit/poll/retry/cancel/delete and query-eligibility service |
