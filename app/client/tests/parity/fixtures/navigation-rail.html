@@ -1,0 +1,183 @@
+<!--
+  Synthetic parity fixture for NavigationRail.
+  Not product authority. Not routable. Script-free and network-free.
+  Shared scenarios mirror tests/parity/manifests/navigation-rail.json.
+  Synthetic route labels: Chat, Documents, Settings.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Navigation rail parity fixture (synthetic)</title>
+    <style>
+      :root {
+        --ui-bg: #141414;
+        --ui-fg: #f2f2f2;
+        --ui-muted: #9a9a9a;
+        --ui-border: #2a2a2a;
+        --sidebar-bg: #181818;
+        --bg: #141414;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --ui-bg: #f4f5f5;
+        --ui-fg: #1a1a1a;
+        --ui-muted: #6b6b6b;
+        --ui-border: #0d0d0d1a;
+        --sidebar-bg: #ffffff;
+        --bg: #f4f5f5;
+      }
+      body {
+        margin: 0;
+        background: var(--ui-bg);
+        color: var(--ui-fg);
+      }
+      .region {
+        padding: 16px;
+        border-bottom: 1px solid var(--ui-border);
+      }
+      .caption {
+        margin: 0 0 10px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .rail {
+        width: 224px;
+        border: 1px solid var(--ui-border);
+        border-radius: 8px;
+        background: var(--sidebar-bg);
+        overflow: hidden;
+      }
+      .header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 64px;
+        padding: 10px 12px;
+        border-bottom: 1px solid color-mix(in oklab, var(--ui-border) 35%, transparent);
+      }
+      .brand {
+        flex: 1;
+        font-size: 13px;
+        color: var(--ui-muted);
+      }
+      .collapse {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        border: 1px solid var(--ui-border);
+        background: transparent;
+        color: var(--ui-muted);
+        font-size: 12px;
+      }
+      .nav {
+        padding: 8px;
+      }
+      .section-label {
+        padding: 8px 10px 4px;
+        font-size: 11px;
+        color: var(--ui-muted);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 32px;
+        padding: 0 10px;
+        border-radius: 6px;
+        font-size: 14px;
+        color: var(--ui-muted);
+        position: relative;
+      }
+      .row.active {
+        color: var(--ui-fg);
+        background: color-mix(in oklab, var(--ui-fg) 8%, transparent);
+      }
+      .row.active::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 50%;
+        width: 2px;
+        height: 16px;
+        transform: translateY(-50%);
+        border-radius: 999px;
+        background: color-mix(in oklab, var(--ui-fg) 50%, transparent);
+      }
+      .footer {
+        border-top: 1px solid color-mix(in oklab, var(--ui-border) 35%, transparent);
+        padding: 8px;
+      }
+      .collapsed-note {
+        width: 224px;
+        padding: 12px;
+        font-size: 12px;
+        color: var(--ui-muted);
+        border: 1px dashed var(--ui-border);
+        border-radius: 8px;
+      }
+      .mobile-bar {
+        display: flex;
+        height: 56px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        border: 1px solid var(--ui-border);
+        border-radius: 8px;
+        background: var(--bg);
+        max-width: 390px;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-expanded">
+      <p class="caption">zai-dark · expanded rail</p>
+      <aside class="rail" data-snapshot="desktop-expanded">
+        <div class="header">
+          <span class="brand">Context Engine</span>
+          <span class="collapse" aria-hidden="true">▢</span>
+        </div>
+        <div class="nav">
+          <div class="row">New chat</div>
+          <div class="row">Search</div>
+          <div class="section-label">Workspace</div>
+          <div class="row active">Chat</div>
+          <div class="row">Documents</div>
+        </div>
+        <div class="footer">
+          <div class="row">Settings</div>
+          <div class="row">Logout</div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-collapsed">
+      <p class="caption">zai-dark · collapsed rail</p>
+      <div class="collapsed-note" data-snapshot="desktop-collapsed">
+        Rail width 0 on desktop; expand control overlays main canvas.
+      </div>
+    </section>
+
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light-expanded">
+      <p class="caption">zai-light · expanded rail</p>
+      <aside class="rail">
+        <div class="header">
+          <span class="brand">Context Engine</span>
+          <span class="collapse" aria-hidden="true">▢</span>
+        </div>
+        <div class="nav">
+          <div class="section-label">Workspace</div>
+          <div class="row active">Chat</div>
+          <div class="row">Documents</div>
+          <div class="row">Settings</div>
+        </div>
+      </aside>
+      <div class="mobile-bar" style="margin-top: 12px" data-snapshot="mobile-drawer-trigger">
+        <span>Context Engine</span>
+        <span aria-hidden="true">☰</span>
+      </div>
+    </section>
+  </body>
+</html>

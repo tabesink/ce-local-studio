@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "targetId": "composer",
+  "owner": "src/features/chat-shell",
+  "layer": "feature",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical region: ChatShell lifted composer form (textarea, references stub, domain selector, send, status bar).",
+      "References picker is gated unavailable (data-testid=ref-picker); no P11-04 attach/suggest chips.",
+      "HTML steers composer radius, shadow, and direct-chat vs domain status line.",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "placeholder": "Ask anything — choose a domain for grounded answers",
+      "directChatStatus": "direct chat",
+      "domainStatus": "domain: Plant manuals",
+      "send": "Send message",
+      "domainSelector": "Knowledge Domain",
+      "refPicker": "References unavailable"
+    },
+    "variants": [
+      "direct-chat",
+      "domain-selected",
+      "streaming-disabled"
+    ],
+    "states": [
+      "empty-input",
+      "ready-input",
+      "send-disabled-streaming"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--composer",
+      "--composer-w",
+      "--composer-radius",
+      "--composer-shadow",
+      "--border",
+      "--fg",
+      "--dim",
+      "--fs-base",
+      "--fs-xs"
+    ],
+    "geometry": {
+      "shell": "max-w-[var(--composer-w)] rounded-[var(--composer-radius)] border shadow",
+      "textarea": "min-h-24 w-full resize-none px-4 py-3",
+      "toolbar": "flex items-center justify-between px-2.5 pb-2.5",
+      "statusBar": "font-mono text-[length:var(--fs-xs)] mt-1"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark-direct",
+      "theme-dark-domain",
+      "theme-light-direct",
+      "theme-dark-streaming"
+    ],
+    "expectedTokenGeometry": [
+      "Composer centered at --composer-w with 24px radius",
+      "Send control is circular h-8 w-8 on trailing edge",
+      "Status bar shows safe domain display label not raw ID"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "textarea and send button are focusable; ref picker disabled",
+      "focus": "domain selector exposes Knowledge Domain label",
+      "screenReader": "ref picker aria-disabled when gated unavailable",
+      "reducedMotion": "no motion-dependent composer correctness",
+      "validationBusyDisabledStatus": "send disabled when streaming or empty input",
+      "zoom": "placeholder and status line remain present",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "horizontal gutter px-4 sm:px-6 preserved in live component"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "targetId": "skeleton",
+  "owner": "src/ui",
+  "layer": "primitive",
+  "catalogState": "FACTORY_READY",
+  "disposition": "add",
+  "sourceEvidence": {
+    "notes": [
+      "No production Skeleton component or usage was found under app/client/src; React parity uses a test-local presentational harness.",
+      "Synthetic loading shapes only; no private IDs, runtime URLs, paths, credentials, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": { "loading": "Loading examples" },
+    "variants": ["text", "row", "card", "pane"],
+    "states": ["loading"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": ["--ui-surface", "--ui-hover", "--ui-muted"],
+    "geometry": { "radius": "tokenized", "density": "compact", "shape": "variant-specific" }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark", "theme-light", "text", "row", "card", "pane"],
+    "expectedTokenGeometry": ["Shapes use semantic surface tokens", "Loading geometry is compact and deterministic"],
+    "forbiddenClaims": ["focus", "ARIA", "keyboard", "touch", "state-transition"]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "presentational skeleton adds no interaction",
+      "focus": "skeleton adds no focus target",
+      "screenReader": "shape is aria-hidden and parent names loading state",
+      "reducedMotion": "test harness uses no required animation",
+      "validationBusyDisabledStatus": "parent exposes aria-busy",
+      "zoom": "shapes remain in normal document flow",
+      "darkLight": "renders under zai-dark and zai-light wrappers",
+      "narrow": "shapes use container-relative width"
+    }
+  }
+}

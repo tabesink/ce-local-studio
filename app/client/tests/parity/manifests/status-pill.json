@@ -2,12 +2,13 @@
   "schemaVersion": 1,
   "targetId": "status-pill",
   "owner": "src/ui",
+  "layer": "primitive",
   "catalogState": "FACTORY_READY",
   "disposition": "migrate+retain-and-reverify",
   "sourceEvidence": {
     "notes": [
       "Canonical body: app/client/src/ui/StatusPill.tsx (live _shared API retained).",
-      "Tone mapping (docs/tests only; do not rename live values): live default↔contract neutral; live good↔contract success.",
+      "Tone mapping (docs/tests only; do not rename live values): live default\u2194contract neutral; live good\u2194contract success.",
       "Live tones: default | info | good | warning | danger. Variants: dot | badge.",
       "Inventory: docs/_scratch/p9-01-ui-inventory.md (KEEP LIVE APIs).",
       "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
@@ -21,15 +22,32 @@
       "warning": "Degraded",
       "danger": "Failed"
     },
-    "tones": ["default", "info", "good", "warning", "danger"],
+    "tones": [
+      "default",
+      "info",
+      "good",
+      "warning",
+      "danger"
+    ],
     "toneMapping": {
       "default": "neutral",
       "good": "success"
     },
-    "variants": ["dot", "badge"],
-    "states": ["static"],
-    "themes": ["zai-dark", "zai-light"],
-    "viewports": ["390x844", "1280x800"],
+    "variants": [
+      "dot",
+      "badge"
+    ],
+    "states": [
+      "static"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
     "semanticTokens": [
       "--ui-muted",
       "--ui-info",
@@ -47,7 +65,12 @@
     }
   },
   "htmlStatic": {
-    "snapshotRegions": ["theme-dark", "theme-light", "tones-dot", "tones-badge"],
+    "snapshotRegions": [
+      "theme-dark",
+      "theme-light",
+      "tones-dot",
+      "tones-badge"
+    ],
     "expectedTokenGeometry": [
       "Each tone pairs a marker/badge chrome with visible text label",
       "good uses --ui-success; default uses --ui-muted (neutral mapping)",

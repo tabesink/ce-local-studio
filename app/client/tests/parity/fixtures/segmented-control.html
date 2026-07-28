@@ -1,0 +1,33 @@
+<!-- Not product authority. Synthetic, non-routable, script-free, and network-free parity fixture. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Segmented control parity fixture</title>
+    <style>
+      :root { --ui-bg:#141414; --ui-fg:#f2f2f2; --ui-muted:#9a9a9a; --ui-surface:#242424; --ui-border:#303030; --fs-sm:12px; --fs-md:13px; font-family:Geist,ui-sans-serif,system-ui,sans-serif; }
+      [data-theme="zai-light"] { --ui-bg:#f4f5f5; --ui-fg:#1a1a1a; --ui-muted:#6b6b6b; --ui-surface:#fff; --ui-border:#0d0d0d1a; }
+      body { margin:0; background:var(--ui-bg); color:var(--ui-fg); }
+      .region { padding:16px; border-bottom:1px solid var(--ui-border); background:var(--ui-bg); }
+      .caption { margin:0 0 10px; color:var(--ui-muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+      .track { display:inline-flex; gap:2px; padding:2px; border:1px solid var(--ui-border); border-radius:8px; background:var(--ui-bg); }
+      .segment { border:0; border-radius:6px; background:transparent; color:var(--ui-muted); padding:4px 10px; font:inherit; font-size:var(--fs-md); }
+      .segment.selected { background:var(--ui-surface); color:var(--ui-fg); }
+      .sm .segment { padding:2px 8px; font-size:var(--fs-sm); }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark">
+      <p class="caption">zai-dark · md</p>
+      <div class="track"><button class="segment selected">Compact</button><button class="segment">Comfortable</button></div>
+    </section>
+    <section class="region" data-theme="zai-dark" data-snapshot="size-sm">
+      <p class="caption">zai-dark · sm</p>
+      <div class="track sm"><button class="segment">Compact</button><button class="segment selected">Comfortable</button></div>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light">
+      <p class="caption">zai-light · md</p>
+      <div class="track"><button class="segment selected">Compact</button><button class="segment">Comfortable</button></div>
+    </section>
+  </body>
+</html>

@@ -1,0 +1,183 @@
+<!--
+  Synthetic parity fixture for SettingsGroup section chrome.
+  Not product authority. Not routable. Script-free and network-free.
+  Shared scenarios mirror tests/parity/manifests/settings-group.json.
+  Domain accordion disclosure: see domains-accordion.html (not duplicated).
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Settings group parity fixture (synthetic)</title>
+    <style>
+      :root {
+        --ui-bg: #141414;
+        --ui-fg: #f2f2f2;
+        --ui-muted: #9a9a9a;
+        --ui-border: #2a2a2a;
+        --ui-surface: #1a1a1a;
+        --ui-separator: #2a2a2a;
+        --ui-success: #3fbf6a;
+        --ui-warning: #d4a017;
+        --fs-md: 14px;
+        --fs-sm: 12px;
+        --fs-base: 13px;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --ui-bg: #f4f5f5;
+        --ui-fg: #1a1a1a;
+        --ui-muted: #6b6b6b;
+        --ui-border: #0d0d0d1a;
+        --ui-surface: #ffffff;
+        --ui-separator: #0d0d0d14;
+        --ui-success: #1e8a3e;
+        --ui-warning: #b45309;
+      }
+      body {
+        margin: 0;
+        background: var(--ui-bg);
+        color: var(--ui-fg);
+      }
+      .region {
+        padding: 16px;
+        border-bottom: 1px solid var(--ui-border);
+      }
+      .caption {
+        margin: 0 0 10px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .group {
+        max-width: 640px;
+      }
+      .group-title {
+        margin: 0 0 6px;
+        padding: 0 14px;
+        font-size: var(--fs-md);
+        font-weight: 600;
+        letter-spacing: -0.005em;
+        color: var(--ui-muted);
+      }
+      .group-desc {
+        margin: 0 0 8px;
+        padding: 0 14px;
+        font-size: var(--fs-sm);
+        line-height: 1.5;
+        color: var(--ui-muted);
+      }
+      .group-body {
+        overflow: hidden;
+        border: 1px solid var(--ui-border);
+        border-radius: 6px;
+        background: var(--ui-surface);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+      }
+      .row {
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(160px, 0.42fr) minmax(0, 1fr);
+        gap: 20px;
+        align-items: center;
+        padding: 10px 14px;
+      }
+      .row + .row::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 1px;
+        background: var(--ui-separator);
+      }
+      .label {
+        font-size: var(--fs-base);
+        font-weight: 500;
+      }
+      .trailing {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: var(--fs-sm);
+      }
+      .status.good {
+        color: var(--ui-success);
+      }
+      .status.warning {
+        color: var(--ui-warning);
+      }
+      .status .dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 9999px;
+        background: currentColor;
+      }
+      .note {
+        margin-top: 8px;
+        padding: 0 14px;
+        font-size: 11px;
+        color: var(--ui-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-with-rows">
+      <p class="caption">zai-dark · with-status-rows</p>
+      <div class="group">
+        <h3 class="group-title">Providers</h3>
+        <p class="group-desc">Credentials are write-only; values are never displayed.</p>
+        <div class="group-body">
+          <div class="row">
+            <div class="label">Synthetic provider A</div>
+            <div class="trailing">
+              <span class="status good"><span class="dot"></span>Configured</span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="label">Synthetic provider B</div>
+            <div class="trailing">
+              <span class="status warning"><span class="dot"></span>Not configured</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light-with-rows">
+      <p class="caption">zai-light · with-status-rows</p>
+      <div class="group">
+        <h3 class="group-title">Providers</h3>
+        <p class="group-desc">Credentials are write-only; values are never displayed.</p>
+        <div class="group-body">
+          <div class="row">
+            <div class="label">Synthetic provider A</div>
+            <div class="trailing">
+              <span class="status good"><span class="dot"></span>Configured</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-description">
+      <p class="caption">zai-dark · with-description</p>
+      <div class="group">
+        <h3 class="group-title">Users</h3>
+        <p class="group-desc">Read-only account status.</p>
+        <div class="group-body">
+          <div class="row">
+            <div class="label">Synthetic Member</div>
+            <div class="trailing">
+              <span class="status good"><span class="dot"></span>Active</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note">Domain accordion rows are covered by domains-accordion.html — not duplicated here.</p>
+    </section>
+  </body>
+</html>

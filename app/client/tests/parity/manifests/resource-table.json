@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "targetId": "resource-table",
+  "owner": "src/ui",
+  "layer": "shared",
+  "catalogState": "FACTORY_READY",
+  "disposition": "add",
+  "sourceEvidence": {
+    "notes": [
+      "No standalone production ResourceTable exists; React parity uses a test-local presentational harness.",
+      "The harness contains synthetic labels only and defines no product DTO fields or destructive actions."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "caption": "Synthetic resources",
+      "resource": "Resource",
+      "status": "Status",
+      "first": "Sample handbook",
+      "second": "Example checklist"
+    },
+    "variants": ["ready", "selected-row"],
+    "states": ["available", "selected"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": ["--ui-bg", "--ui-fg", "--ui-muted", "--ui-surface", "--ui-border", "--link"],
+    "geometry": {
+      "density": "36px minimum rows with compact headers",
+      "selection": "full-width row control inside semantic table cells"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark", "theme-light", "selected-row"],
+    "expectedTokenGeometry": [
+      "Header and cells share aligned columns",
+      "Selected row uses border and surface treatment without color-only meaning"
+    ],
+    "forbiddenClaims": ["focus", "ARIA", "keyboard", "touch", "state-transition", "authorization", "backend-state"]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "row controls activate through native button keyboard and pointer behavior",
+      "focus": "selected row remains independently focusable",
+      "screenReader": "caption, column headers, and aria-pressed row selection are exposed",
+      "reducedMotion": "selection does not depend on motion",
+      "validationBusyDisabledStatus": "synthetic visible status accompanies each row",
+      "zoom": "labels remain text in semantic cells",
+      "darkLight": "harness renders in zai-dark and zai-light wrappers",
+      "narrow": "table remains in a bounded overflow container"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "targetId": "card",
+  "owner": "src/_shared/ui",
+  "layer": "primitive",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Live body: app/client/src/_shared/ui/index.tsx (Card).",
+      "Synthetic card content only; no private IDs, runtime URLs, paths, credentials, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": { "title": "Synthetic card", "body": "Compact supporting text" },
+    "variants": ["sm", "md", "lg", "borderless"],
+    "states": ["default"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": ["--ui-bg", "--ui-fg", "--ui-muted", "--ui-border"],
+    "geometry": { "radius": "rounded-lg", "padding": "p-3, p-4, p-6", "border": "optional" }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark", "theme-light", "padding-sm", "padding-md", "padding-lg", "borderless"],
+    "expectedTokenGeometry": ["Surface uses --ui-bg", "Optional boundary uses --ui-border"],
+    "forbiddenClaims": ["focus", "ARIA", "keyboard", "touch", "state-transition"]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "presentational card adds no interaction",
+      "focus": "presentational card adds no focus target",
+      "screenReader": "children retain their native semantics",
+      "reducedMotion": "no motion-dependent behavior",
+      "validationBusyDisabledStatus": "not applicable to static card",
+      "zoom": "content remains in normal document flow",
+      "darkLight": "renders under zai-dark and zai-light wrappers",
+      "narrow": "no fixed width is imposed"
+    }
+  }
+}

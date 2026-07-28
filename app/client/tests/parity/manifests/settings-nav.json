@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "targetId": "settings-nav",
+  "owner": "src/features/settings-panel",
+  "layer": "feature",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical composition: SettingsPanel wraps SettingsLayout from @/_shared/ui; section nav is SectionNav inside the settings aside.",
+      "Member sees General only; administrator adds Model Provider, Knowledge Domains, Users.",
+      "Domain accordion rows are covered by domains-accordion — not duplicated here.",
+      "Inventory: docs/_scratch/p9-04-settings-domains-inventory.md.",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "title": "Settings",
+      "navLabel": "Settings sections",
+      "general": "General",
+      "generalDescription": "Personal preferences",
+      "provider": "Model Provider",
+      "providerDescription": "Providers and model profiles",
+      "domains": "Knowledge Domains",
+      "domainsDescription": "Domain-backed retrieval",
+      "users": "Users",
+      "usersDescription": "User accounts",
+      "refresh": "Refresh settings"
+    },
+    "variants": [
+      "member-general-active",
+      "admin-provider-active"
+    ],
+    "states": [
+      "section-active-indicator",
+      "aside-sticky-desktop"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--ui-fg",
+      "--color-surface",
+      "--color-surface-hover",
+      "--color-foreground-subtle",
+      "--color-sky-400",
+      "--fs-md",
+      "--fs-xl"
+    ],
+    "geometry": {
+      "layout": "lg:grid-cols-[200px_minmax(0,640px)]; aside sticky with SectionNav",
+      "density": "h-8 section buttons; 2px leading active indicator"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark-member-general",
+      "theme-dark-admin-provider",
+      "theme-light-member-general"
+    ],
+    "expectedTokenGeometry": [
+      "Settings title uses --fs-xl semibold",
+      "Active section shows leading sky indicator and filled surface",
+      "Nav wraps to two columns on narrow, column on lg+"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "section buttons are keyboard-focusable and activatable",
+      "focus": "active section button receives focus on Tab navigation",
+      "screenReader": "nav exposes Settings sections label; buttons carry section titles",
+      "reducedMotion": "transition-colors only; no motion-dependent correctness",
+      "validationBusyDisabledStatus": "refresh control reflects loading prop",
+      "zoom": "section labels remain present at component level",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "section nav flex-wrap below lg breakpoint"
+    }
+  }
+}

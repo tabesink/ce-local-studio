@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "targetId": "source-operation-panel",
+  "owner": "src/features/documents",
+  "layer": "feature",
+  "catalogState": "FACTORY_READY",
+  "disposition": "add",
+  "sourceEvidence": {
+    "notes": [
+      "DocumentsPage contains inline administrator operation chrome but no standalone SourceOperationPanel.",
+      "React parity uses a test-local presentational harness with synthetic lifecycle labels only.",
+      "The fixture and harness make no backend, authorization, polling, retry, cancellation, or mutation claims."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "title": "Source operation",
+      "source": "Synthetic handbook",
+      "preparation": "Preparation",
+      "preparationStage": "Preparing",
+      "index": "Index",
+      "indexStage": "Waiting"
+    },
+    "variants": ["preparing", "index-waiting"],
+    "states": ["synthetic-active"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": ["--ui-bg", "--ui-fg", "--ui-muted", "--ui-surface", "--ui-border", "--link"],
+    "geometry": {
+      "layout": "compact feature panel with source label and ordered lifecycle rows",
+      "density": "two-line lifecycle rows with visible text labels"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark", "theme-light", "lifecycle-rows"],
+    "expectedTokenGeometry": [
+      "Source label is distinct from ordered Preparation and Index rows",
+      "Lifecycle state uses text and restrained status markers"
+    ],
+    "forbiddenClaims": ["focus", "ARIA", "keyboard", "touch", "state-transition", "backend-state", "polling", "mutation"]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "not applicable to this read-only presentational harness",
+      "focus": "no focus target is introduced",
+      "screenReader": "named region and definition list expose lifecycle labels and stages",
+      "reducedMotion": "lifecycle presentation has no required animation",
+      "validationBusyDisabledStatus": "synthetic stages are visible text only",
+      "zoom": "ordered lifecycle labels wrap without relying on icons",
+      "darkLight": "harness renders in zai-dark and zai-light wrappers",
+      "narrow": "panel uses a single wrapping column"
+    }
+  }
+}

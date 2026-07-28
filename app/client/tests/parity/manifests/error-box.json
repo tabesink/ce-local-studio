@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "targetId": "error-box",
+  "owner": "src/components/ui",
+  "layer": "primitive",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Live body: app/client/src/components/ui/ErrorBox.tsx.",
+      "Call site: LoginPage auth failure message.",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "message": "Sign-in failed. Check your credentials and try again."
+    },
+    "variants": [
+      "default"
+    ],
+    "states": [
+      "visible"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--ui-danger",
+      "--fg",
+      "--fs-sm",
+      "--rad-lg"
+    ],
+    "geometry": {
+      "padding": "px-3 py-2",
+      "radius": "rounded-[var(--rad-lg)]",
+      "border": "danger-tinted border and background mix"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark",
+      "theme-light",
+      "alert"
+    ],
+    "expectedTokenGeometry": [
+      "Border and background use --ui-danger color-mix",
+      "Text uses --fg at --fs-sm"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "static alert text; no interactive controls",
+      "focus": "alert is not focusable",
+      "screenReader": "role=alert exposes message text",
+      "reducedMotion": "no motion-dependent behavior",
+      "validationBusyDisabledStatus": "message prop is required string",
+      "zoom": "message remains present at component level",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "block-level alert; shared viewport labels only"
+    }
+  }
+}

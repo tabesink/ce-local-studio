@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "targetId": "settings-row",
   "owner": "src/features/settings-panel",
+  "layer": "feature",
   "catalogState": "FACTORY_READY",
   "disposition": "retain-and-reverify",
   "sourceEvidence": {
@@ -19,10 +20,21 @@
       "control": "Edit",
       "status": "Ready"
     },
-    "variants": ["settings"],
-    "states": ["with-control", "with-status"],
-    "themes": ["zai-dark", "zai-light"],
-    "viewports": ["390x844", "1280x800"],
+    "variants": [
+      "settings"
+    ],
+    "states": [
+      "with-control",
+      "with-status"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
     "semanticTokens": [
       "--ui-fg",
       "--ui-muted",
@@ -36,7 +48,12 @@
     }
   },
   "htmlStatic": {
-    "snapshotRegions": ["theme-dark", "theme-light", "row-with-control", "row-with-status"],
+    "snapshotRegions": [
+      "theme-dark",
+      "theme-light",
+      "row-with-control",
+      "row-with-status"
+    ],
     "expectedTokenGeometry": [
       "Label uses --ui-fg at --fs-base",
       "Description uses --ui-muted",

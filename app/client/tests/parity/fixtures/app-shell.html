@@ -1,0 +1,180 @@
+<!--
+  Synthetic parity fixture for AppShell workstation composition.
+  Not product authority. Not routable. Script-free and network-free.
+  Shared scenarios mirror tests/parity/manifests/app-shell.json.
+  Three-region wireframe: rail | main | optional inspector (dashed).
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>App shell parity fixture (synthetic)</title>
+    <style>
+      :root {
+        --ui-bg: #141414;
+        --ui-fg: #f2f2f2;
+        --ui-muted: #9a9a9a;
+        --ui-border: #2a2a2a;
+        --agent-bg: #101010;
+        --sidebar-bg: #181818;
+        --app-height: 720px;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --ui-bg: #f4f5f5;
+        --ui-fg: #1a1a1a;
+        --ui-muted: #6b6b6b;
+        --ui-border: #0d0d0d1a;
+        --agent-bg: #ececec;
+        --sidebar-bg: #ffffff;
+      }
+      body {
+        margin: 0;
+        background: var(--ui-bg);
+        color: var(--ui-fg);
+      }
+      .region {
+        padding: 16px;
+        border-bottom: 1px solid var(--ui-border);
+      }
+      .caption {
+        margin: 0 0 10px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .shell {
+        display: flex;
+        height: var(--app-height);
+        overflow: hidden;
+        border: 1px solid var(--ui-border);
+        border-radius: 8px;
+        background: var(--ui-bg);
+      }
+      .rail {
+        width: 224px;
+        flex-shrink: 0;
+        border-right: 1px solid var(--ui-border);
+        background: var(--sidebar-bg);
+        padding: 12px;
+      }
+      .rail.collapsed {
+        width: 0;
+        padding: 0;
+        border-right: 0;
+        overflow: hidden;
+      }
+      .rail-note {
+        font-size: 11px;
+        color: var(--ui-muted);
+        margin-top: 8px;
+      }
+      .main {
+        flex: 1;
+        min-width: 0;
+        background: var(--agent-bg);
+        padding: 20px;
+      }
+      .inspector {
+        width: 280px;
+        flex-shrink: 0;
+        border-left: 1px dashed color-mix(in oklab, var(--ui-border) 70%, transparent);
+        background: color-mix(in oklab, var(--ui-bg) 92%, transparent);
+        padding: 16px;
+        color: var(--ui-muted);
+        font-size: 12px;
+      }
+      .mobile-bar {
+        display: none;
+        height: 56px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--ui-border);
+        background: var(--ui-bg);
+        margin-bottom: 8px;
+      }
+      .mobile-bar.visible {
+        display: flex;
+      }
+      .placeholder {
+        border: 1px dashed color-mix(in oklab, var(--ui-border) 80%, transparent);
+        border-radius: 6px;
+        padding: 24px;
+        text-align: center;
+        color: var(--ui-muted);
+        font-size: 13px;
+      }
+      .nav-label {
+        display: block;
+        font-size: 13px;
+        padding: 6px 8px;
+        color: var(--ui-muted);
+      }
+      .nav-label.active {
+        color: var(--ui-fg);
+        background: color-mix(in oklab, var(--ui-fg) 8%, transparent);
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-expanded">
+      <p class="caption">zai-dark · desktop expanded rail + optional inspector</p>
+      <div class="shell" data-snapshot="desktop-expanded-rail">
+        <aside class="rail">
+          <strong style="font-size: 13px">Context Engine</strong>
+          <span class="nav-label active">Chat</span>
+          <span class="nav-label">Documents</span>
+          <span class="nav-label">Settings</span>
+        </aside>
+        <main class="main">
+          <div class="placeholder">Primary workspace</div>
+        </main>
+        <aside class="inspector">Optional inspector</aside>
+      </div>
+    </section>
+
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-collapsed">
+      <p class="caption">zai-dark · desktop collapsed rail note</p>
+      <div class="shell" data-snapshot="desktop-collapsed-rail">
+        <aside class="rail collapsed"></aside>
+        <main class="main">
+          <p class="rail-note">Expand sidebar affordance sits over main when rail width is 0.</p>
+          <div class="placeholder">Primary workspace</div>
+        </main>
+      </div>
+    </section>
+
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-narrow-bar">
+      <p class="caption">zai-dark · narrow mobile top bar region</p>
+      <div data-snapshot="narrow-mobile-bar">
+        <div class="mobile-bar visible">
+          <span>Context Engine</span>
+          <span aria-hidden="true">☰</span>
+        </div>
+        <div class="shell" style="height: 520px">
+          <main class="main" style="padding-top: 8px">
+            <div class="placeholder">Primary workspace (pt-14 offset in live shell)</div>
+          </main>
+        </div>
+      </div>
+    </section>
+
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light-expanded">
+      <p class="caption">zai-light · desktop expanded rail</p>
+      <div class="shell">
+        <aside class="rail">
+          <strong style="font-size: 13px">Context Engine</strong>
+          <span class="nav-label active">Chat</span>
+          <span class="nav-label">Documents</span>
+          <span class="nav-label">Settings</span>
+        </aside>
+        <main class="main">
+          <div class="placeholder">Primary workspace</div>
+        </main>
+      </div>
+    </section>
+  </body>
+</html>

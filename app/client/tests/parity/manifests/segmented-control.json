@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "targetId": "segmented-control",
+  "owner": "src/_shared/ui",
+  "layer": "primitive",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Live body: app/client/src/_shared/ui/index.tsx (SegmentedControl).",
+      "Synthetic mode labels only; no private IDs, runtime URLs, paths, credentials, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": { "first": "Compact", "second": "Comfortable" },
+    "variants": ["sm", "md"],
+    "states": ["first-selected", "second-selected"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": ["--ui-bg", "--ui-fg", "--ui-muted", "--ui-surface", "--ui-border"],
+    "geometry": { "track": "rounded-lg p-0.5", "item": "rounded-md", "density": "compact" }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark", "theme-light", "size-sm", "size-md"],
+    "expectedTokenGeometry": ["Track uses --ui-bg and --ui-border", "Selected segment uses --ui-surface"],
+    "forbiddenClaims": ["focus", "ARIA", "keyboard", "touch", "state-transition"]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "tab buttons emit the selected id",
+      "focus": "native buttons remain focusable",
+      "screenReader": "tablist and aria-selected expose selection",
+      "reducedMotion": "only tokenized color transitions are present",
+      "validationBusyDisabledStatus": "single controlled selection is explicit",
+      "zoom": "labels remain visible",
+      "darkLight": "renders under zai-dark and zai-light wrappers",
+      "narrow": "inline control keeps compact geometry"
+    }
+  }
+}

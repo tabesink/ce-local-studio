@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "targetId": "select",
+  "owner": "src/_shared/ui",
+  "layer": "primitive",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify (pending migrate to src/ui)",
+  "sourceEvidence": {
+    "notes": [
+      "Live body: app/client/src/_shared/ui/index.tsx (Select forwardRef).",
+      "Call sites: SettingsPanel (embedding model), PreferencesPanel (font family).",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "field": "Font family",
+      "placeholder": "Choose a font",
+      "optionA": "System default",
+      "optionB": "Geist Sans",
+      "disabledValue": "Locked selection"
+    },
+    "variants": [
+      "plain",
+      "with-label",
+      "with-placeholder",
+      "with-options"
+    ],
+    "states": [
+      "default",
+      "disabled"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--ui-fg",
+      "--ui-bg",
+      "--ui-muted",
+      "--ui-separator",
+      "--ui-info",
+      "--fs-base"
+    ],
+    "geometry": {
+      "controlHeight": "h-8",
+      "radius": "rounded-md",
+      "density": "compact"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark",
+      "theme-light",
+      "labeled",
+      "options",
+      "disabled"
+    ],
+    "expectedTokenGeometry": [
+      "Label uses --ui-muted uppercase tracking",
+      "Select border uses --ui-separator",
+      "Control height ~32px (h-8 family)"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "native select accepts keyboard navigation for options",
+      "focus": "enabled select is focusable; disabled select is not",
+      "screenReader": "label associates via htmlFor/id when label prop is provided; aria-label supported",
+      "reducedMotion": "no motion-dependent behavior claimed for Select",
+      "validationBusyDisabledStatus": "native disabled attribute supported",
+      "zoom": "label and selected option remain present at component level",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "full-width field; shared viewport labels only"
+    }
+  }
+}

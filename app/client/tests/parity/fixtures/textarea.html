@@ -1,0 +1,36 @@
+<!-- Not product authority. Synthetic, non-routable, script-free, and network-free parity fixture. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Textarea parity fixture</title>
+    <style>
+      :root { --ui-bg:#141414; --ui-fg:#f2f2f2; --ui-muted:#9a9a9a; --ui-separator:#2f2f2f; --ui-info:#3b9eff; --fs-base:13px; font-family:Geist,ui-sans-serif,system-ui,sans-serif; }
+      [data-theme="zai-light"] { --ui-bg:#f4f5f5; --ui-fg:#1a1a1a; --ui-muted:#6b6b6b; --ui-separator:#0d0d0d1a; --ui-info:#2563eb; }
+      body { margin:0; background:var(--ui-bg); color:var(--ui-fg); }
+      .region { max-width:420px; padding:16px; border-bottom:1px solid var(--ui-separator); background:var(--ui-bg); }
+      .caption { margin:0 0 8px; color:var(--ui-muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+      label { display:block; margin-bottom:6px; font-size:var(--fs-base); }
+      textarea { box-sizing:border-box; width:100%; resize:none; border:1px solid var(--ui-separator); border-radius:6px; background:var(--ui-bg); color:var(--ui-fg); padding:6px 10px; font:inherit; }
+      textarea::placeholder { color:var(--ui-muted); }
+      textarea:disabled { opacity:.5; }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark">
+      <p class="caption">zai-dark · empty</p>
+      <label>Summary</label>
+      <textarea rows="3" placeholder="Add a short summary"></textarea>
+    </section>
+    <section class="region" data-theme="zai-dark" data-snapshot="filled">
+      <p class="caption">zai-dark · filled</p>
+      <label>Summary</label>
+      <textarea rows="3">Synthetic note</textarea>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light">
+      <p class="caption">zai-light · disabled</p>
+      <label>Summary</label>
+      <textarea rows="3" disabled>Synthetic note</textarea>
+    </section>
+  </body>
+</html>

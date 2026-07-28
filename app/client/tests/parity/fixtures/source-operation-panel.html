@@ -1,0 +1,64 @@
+<!-- Not product authority. Synthetic data only. Script-free, network-free, and non-routable. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Source operation panel parity fixture</title>
+    <style>
+      :root {
+        --ui-bg: #141414;
+        --ui-fg: #f2f2f2;
+        --ui-muted: #9a9a9a;
+        --ui-surface: #1e1e1e;
+        --ui-border: #303030;
+        --link: #78a9ff;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --ui-bg: #f4f5f5;
+        --ui-fg: #1a1a1a;
+        --ui-muted: #666;
+        --ui-surface: #fff;
+        --ui-border: #d8d8d8;
+        --link: #245fbd;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--ui-bg); color: var(--ui-fg); }
+      .region { padding: 20px; border-bottom: 1px solid var(--ui-border); background: var(--ui-bg); }
+      .caption { margin: 0 0 10px; color: var(--ui-muted); font: 11px Geist Mono, monospace; text-transform: uppercase; }
+      .panel { max-width: 440px; overflow: hidden; border: 1px solid var(--ui-border); border-radius: 8px; background: var(--ui-surface); }
+      .header { padding: 12px 14px; border-bottom: 1px solid var(--ui-border); }
+      .eyebrow { margin: 0 0 4px; color: var(--ui-muted); font: 10px Geist Mono, monospace; text-transform: uppercase; letter-spacing: .08em; }
+      .source { margin: 0; font-size: 14px; font-weight: 600; }
+      .lifecycle { padding: 5px 14px; }
+      .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 42px; border-bottom: 1px solid var(--ui-border); }
+      .row:last-child { border-bottom: 0; }
+      .label { font-size: 13px; }
+      .stage { display: flex; align-items: center; gap: 7px; color: var(--ui-muted); font: 11px Geist Mono, monospace; }
+      .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--link); }
+      .waiting .dot { background: var(--ui-muted); }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark">
+      <p class="caption">Synthetic lifecycle labels · dark</p>
+      <div class="panel">
+        <div class="header"><p class="eyebrow">Source operation</p><p class="source">Synthetic handbook</p></div>
+        <div class="lifecycle" data-snapshot="lifecycle-rows">
+          <div class="row"><span class="label">Preparation</span><span class="stage"><i class="dot"></i>Preparing</span></div>
+          <div class="row waiting"><span class="label">Index</span><span class="stage"><i class="dot"></i>Waiting</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light">
+      <p class="caption">Synthetic lifecycle labels · light</p>
+      <div class="panel">
+        <div class="header"><p class="eyebrow">Source operation</p><p class="source">Synthetic handbook</p></div>
+        <div class="lifecycle">
+          <div class="row"><span class="label">Preparation</span><span class="stage"><i class="dot"></i>Preparing</span></div>
+          <div class="row waiting"><span class="label">Index</span><span class="stage"><i class="dot"></i>Waiting</span></div>
+        </div>
+      </div>
+    </section>
+  </body>
+</html>

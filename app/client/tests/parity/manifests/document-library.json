@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "targetId": "document-library",
+  "owner": "src/features/documents",
+  "layer": "feature",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical composition: app/client/src/features/documents/DocumentsPage.tsx library column (table, filter, domain select).",
+      "Viewer chrome and PdfPreview are covered by the document-viewer target; preview panel is out of scope here.",
+      "Inventory: docs/_scratch/p9-03-documents-library-inventory.md.",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, object keys, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "eyebrow": "Library",
+      "title": "Source Documents",
+      "domainSelect": "Knowledge Domain",
+      "domainName": "Synthetic Alpha Domain",
+      "filterPlaceholder": "Filter by filename...",
+      "filename": "Synthetic Policy Guide.pdf",
+      "previewKind": "pdf",
+      "emptyNotice": "No Source Documents available for this Knowledge Domain."
+    },
+    "variants": [
+      "member-with-rows",
+      "member-empty"
+    ],
+    "states": [
+      "domain-select-ready",
+      "table-dense-rows"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--ui-bg",
+      "--ui-fg",
+      "--ui-muted",
+      "--ui-border",
+      "--fs-sm",
+      "--fs-xs"
+    ],
+    "geometry": {
+      "layout": "PageHeader + domain select + filter + dense table; library column scrolls independently",
+      "density": "compact table rows; h-8 header controls"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark-with-rows",
+      "theme-light-with-rows",
+      "theme-dark-empty"
+    ],
+    "expectedTokenGeometry": [
+      "Eyebrow and title follow pane-header density",
+      "Table uses compact 12–13px cell typography",
+      "Preview column hosts StatusPill tone for preview kind"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "domain select and table rows are keyboard reachable in live component",
+      "focus": "SearchInput and refresh control receive focus; row click opens viewer (document-viewer target)",
+      "screenReader": "Knowledge Domain select exposes aria-label; table headers present",
+      "reducedMotion": "no motion-dependent library correctness",
+      "validationBusyDisabledStatus": "empty and loading states use EmptySafeNotice / PageState patterns",
+      "zoom": "table labels remain present at component level",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "library column full-width below lg when viewer closed"
+    }
+  }
+}

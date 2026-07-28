@@ -1,0 +1,204 @@
+<!--
+  Synthetic parity fixture for ConversationRail (chat pane header).
+  Not product authority. Not routable. Script-free and network-free.
+  Shared scenarios mirror tests/parity/manifests/conversation-rail.json.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Conversation rail parity fixture (synthetic)</title>
+    <style>
+      :root {
+        --ui-bg: #141414;
+        --ui-fg: #f2f2f2;
+        --ui-muted: #9a9a9a;
+        --ui-border: #2a2a2a;
+        --agent-bg: #101010;
+        --fg: #f2f2f2;
+        --dim: #9a9a9a;
+        --border: #2a2a2a;
+        --fs-base: 14px;
+        --fs-sm: 13px;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --ui-bg: #f4f5f5;
+        --ui-fg: #1a1a1a;
+        --ui-muted: #6b6b6b;
+        --ui-border: #0d0d0d1a;
+        --agent-bg: #ececec;
+        --fg: #1a1a1a;
+        --dim: #6b6b6b;
+        --border: #0d0d0d1a;
+      }
+      body {
+        margin: 0;
+        background: var(--ui-bg);
+        color: var(--ui-fg);
+      }
+      .region {
+        padding: 16px;
+        border-bottom: 1px solid var(--ui-border);
+      }
+      .caption {
+        margin: 0 0 10px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .workbench {
+        max-width: 720px;
+        border: 1px solid var(--ui-border);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--agent-bg);
+      }
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        height: 40px;
+        padding: 0 16px;
+        border-bottom: 1px solid color-mix(in oklab, var(--border) 35%, transparent);
+      }
+      .title-cluster {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: var(--fs-base);
+        font-weight: 500;
+        color: var(--fg);
+      }
+      .pill {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: color-mix(in oklab, #3b82f6 18%, transparent);
+        color: #93c5fd;
+      }
+      .actions {
+        display: flex;
+        shrink: 0;
+        align-items: center;
+        gap: 6px;
+      }
+      .icon-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        border: 1px solid var(--ui-border);
+        background: transparent;
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .picker-note {
+        margin-top: 8px;
+        padding: 8px 10px;
+        border: 1px dashed var(--ui-border);
+        border-radius: 6px;
+        font-size: 12px;
+        color: var(--dim);
+      }
+      .picker-item {
+        padding: 6px 12px;
+        font-size: var(--fs-sm);
+        color: var(--dim);
+      }
+      .picker-item.active {
+        color: var(--fg);
+      }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-ready">
+      <p class="caption">zai-dark · ready title</p>
+      <div class="workbench" data-snapshot="ready-title">
+        <header class="header">
+          <div class="title-cluster">
+            <span class="title">Valve maintenance notes</span>
+          </div>
+          <div class="actions">
+            <span class="icon-btn" aria-hidden="true">⌄</span>
+            <span class="icon-btn" aria-hidden="true">+</span>
+            <span class="icon-btn" aria-hidden="true">▣</span>
+          </div>
+        </header>
+      </div>
+    </section>
+
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-empty">
+      <p class="caption">zai-dark · empty title</p>
+      <div class="workbench" data-snapshot="empty-title">
+        <header class="header">
+          <div class="title-cluster">
+            <span class="title">New conversation</span>
+          </div>
+          <div class="actions">
+            <span class="icon-btn" aria-hidden="true">⌄</span>
+            <span class="icon-btn" aria-hidden="true">+</span>
+            <span class="icon-btn" aria-hidden="true">▣</span>
+          </div>
+        </header>
+      </div>
+    </section>
+
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-streaming">
+      <p class="caption">zai-dark · stream status pill</p>
+      <div class="workbench">
+        <header class="header">
+          <div class="title-cluster">
+            <span class="title">Synthetic domain query</span>
+            <span class="pill">Searching domain</span>
+          </div>
+          <div class="actions">
+            <span class="icon-btn" aria-hidden="true">■</span>
+            <span class="icon-btn" aria-hidden="true">▣</span>
+          </div>
+        </header>
+      </div>
+    </section>
+
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light-ready">
+      <p class="caption">zai-light · picker wireframe</p>
+      <div class="workbench">
+        <header class="header">
+          <div class="title-cluster">
+            <span class="title">Valve maintenance notes</span>
+          </div>
+          <div class="actions">
+            <span class="icon-btn" aria-hidden="true">⌄</span>
+            <span class="icon-btn" aria-hidden="true">+</span>
+            <span class="icon-btn" aria-hidden="true">▣</span>
+          </div>
+        </header>
+        <div class="picker-note" data-snapshot="picker-dropdown-wireframe">
+          <div class="picker-item active">Valve maintenance notes</div>
+          <div class="picker-item">Synthetic domain query</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-inspector-open">
+      <p class="caption">zai-dark · inspector toggle expanded</p>
+      <div class="workbench">
+        <header class="header">
+          <div class="title-cluster">
+            <span class="title">Valve maintenance notes</span>
+          </div>
+          <div class="actions">
+            <span class="icon-btn" aria-hidden="true" style="border-color: #3b82f6">▣</span>
+          </div>
+        </header>
+      </div>
+    </section>
+  </body>
+</html>

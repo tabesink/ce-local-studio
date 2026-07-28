@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "targetId": "ui-modal",
+  "owner": "src/_shared/ui",
+  "layer": "shared",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify (pending migrate to src/ui)",
+  "sourceEvidence": {
+    "notes": [
+      "Live body: app/client/src/_shared/ui/index.tsx (UiModal, UiModalHeader).",
+      "Call site: SettingsPanel delete Knowledge Domain confirmation.",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "title": "Confirm action",
+      "body": "This synthetic action cannot be undone.",
+      "close": "Close",
+      "cancel": "Cancel",
+      "confirm": "Confirm"
+    },
+    "variants": [
+      "default",
+      "max-w-md"
+    ],
+    "states": [
+      "open",
+      "closed"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--ui-fg",
+      "--ui-bg",
+      "--ui-surface",
+      "--ui-border",
+      "--ui-hover"
+    ],
+    "geometry": {
+      "panelRadius": "rounded-xl",
+      "headerPadding": "px-6 py-4",
+      "maxWidth": "max-w-lg default; max-w-md in settings delete flow"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark",
+      "theme-light",
+      "dialog-open",
+      "header"
+    ],
+    "expectedTokenGeometry": [
+      "Panel uses --ui-surface with --ui-border",
+      "Header title uses semibold lg text",
+      "Backdrop overlay is static presentation only"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "Close control is a button activatable via click/keyboard",
+      "focus": "dialog renders when isOpen; closed returns null",
+      "screenReader": "role=dialog aria-modal=true; title linked via aria-labelledby; Close buttons expose aria-label",
+      "reducedMotion": "backdrop blur is presentation only",
+      "validationBusyDisabledStatus": "not applicable to modal chrome",
+      "zoom": "title and body copy remain present at component level",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "panel is w-full within max-width constraint"
+    }
+  }
+}

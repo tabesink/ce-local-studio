@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "targetId": "pane-header",
+  "owner": "src/_shared/ui",
+  "layer": "shared",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Live primitive: app/client/src/_shared/ui/index.tsx PageHeader (eyebrow, title, status, actions).",
+      "No dedicated PaneHeader export; route primary surfaces compose PageHeader inside app-shell main region.",
+      "Call sites: DocumentsPage (Library / Source Documents), GraphPage (Knowledge graph / Graph).",
+      "HTML steers ~40px compact header bar geometry with title + trailing actions.",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "eyebrow": "Workspace",
+      "title": "Primary surface",
+      "actionPrimary": "New item",
+      "actionSecondary": "Filter"
+    },
+    "variants": [
+      "title-only",
+      "title-with-actions",
+      "eyebrow-title-actions"
+    ],
+    "states": [
+      "default",
+      "with-status-slot"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--ui-fg",
+      "--ui-muted",
+      "--fs-xs",
+      "--fs-3xl",
+      "--fs-sm"
+    ],
+    "geometry": {
+      "barHeightHint": "~40px row via min-h-8 items-center justify-between gap-3",
+      "title": "truncate h2 at --fs-3xl",
+      "actions": "shrink-0 flex items-center gap-2 trailing cluster"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark-title-actions",
+      "theme-light-title-actions",
+      "theme-dark-eyebrow"
+    ],
+    "expectedTokenGeometry": [
+      "Header bar min-height ~40px with title left and actions right",
+      "Eyebrow uses uppercase --fs-xs --ui-muted",
+      "Title uses --ui-fg at larger scale"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "actions slot may host buttons; parity uses stub buttons",
+      "focus": "action buttons are focusable when provided",
+      "screenReader": "title renders as h2; eyebrow precedes title when provided",
+      "reducedMotion": "no motion-dependent behavior",
+      "validationBusyDisabledStatus": "presentational header; no validation state on frame",
+      "zoom": "truncated title text remains present at component level",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "flex justify-between wraps via min-w-0 title cluster"
+    }
+  }
+}

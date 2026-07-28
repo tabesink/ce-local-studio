@@ -1,0 +1,196 @@
+<!--
+  Synthetic parity fixture for LoginPage.
+  Not product authority. Not routable. Script-free and network-free.
+  Shared scenarios mirror tests/parity/manifests/login.json.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Login parity fixture (synthetic)</title>
+    <style>
+      :root {
+        --bg: #141414;
+        --fg: #f2f2f2;
+        --dim: #9a9a9a;
+        --ui-border: #2a2a2a;
+        --color-panel: #1a1a1a;
+        --rail: #181818;
+        --rad-xl: 12px;
+        --rad-lg: 10px;
+        --fs-2xl: 22px;
+        --fs-sm: 12px;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --bg: #f4f5f5;
+        --fg: #1a1a1a;
+        --dim: #6b6b6b;
+        --ui-border: #0d0d0d1a;
+        --color-panel: #ffffff;
+        --rail: #ececec;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      .region {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 24px;
+      }
+      .caption {
+        position: absolute;
+        top: 12px;
+        left: 16px;
+        margin: 0;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+      .card {
+        width: 100%;
+        max-width: 360px;
+        border: 1px solid var(--ui-border);
+        border-radius: var(--rad-xl);
+        background: var(--color-panel);
+        padding: 20px;
+      }
+      .logo-block {
+        width: 96px;
+        height: 96px;
+        margin: 0 auto 12px;
+        border-radius: var(--rad-lg);
+        background: var(--rail);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--dim);
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .brand {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+      .brand h1 {
+        margin: 0;
+        font-size: var(--fs-2xl);
+        font-weight: 600;
+        line-height: 1.2;
+      }
+      .brand p {
+        margin: 4px 0 0;
+        font-size: var(--fs-sm);
+        color: var(--dim);
+      }
+      .field {
+        margin-bottom: 12px;
+      }
+      .field label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: var(--fs-sm);
+        color: var(--dim);
+      }
+      .field input {
+        width: 100%;
+        box-sizing: border-box;
+        height: 36px;
+        border: 1px solid var(--ui-border);
+        border-radius: 8px;
+        background: var(--bg);
+        color: var(--fg);
+        padding: 0 10px;
+        font-size: 14px;
+      }
+      .error {
+        margin-top: 16px;
+        padding: 10px 12px;
+        border: 1px solid #7f1d1d;
+        border-radius: 8px;
+        background: color-mix(in oklab, #7f1d1d 20%, transparent);
+        color: #fca5a5;
+        font-size: var(--fs-sm);
+      }
+      .submit {
+        display: block;
+        width: 100%;
+        margin-top: 20px;
+        height: 36px;
+        border: none;
+        border-radius: 9999px;
+        background: color-mix(in oklab, var(--fg) 12%, transparent);
+        color: var(--fg);
+        font-size: 14px;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-ready">
+      <p class="caption">zai-dark · ready</p>
+      <form class="card">
+        <div class="brand">
+          <div class="logo-block">Logo</div>
+          <h1>Context Engine</h1>
+          <p>Sign in with your team account.</p>
+        </div>
+        <div class="field">
+          <label for="username-dark">Username</label>
+          <input id="username-dark" type="text" readonly />
+        </div>
+        <div class="field">
+          <label for="password-dark">Password</label>
+          <input id="password-dark" type="password" readonly />
+        </div>
+        <button class="submit" type="button">Sign in</button>
+      </form>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light-ready">
+      <p class="caption">zai-light · ready</p>
+      <form class="card">
+        <div class="brand">
+          <div class="logo-block">Logo</div>
+          <h1>Context Engine</h1>
+          <p>Sign in with your team account.</p>
+        </div>
+        <div class="field">
+          <label for="username-light">Username</label>
+          <input id="username-light" type="text" readonly />
+        </div>
+        <div class="field">
+          <label for="password-light">Password</label>
+          <input id="password-light" type="password" readonly />
+        </div>
+        <button class="submit" type="button">Sign in</button>
+      </form>
+    </section>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-with-error">
+      <p class="caption">zai-dark · with-error</p>
+      <form class="card">
+        <div class="brand">
+          <div class="logo-block">Logo</div>
+          <h1>Context Engine</h1>
+          <p>Sign in with your team account.</p>
+        </div>
+        <div class="field">
+          <label>Username</label>
+          <input type="text" readonly />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" readonly />
+        </div>
+        <div class="error">Sign in failed.</div>
+        <button class="submit" type="button">Sign in</button>
+      </form>
+    </section>
+  </body>
+</html>

@@ -1,0 +1,31 @@
+<!-- Not product authority. Synthetic, non-routable, script-free, and network-free parity fixture. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Table parity fixture</title>
+    <style>
+      :root { --ui-bg:#141414; --ui-fg:#f2f2f2; --ui-muted:#9a9a9a; --ui-surface:#202020; --ui-border:#303030; font-family:Geist,ui-sans-serif,system-ui,sans-serif; }
+      [data-theme="zai-light"] { --ui-bg:#f4f5f5; --ui-fg:#1a1a1a; --ui-muted:#6b6b6b; --ui-surface:#fff; --ui-border:#0d0d0d1a; }
+      body { margin:0; background:var(--ui-bg); color:var(--ui-fg); }
+      .region { padding:16px; border-bottom:1px solid var(--ui-border); background:var(--ui-bg); }
+      .caption { margin:0 0 10px; color:var(--ui-muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+      .wrap { overflow-x:auto; border:1px solid var(--ui-border); border-radius:7px; }
+      .borderless { border:0; }
+      table { width:100%; min-width:320px; border-collapse:collapse; text-align:left; font-size:13px; }
+      thead { background:var(--ui-surface); border-bottom:1px solid var(--ui-border); }
+      th,td { padding:10px 14px; } th { color:var(--ui-muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+      tbody tr+tr { border-top:1px solid var(--ui-border); }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="bordered">
+      <p class="caption">zai-dark · bordered</p>
+      <div class="wrap"><table><thead><tr><th>Item</th><th>State</th></tr></thead><tbody><tr><td>Example one</td><td>Ready</td></tr><tr><td>Example two</td><td>Paused</td></tr></tbody></table></div>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light">
+      <p class="caption">zai-light · borderless</p>
+      <div class="wrap borderless"><table><thead><tr><th>Item</th><th>State</th></tr></thead><tbody><tr><td>Example one</td><td>Ready</td></tr></tbody></table></div>
+    </section>
+  </body>
+</html>

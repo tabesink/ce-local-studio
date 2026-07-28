@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "targetId": "login",
+  "owner": "src/features/auth",
+  "layer": "feature",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical composition: app/client/src/features/auth/LoginPage.tsx centered credential card.",
+      "No app rail; team credentials with generic auth errors only.",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "productName": "Context Engine",
+      "subtitle": "Sign in with your team account.",
+      "username": "Username",
+      "password": "Password",
+      "submit": "Sign in",
+      "error": "Sign in failed."
+    },
+    "variants": [
+      "ready",
+      "with-error"
+    ],
+    "states": [
+      "centered-card",
+      "submit-busy"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--bg",
+      "--fg",
+      "--dim",
+      "--ui-border",
+      "--color-panel",
+      "--rail",
+      "--rad-xl",
+      "--fs-2xl",
+      "--fs-sm"
+    ],
+    "geometry": {
+      "layout": "min-h-screen centered; max-w-[360px] card with logo block",
+      "density": "compact inputs; full-width submit button"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark-ready",
+      "theme-light-ready",
+      "theme-dark-with-error"
+    ],
+    "expectedTokenGeometry": [
+      "Card uses --color-panel with --rad-xl border",
+      "Logo block uses --rail background",
+      "Form fields stack with space-y-3 rhythm"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "username, password, and submit are keyboard reachable in tab order",
+      "focus": "inputs and submit button receive focus",
+      "screenReader": "labels wired to inputs; error uses ErrorBox when present",
+      "reducedMotion": "submit loading state does not depend on motion",
+      "validationBusyDisabledStatus": "submit shows loading while busy; required fields enforced",
+      "zoom": "heading and inputs remain present at component level",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "card uses px-6 page gutter; max width capped at 360px"
+    }
+  }
+}

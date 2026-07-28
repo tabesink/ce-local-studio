@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "targetId": "textarea",
+  "owner": "src/_shared/ui",
+  "layer": "primitive",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Live body: app/client/src/_shared/ui/index.tsx (Textarea forwardRef).",
+      "Synthetic content only; no private IDs, runtime URLs, paths, credentials, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": { "field": "Summary", "placeholder": "Add a short summary", "value": "Synthetic note" },
+    "variants": ["default", "fixed-rows"],
+    "states": ["empty", "filled", "disabled"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": ["--ui-bg", "--ui-fg", "--ui-muted", "--ui-separator", "--ui-info", "--fs-base"],
+    "geometry": { "radius": "rounded-md", "padding": "px-2.5 py-1.5", "density": "compact" }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark", "theme-light", "filled", "disabled"],
+    "expectedTokenGeometry": ["Border uses --ui-separator", "Text and placeholder use semantic foreground tokens"],
+    "forbiddenClaims": ["focus", "ARIA", "keyboard", "touch", "state-transition"]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "native textarea accepts text entry",
+      "focus": "enabled textarea is focusable",
+      "screenReader": "aria-label and native disabled attributes pass through",
+      "reducedMotion": "no motion-dependent behavior",
+      "validationBusyDisabledStatus": "native disabled state is supported",
+      "zoom": "value remains available as native text",
+      "darkLight": "renders under zai-dark and zai-light wrappers",
+      "narrow": "control remains full width"
+    }
+  }
+}

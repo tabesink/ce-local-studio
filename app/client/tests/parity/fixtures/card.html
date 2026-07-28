@@ -1,0 +1,30 @@
+<!-- Not product authority. Synthetic, non-routable, script-free, and network-free parity fixture. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Card parity fixture</title>
+    <style>
+      :root { --ui-bg:#141414; --ui-fg:#f2f2f2; --ui-muted:#9a9a9a; --ui-border:#303030; font-family:Geist,ui-sans-serif,system-ui,sans-serif; }
+      [data-theme="zai-light"] { --ui-bg:#f4f5f5; --ui-fg:#1a1a1a; --ui-muted:#6b6b6b; --ui-border:#0d0d0d1a; }
+      body { margin:0; background:var(--ui-bg); color:var(--ui-fg); }
+      .region { display:grid; gap:8px; padding:16px; border-bottom:1px solid var(--ui-border); background:var(--ui-bg); }
+      .caption { margin:0 0 2px; color:var(--ui-muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+      .card { border:1px solid var(--ui-border); border-radius:8px; background:var(--ui-bg); }
+      .sm { padding:12px; } .md { padding:16px; } .lg { padding:24px; } .borderless { border:0; }
+      h2 { margin:0 0 4px; font-size:14px; font-weight:600; } p { margin:0; color:var(--ui-muted); font-size:12px; }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark">
+      <p class="caption">zai-dark · padding</p>
+      <article class="card sm"><h2>Synthetic card</h2><p>Small padding</p></article>
+      <article class="card md"><h2>Synthetic card</h2><p>Medium padding</p></article>
+      <article class="card lg"><h2>Synthetic card</h2><p>Large padding</p></article>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light">
+      <p class="caption">zai-light · borderless</p>
+      <article class="card md borderless"><h2>Synthetic card</h2><p>Compact supporting text</p></article>
+    </section>
+  </body>
+</html>

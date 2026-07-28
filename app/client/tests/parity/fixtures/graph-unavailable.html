@@ -1,0 +1,135 @@
+<!--
+  Synthetic parity fixture for Graph unavailable surface.
+  Not product authority. Not routable. Script-free and network-free.
+  Shared scenarios mirror tests/parity/manifests/graph-unavailable.json.
+  No canvas, graph nodes, or LightRAG placeholders.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Graph unavailable parity fixture (synthetic)</title>
+    <style>
+      :root {
+        --ui-bg: #141414;
+        --ui-fg: #f2f2f2;
+        --ui-muted: #9a9a9a;
+        --ui-border: #2a2a2a;
+        --ui-surface: #1a1a1a;
+        --fs-lg: 16px;
+        --fs-sm: 12px;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --ui-bg: #f4f5f5;
+        --ui-fg: #1a1a1a;
+        --ui-muted: #6b6b6b;
+        --ui-border: #0d0d0d1a;
+        --ui-surface: #ffffff;
+      }
+      body {
+        margin: 0;
+        background: var(--ui-bg);
+        color: var(--ui-fg);
+      }
+      .region {
+        padding: 20px 24px;
+        min-height: 420px;
+        border-bottom: 1px solid var(--ui-border);
+      }
+      .caption {
+        margin: 0 0 12px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .header .eyebrow {
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .header h2 {
+        margin: 2px 0 16px;
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .panel {
+        display: flex;
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+        min-height: 320px;
+        border: 1px solid var(--ui-border);
+        border-radius: 8px;
+        background: color-mix(in oklab, var(--ui-surface) 40%, transparent);
+      }
+      .message {
+        max-width: 28rem;
+        padding: 24px;
+        text-align: center;
+      }
+      .icon {
+        width: 32px;
+        height: 32px;
+        margin: 0 auto 12px;
+        color: var(--ui-muted);
+        border: 1px dashed var(--ui-border);
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+      }
+      .message h3 {
+        margin: 0;
+        font-size: var(--fs-lg);
+        font-weight: 500;
+      }
+      .message p {
+        margin: 8px 0 0;
+        font-size: var(--fs-sm);
+        line-height: 1.6;
+        color: var(--ui-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-unavailable">
+      <p class="caption">zai-dark · unavailable-center</p>
+      <div class="header">
+        <div class="eyebrow">Knowledge graph</div>
+        <h2>Graph</h2>
+      </div>
+      <div class="panel">
+        <div class="message">
+          <div class="icon">⬡</div>
+          <h3>Graph visualization is not available</h3>
+          <p>
+            The knowledge graph route stays deliberately unavailable until a versioned graph API and data
+            contracts are approved. This page makes no product-data requests.
+          </p>
+        </div>
+      </div>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light-unavailable">
+      <p class="caption">zai-light · unavailable-center</p>
+      <div class="header">
+        <div class="eyebrow">Knowledge graph</div>
+        <h2>Graph</h2>
+      </div>
+      <div class="panel">
+        <div class="message">
+          <div class="icon">⬡</div>
+          <h3>Graph visualization is not available</h3>
+          <p>
+            The knowledge graph route stays deliberately unavailable until a versioned graph API and data
+            contracts are approved. This page makes no product-data requests.
+          </p>
+        </div>
+      </div>
+    </section>
+  </body>
+</html>

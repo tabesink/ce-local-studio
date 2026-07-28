@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "targetId": "page-state",
+  "owner": "src/components/ui",
+  "layer": "shared",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Live body: app/client/src/components/ui/PageState.tsx.",
+      "Call sites: AppLayout session resolve, SettingsPanel Suspense, DocumentsPage, not-found, forbidden.",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "defaultTitle": "Loading",
+      "defaultMessage": "Resolving session.",
+      "dangerTitle": "Forbidden",
+      "dangerMessage": "You do not have access to this surface."
+    },
+    "variants": [
+      "default",
+      "danger"
+    ],
+    "states": [
+      "centered-empty"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--ui-fg",
+      "--ui-danger",
+      "--dim",
+      "--fs-2xl",
+      "--fs-base",
+      "--leading-tight"
+    ],
+    "geometry": {
+      "minHeight": "min-h-[520px] centered column",
+      "maxWidth": "max-w-[520px]",
+      "indicator": "size-2 rounded-full status dot"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark",
+      "theme-light",
+      "default-tone",
+      "danger-tone"
+    ],
+    "expectedTokenGeometry": [
+      "Default indicator uses --dim",
+      "Danger indicator uses --ui-danger",
+      "Message uses --dim at --fs-base"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "static informational surface; no interactive controls",
+      "focus": "no focusable controls in default PageState",
+      "screenReader": "title is h1; message is paragraph text",
+      "reducedMotion": "no motion-dependent behavior",
+      "validationBusyDisabledStatus": "tone prop selects default vs danger presentation",
+      "zoom": "title and message remain present at component level",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "centered column with padding; shared viewport labels only"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "targetId": "drawer",
+  "owner": "src/_shared/ui",
+  "layer": "shared",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Live bodies: app/client/src/_shared/ui/index.tsx (Drawer, DrawerHeader, DrawerBody, DrawerFooter).",
+      "Synthetic detail copy only; no private IDs, runtime URLs, paths, credentials, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": { "title": "Details", "body": "Synthetic drawer content", "status": "Saved", "close": "Close" },
+    "variants": ["detail", "task"],
+    "states": ["open"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": ["--ui-bg", "--ui-fg", "--ui-muted", "--ui-border"],
+    "geometry": { "anchor": "right", "header": "h-9", "footer": "h-10", "body": "scrollable" }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark", "theme-light", "header", "body", "footer"],
+    "expectedTokenGeometry": ["Panel uses --ui-bg with left --ui-border", "Header and footer remain fixed around scrolling body"],
+    "forbiddenClaims": ["focus", "ARIA", "keyboard", "touch", "state-transition"]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "close control emits close intent",
+      "focus": "close button remains focusable",
+      "screenReader": "aside landmark and named Close button remain available",
+      "reducedMotion": "drawer chrome has no motion-dependent behavior",
+      "validationBusyDisabledStatus": "footer status is visible text",
+      "zoom": "body remains independently scrollable",
+      "darkLight": "renders under zai-dark and zai-light wrappers",
+      "narrow": "width is clamped by min and max inline geometry"
+    }
+  }
+}

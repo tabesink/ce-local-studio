@@ -70,6 +70,7 @@ DRIFT IDs 01 through 34 appear exactly once above as primary rows.
 | hashed composer tokens and safe accepted labels | P11 | one-use atomic consumption and replay tests | DONE — P11-01..P11-03 (`docs/_scratch/p11-03-assembly-fingerprint-replay-evidence.md`); DRIFT-26 closed; browser References unlock residual; P11-04 Evidence attach UX DEFERRED (`docs/_scratch/p11-04-evidence-reattachment-evidence.md`) |
 | pinned frontend dependencies and themes | P9 | lockfile, build, dark/light token and storage-safety gates | NOT_STARTED |
 | shell and UI primitives | P9-01 | call-site inventory, canonical ownership, accessibility and parity evidence | DONE — five starters `FACTORY_READY` (Domain accordion via P9-04); residual mega-kit `defer-FE-01`; DRIFT-02 closed by P9-02 |
+| full workstation HTML gallery (Option A) | P9-06 | every Phase 1 in-use surface has catalog `targetId` + HTML/React/manifest trio; agents stop when HTML missing; CI maps owners↔catalog; plan `docs/plans/2026-07-28-002-feat-full-workstation-html-gallery-plan.md` | DONE — 39 target trios + script-free local index + hard catalog/docs/files gate; evidence `docs/_scratch/p9-06-full-gallery-evidence.md` |
 
 ## D0 red baseline and first gate
 

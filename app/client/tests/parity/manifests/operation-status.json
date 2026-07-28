@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "targetId": "operation-status",
+  "owner": "src/ui",
+  "layer": "shared",
+  "catalogState": "FACTORY_READY",
+  "disposition": "add",
+  "sourceEvidence": {
+    "notes": [
+      "No standalone production OperationStatus exists; React parity uses a test-local presentational harness.",
+      "All stages, attempts, and messages are synthetic display labels, not backend or polling claims."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "title": "Synthetic operation",
+      "stage": "Preparing",
+      "attempt": "Attempt 1",
+      "message": "Synthetic progress for visual review only."
+    },
+    "variants": ["in-progress", "complete"],
+    "states": ["active", "terminal"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": ["--ui-bg", "--ui-fg", "--ui-muted", "--ui-surface", "--ui-border", "--link"],
+    "geometry": {
+      "layout": "compact title, stage, attempt, message, and progress row",
+      "progress": "bounded horizontal indicator with visible stage text"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark-active", "theme-light-complete"],
+    "expectedTokenGeometry": [
+      "Status card uses quiet border and compact metadata",
+      "Stage is communicated by text as well as progress fill"
+    ],
+    "forbiddenClaims": ["focus", "ARIA", "keyboard", "touch", "state-transition", "polling", "backend-state"]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "not applicable to read-only operation status",
+      "focus": "no focus is required for static status content",
+      "screenReader": "named status region exposes stage and safe message",
+      "reducedMotion": "progress presentation has no required animation",
+      "validationBusyDisabledStatus": "active stage uses aria-live status; terminal stage remains visible",
+      "zoom": "stage and message remain textual",
+      "darkLight": "harness renders in zai-dark and zai-light wrappers",
+      "narrow": "metadata wraps within the card"
+    }
+  }
+}

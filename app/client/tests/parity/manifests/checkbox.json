@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "targetId": "checkbox",
+  "owner": "src/_shared/ui",
+  "layer": "primitive",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Live body: app/client/src/_shared/ui/index.tsx (Checkbox).",
+      "Synthetic labels only; no private IDs, runtime URLs, paths, credentials, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": { "unchecked": "Include summaries", "checked": "Include citations" },
+    "variants": ["unchecked", "checked"],
+    "states": ["unchecked", "checked"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": ["--ui-fg", "--ui-muted", "--ui-info", "--fs-sm"],
+    "geometry": { "control": "14px square", "labelGap": "6px", "hitArea": "label-owned" }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark", "theme-light", "unchecked", "checked"],
+    "expectedTokenGeometry": ["Native checkbox uses --ui-info accent", "Label uses --ui-muted"],
+    "forbiddenClaims": ["focus", "ARIA", "keyboard", "touch", "state-transition"]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "native checkbox toggles from its owning label",
+      "focus": "native input remains focusable",
+      "screenReader": "visible label provides the accessible name",
+      "reducedMotion": "no motion-dependent behavior",
+      "validationBusyDisabledStatus": "controlled checked state is explicit",
+      "zoom": "label remains visible beside control",
+      "darkLight": "renders under zai-dark and zai-light wrappers",
+      "narrow": "inline label wraps without fixed width"
+    }
+  }
+}

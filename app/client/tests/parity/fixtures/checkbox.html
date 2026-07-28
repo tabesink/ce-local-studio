@@ -1,0 +1,31 @@
+<!-- Not product authority. Synthetic, non-routable, script-free, and network-free parity fixture. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Checkbox parity fixture</title>
+    <style>
+      :root { --ui-bg:#141414; --ui-fg:#f2f2f2; --ui-muted:#9a9a9a; --ui-info:#3b9eff; --ui-border:#303030; --fs-sm:12px; font-family:Geist,ui-sans-serif,system-ui,sans-serif; }
+      [data-theme="zai-light"] { --ui-bg:#f4f5f5; --ui-fg:#1a1a1a; --ui-muted:#6b6b6b; --ui-info:#2563eb; --ui-border:#0d0d0d1a; }
+      body { margin:0; background:var(--ui-bg); color:var(--ui-fg); }
+      .region { padding:16px; border-bottom:1px solid var(--ui-border); background:var(--ui-bg); }
+      .caption { margin:0 0 10px; color:var(--ui-muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+      .checkbox { display:inline-flex; align-items:center; gap:6px; color:var(--ui-muted); font-size:var(--fs-sm); }
+      .checkbox input { width:14px; height:14px; margin:0; accent-color:var(--ui-info); }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark">
+      <p class="caption">zai-dark · unchecked</p>
+      <label class="checkbox"><input type="checkbox" />Include summaries</label>
+    </section>
+    <section class="region" data-theme="zai-dark" data-snapshot="checked">
+      <p class="caption">zai-dark · checked</p>
+      <label class="checkbox"><input type="checkbox" checked />Include citations</label>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light">
+      <p class="caption">zai-light · checked</p>
+      <label class="checkbox"><input type="checkbox" checked />Include citations</label>
+    </section>
+  </body>
+</html>

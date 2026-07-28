@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "targetId": "evidence-inspector",
+  "owner": "src/features/chat-shell",
+  "layer": "feature",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical component: app/client/src/features/chat-shell/EvidencePanel.tsx.",
+      "Turn-scoped inspector with Evidence | Refs | Source tabs; desktop complementary aside, narrow drawer below 1024px.",
+      "P9-02 chat-inspector.test.tsx covers Library navigation; parity tests assert catalog geometry and R10 hooks.",
+      "Synthetic evidence cards and excerpts only."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "title": "Evidence",
+      "tabEvidence": "Evidence",
+      "tabRefs": "Refs",
+      "tabSource": "Source",
+      "emptyEvidence": "Retrieved evidence for this answer appears here after a domain query.",
+      "sourceLabel": "Valve handbook",
+      "excerpt": "Inspect relief valves quarterly under normal operating pressure."
+    },
+    "variants": [
+      "desktop-aside",
+      "narrow-drawer",
+      "empty-evidence"
+    ],
+    "states": [
+      "inspector-closed",
+      "inspector-open-ready",
+      "refs-tab",
+      "source-tab"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--color-panel",
+      "--color-header",
+      "--border",
+      "--surface",
+      "--fg",
+      "--dim",
+      "--link",
+      "--fs-sm"
+    ],
+    "geometry": {
+      "header": "h-10 shrink-0 border-b px-3",
+      "tabs": "flex gap-1 border-b px-2 py-1.5",
+      "defaultWidth": "440px desktop; min(100vw,400px) drawer",
+      "resizeHandle": "absolute left-0 w-1 col-resize on desktop"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark-empty",
+      "theme-dark-ready",
+      "theme-light-ready",
+      "theme-dark-narrow-drawer"
+    ],
+    "expectedTokenGeometry": [
+      "Panel uses --color-panel with left border",
+      "Evidence cards show citation label + source label + excerpt clamp",
+      "Narrow variant notes full-height drawer overlay"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "evidence cards activate with Enter/Space; drawer Escape closes",
+      "focus": "tablist and cards are focusable when open",
+      "screenReader": "complementary landmark on desktop; dialog on narrow drawer",
+      "reducedMotion": "no motion-dependent inspector correctness",
+      "validationBusyDisabledStatus": "Open in Library disabled when opaque refs missing",
+      "zoom": "tab labels and card excerpts remain present",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "matchMedia drawer path renders dialog role"
+    }
+  }
+}

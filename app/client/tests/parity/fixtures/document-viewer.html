@@ -1,0 +1,158 @@
+<!--
+  Synthetic parity fixture for PDF viewer chrome.
+  Not product authority. Not routable. Script-free and network-free.
+  Shared scenarios mirror tests/parity/manifests/document-viewer.json.
+  Canvas region is a placeholder only — no real PDF bytes.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Document viewer parity fixture (synthetic)</title>
+    <style>
+      :root {
+        --ui-bg: #141414;
+        --ui-fg: #f2f2f2;
+        --ui-muted: #9a9a9a;
+        --ui-border: #2a2a2a;
+        --fs-xs: 11px;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --ui-bg: #f4f5f5;
+        --ui-fg: #1a1a1a;
+        --ui-muted: #6b6b6b;
+        --ui-border: #0d0d0d1a;
+      }
+      body {
+        margin: 0;
+        background: var(--ui-bg);
+        color: var(--ui-fg);
+      }
+      .region {
+        padding: 16px;
+        border-bottom: 1px solid var(--ui-border);
+      }
+      .caption {
+        margin: 0 0 10px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .viewer {
+        overflow: hidden;
+        border: 1px solid var(--ui-border);
+        border-radius: 6px;
+        background: var(--ui-bg);
+        max-width: 480px;
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        height: 32px;
+        padding: 0 8px;
+        border-bottom: 1px solid var(--ui-border);
+      }
+      .nav-btn {
+        width: 24px;
+        height: 24px;
+        border-radius: 4px;
+        border: 1px solid var(--ui-border);
+        color: var(--ui-muted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+      }
+      .page-label {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: var(--fs-xs);
+        color: var(--ui-muted);
+      }
+      .canvas-region {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        min-height: 280px;
+        max-height: 28rem;
+        padding: 8px;
+        overflow: auto;
+      }
+      .canvas-placeholder {
+        width: 100%;
+        max-width: 360px;
+        aspect-ratio: 8.5 / 11;
+        border: 1px dashed color-mix(in oklab, var(--ui-border) 80%, transparent);
+        border-radius: 4px;
+        background: color-mix(in oklab, var(--ui-muted) 8%, var(--ui-bg));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--ui-muted);
+        font-size: var(--fs-xs);
+        text-align: center;
+        padding: 16px;
+      }
+      .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 40px;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--ui-border);
+        margin-bottom: 12px;
+        max-width: 480px;
+        font-size: 13px;
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-toolbar">
+      <p class="caption">zai-dark · toolbar-ready</p>
+      <div class="panel-header">
+        <span>Synthetic Policy Guide.pdf</span>
+        <span class="nav-btn">×</span>
+      </div>
+      <div class="viewer">
+        <div class="toolbar">
+          <span class="nav-btn">‹</span>
+          <span class="page-label">Page 2 of 12</span>
+          <span class="nav-btn">›</span>
+        </div>
+        <div class="canvas-region">
+          <div class="canvas-placeholder">Synthetic canvas placeholder — no PDF bytes</div>
+        </div>
+      </div>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light-toolbar">
+      <p class="caption">zai-light · toolbar-ready</p>
+      <div class="viewer">
+        <div class="toolbar">
+          <span class="nav-btn">‹</span>
+          <span class="page-label">Page 2 of 12</span>
+          <span class="nav-btn">›</span>
+        </div>
+        <div class="canvas-region">
+          <div class="canvas-placeholder">Synthetic canvas placeholder</div>
+        </div>
+      </div>
+    </section>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-canvas-placeholder">
+      <p class="caption">zai-dark · loading-label</p>
+      <div class="viewer">
+        <div class="toolbar">
+          <span class="nav-btn">‹</span>
+          <span class="page-label">Loading…</span>
+          <span class="nav-btn">›</span>
+        </div>
+        <div class="canvas-region">
+          <div class="canvas-placeholder">Awaiting governed preview</div>
+        </div>
+      </div>
+    </section>
+  </body>
+</html>

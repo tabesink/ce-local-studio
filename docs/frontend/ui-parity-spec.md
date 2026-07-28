@@ -116,39 +116,100 @@ See responsive-and-desktop-matrix.md for the exact viewport matrix.
 - Per-page mobile behavior invented independently of the shared shell
 - Agent-only controls such as model picker, terminal, filesystem, browser automation, queue, or tool approval
 
-## D0 frontend-factory catalog
+## Phase 1 workstation factory catalog
 
-This section is the sole D0 owner of the parity-manifest schema, catalog states, and readiness rules. D0 documents the factory; it does not create application fixtures or award React/runtime completion.
+This section is the sole owner of the parity-manifest schema, catalog states, and readiness rules. P9-01/P9-04 proved the five-starter subset; **P9-06** expands the catalog to the full Phase 1 workstation (Option A — HTML steers every in-scope UI surface). Documentation of a row does not award React/runtime completion.
 
-Catalog states are `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED_CONTRACT`, and `FACTORY_READY`. For starter targets (Button, Input, StatusPill, SettingsRow), `FACTORY_READY` is earned after all applicable shared, HTML-static, React (Vitest/Testing Library), and accessibility assertions pass. Playwright route-level visual matrix and production-boundary Settings domains acceptance remain P12-07 and are not required to mark starter targets factory-ready.
+### Option A rule
 
-| Target | Owner | D0 state | Required brownfield disposition |
-| --- | --- | --- | --- |
-| Button | `src/ui` | FACTORY_READY | migrate + retain-and-reverify live API; P9-01 shared/HTML/React (Vitest/RTL) + R10 subset proven |
-| Input | `src/ui` | FACTORY_READY | migrate + retain-and-reverify live API; P9-01 shared/HTML/React (Vitest/RTL) + R10 subset proven |
-| StatusPill | `src/ui` | FACTORY_READY | migrate + retain-and-reverify live tones (`default`↔neutral, `good`↔success); P9-01 parity proven |
-| SettingsRow | `src/features/settings-panel` | FACTORY_READY | Settings-owned composition; P9-01 shared/HTML/React (Vitest/RTL) + R10 subset proven |
-| Settings Domain accordion | `src/features/settings-panel` | FACTORY_READY | Settings-owned `DomainAccordionRow`; P9-04 shared/HTML/React (Vitest/RTL) + R10 subset proven — no ProgressBar-on-expand / storageSummary; production-boundary Playwright F3 remains P12-07 |
+Every Phase 1 UI surface an agent may implement must have a catalog `targetId` with a script-free HTML fixture before chrome work is allowed. Missing target → stop and add catalog + HTML first. Uncovered Phase 1 chrome is a stop condition, not an advisory gap.
 
-The starter set is not a complete UI allowlist. Uncovered roles continue using the contracted canonical CE control; agents record a parity gap rather than inventing local chrome.
+HTML remains visual steering only: synthetic, script-free, network-free, non-routable, excluded from production bundles. React (Vitest/Testing Library) owns behavior, semantics, focus, and accessibility. Live product routes stay server-backed through the same-origin BFF; HTML never authorizes product behavior, DTOs, or SSE.
 
-Each later target manifest is versioned and contains:
+### Layers and states
 
-- identity: `schemaVersion`, `targetId`, `owner`, `catalogState`, `disposition`, and source-evidence digests;
+Each target has `layer`: `primitive` | `shared` | `feature`.
+
+Catalog states are `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED_CONTRACT`, and `FACTORY_READY`. `FACTORY_READY` is earned after all applicable shared, HTML-static, React (Vitest/Testing Library), and accessibility assertions pass. Playwright route-level visual matrix and production-boundary Settings domains acceptance remain P12-07 and are not required to mark a target factory-ready.
+
+Contracted-but-unused residuals may stay `NOT_STARTED` while listed. Agents must not invent replacements for listed roles. P11-04 Evidence attach/suggest UI must not appear as a gallery target while DEFERRED. Graph gallery covers only the deliberate unavailable surface until an approved graph DTO exists.
+
+### Starter subset (already FACTORY_READY)
+
+| Target | targetId | layer | Owner | Disposition |
+| --- | --- | --- | --- | --- |
+| Button | `button` | primitive | `src/ui` | migrate + retain-and-reverify; P9-01 |
+| Input | `input` | primitive | `src/ui` | migrate + retain-and-reverify; P9-01 |
+| StatusPill | `status-pill` | primitive | `src/ui` | migrate + retain-and-reverify; P9-01 |
+| SettingsRow | `settings-row` | feature | `src/features/settings-panel` | Settings-owned; P9-01 |
+| Settings Domain accordion | `domains-accordion` | feature | `src/features/settings-panel` | Settings-owned; P9-04 — no ProgressBar-on-expand / storageSummary; Playwright F3 = P12-07 |
+
+### Full Phase 1 register
+
+| targetId | layer | Owner | State | Wave |
+| --- | --- | --- | --- | --- |
+| button | primitive | `src/ui` | FACTORY_READY | — |
+| input | primitive | `src/ui` | FACTORY_READY | — |
+| status-pill | primitive | `src/ui` | FACTORY_READY | — |
+| settings-row | feature | `src/features/settings-panel` | FACTORY_READY | — |
+| domains-accordion | feature | `src/features/settings-panel` | FACTORY_READY | — |
+| select | primitive | `src/_shared/ui` (migrate to `src/ui` later) | FACTORY_READY | P9-06 U2 |
+| toggle-switch | primitive | `src/_shared/ui` (migrate to `src/ui` later) | FACTORY_READY | P9-06 U2 |
+| ui-modal | shared | `src/_shared/ui` (migrate later) | FACTORY_READY | P9-06 U2 |
+| page-state | shared | `src/components/ui` | FACTORY_READY | P9-06 U2 |
+| error-box | primitive | `src/components/ui` | FACTORY_READY | P9-06 U2 |
+| app-shell | shared | `src/features/shell` | FACTORY_READY | P9-06 U3 |
+| navigation-rail | shared | `src/features/navigation-sidebar` | FACTORY_READY | P9-06 U3 |
+| pane-header | shared | `src/_shared/ui` (`PageHeader`) | FACTORY_READY | P9-06 U3 |
+| conversation-rail | feature | `src/features/chat-shell` | FACTORY_READY | P9-06 U4 |
+| transcript | feature | `src/features/chat-shell` | FACTORY_READY | P9-06 U4 |
+| composer | feature | `src/features/chat-shell` | FACTORY_READY | P9-06 U4 |
+| evidence-inspector | feature | `src/features/chat-shell` | FACTORY_READY | P9-06 U4 |
+| chat-workbench | feature | `src/features/chat-shell` | FACTORY_READY | P9-06 U4 |
+| document-library | feature | `src/features/documents` | FACTORY_READY | P9-06 U5 |
+| document-viewer | feature | `src/features/documents` | FACTORY_READY | P9-06 U5 |
+| source-operation-panel | feature | `src/features/documents` | FACTORY_READY | P9-06 U6 |
+| settings-nav | feature | `src/features/settings-panel` | FACTORY_READY | P9-06 U5 |
+| settings-group | feature | `src/features/settings-panel` | FACTORY_READY | P9-06 U5 |
+| login | feature | `src/features/auth` | FACTORY_READY | P9-06 U5 |
+| graph-unavailable | feature | `src/features/graph` | FACTORY_READY | P9-06 U5 |
+| textarea | primitive | `src/_shared/ui` (migrate later) | FACTORY_READY | P9-06 U6 |
+| checkbox | primitive | `src/_shared/ui` (migrate later) | FACTORY_READY | P9-06 U6 |
+| segmented-control | primitive | `src/_shared/ui` (migrate later) | FACTORY_READY | P9-06 U6 |
+| tabs | primitive | `src/_shared/ui` (migrate later) | FACTORY_READY | P9-06 U6 |
+| card | primitive | `src/_shared/ui` (migrate later) | FACTORY_READY | P9-06 U6 |
+| table | primitive | `src/_shared/ui` (migrate later) | FACTORY_READY | P9-06 U6 |
+| list-row | primitive | `src/_shared/ui` (migrate later) | FACTORY_READY | P9-06 U6 |
+| drawer | shared | `src/_shared/ui` (migrate later) | FACTORY_READY | P9-06 U6 |
+| skeleton | primitive | `src/ui` (test-local harness until production use) | FACTORY_READY | P9-06 U6 |
+| markdown-content | primitive | `src/ui` (test-local harness until production use) | FACTORY_READY | P9-06 U6 |
+| resource-table | shared | `src/ui` (test-local harness until production use) | FACTORY_READY | P9-06 U6 |
+| operation-status | shared | `src/ui` (test-local harness until production use) | FACTORY_READY | P9-06 U6 |
+| confirm-action-dialog | shared | `src/ui` (composes `UiModal`; test-local harness) | FACTORY_READY | P9-06 U6 |
+| right-inspector | shared | `src/ui` (test-local harness; feature inspector remains owned) | FACTORY_READY | P9-06 U6 |
+
+Plan authority: `docs/plans/2026-07-28-002-feat-full-workstation-html-gallery-plan.md`. Tracker: `docs/master-build-plan.md` P9-06.
+
+### Manifest schema
+
+Each target manifest is versioned (`schemaVersion: 1` with additive `layer`) and contains:
+
+- identity: `schemaVersion`, `targetId`, `owner`, `layer`, `catalogState`, `disposition`, and source-evidence digests;
 - shared assertions: deterministic labels/content, variants/states, themes, viewports, semantic tokens, and geometry;
 - HTML-static assertions: script-free snapshot regions, masks, and expected visual outcomes only;
 - React assertions: interaction, keyboard/touch, focus/return, semantics, screen-reader behavior, reduced motion, validation/busy/disabled/status states, zoom, and responsive behavior.
 
-The exact output paths (aligned with master-build-plan P9-01) are:
+The exact output paths (aligned with master-build-plan P9-01 / P9-06) are:
 
 - `app/client/tests/structure/ui-ownership.test.ts` for canonical ownership / no-competing-kit enforcement;
 - `app/client/tests/structure/{import-direction,thin-routes,server-browser-boundary,generated-contract-homes}.test.ts` for P9-05 layering / thin-route / server-env / generated DTO hygiene;
 - `app/client/tests/parity/manifests/<target-id>.json` for versioned scenarios;
 - `app/client/tests/parity/fixtures/<target-id>.html` for synthetic, script-free, network-free, non-routable static guidance;
 - `app/client/tests/parity/react/<target-id>.test.tsx` for React behavior and accessibility;
-- `app/client/tests/e2e/` for browser scaffolding; production-boundary Settings domains proof remains a later P12-07 / P9-04 artifact (for example `settings-domains.spec.ts`), not a P9-01 exit gate.
+- `app/client/tests/parity/index.html` for non-routable local browsing of fixtures (P9-06; never a product route under `src/app`);
+- `app/client/tests/e2e/` for browser scaffolding; production-boundary Settings domains proof and route visual matrix remain P12-07.
 
-HTML assets are excluded from production bundles and may contain only synthetic data. They never authorize product behavior. Live `/settings?section=domains` acceptance uses the production Next build, same-origin BFF, FastAPI, and server-produced DTOs with no request interception or mocked product response.
+HTML assets are excluded from production bundles and may contain only synthetic data. They never authorize product behavior. Live `/settings?section=domains` acceptance uses the production Next build, same-origin BFF, FastAPI, and server-produced DTOs with no request interception or mocked product response. P12-07 route baselines must reference catalog `targetId`s (or HTML snapshot regions) so HTML steering and Playwright do not diverge.
 
 ## Visual acceptance
 

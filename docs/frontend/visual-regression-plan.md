@@ -49,6 +49,8 @@ Baselines live beside the tests and are generated from the pinned reference envi
 
 Commit a machine-readable parity manifest beside the baselines. Each entry records a deterministic Local Studio source digest and exact anchor, Context Engine route/state/persona, fixture revision, viewport, zoom, theme, screenshot path, masks, threshold, and approved divergence identifier. A moving reference directory or unrecorded digest change is forbidden; a source commit may be recorded additionally only when usable Git provenance exists.
 
+P12-07 route baselines must reference catalog `targetId`s from `docs/frontend/ui-parity-spec.md` (and/or HTML snapshot regions under `app/client/tests/parity/fixtures/`) so Option A HTML steering and Playwright visual acceptance do not diverge. HTML fixtures remain non-authoritative for behavior; they are the human look-steering input that route screenshots must stay consistent with.
+
 This documentation package does not claim that approved golden PNGs already exist. FE-00 must capture and review the manifest plus referenced images before any route can pass parity acceptance. Missing images, placeholder hashes, or an entry whose `approvalStatus` is not `approved` fail the visual gate.
 
 ```json

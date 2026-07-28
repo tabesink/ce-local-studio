@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "targetId": "confirm-action-dialog",
+  "owner": "src/ui",
+  "layer": "shared",
+  "catalogState": "FACTORY_READY",
+  "disposition": "add",
+  "sourceEvidence": {
+    "notes": [
+      "No standalone ConfirmActionDialog exists; the test-local composition reuses production UiModal and UiModalHeader pieces.",
+      "Synthetic target and consequence copy define no mutation, resource DTO, or backend behavior."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "title": "Remove synthetic item?",
+      "target": "Sample handbook",
+      "consequence": "This removes the item from this synthetic view.",
+      "cancel": "Cancel",
+      "confirm": "Remove"
+    },
+    "variants": ["destructive"],
+    "states": ["open", "closed"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": ["--ui-bg", "--ui-fg", "--ui-muted", "--ui-surface", "--ui-border", "--danger"],
+    "geometry": {
+      "shell": "UiModal max-w-md with UiModalHeader",
+      "actions": "right-aligned Cancel then destructive confirm"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark-open", "theme-light-open", "dialog-actions"],
+    "expectedTokenGeometry": [
+      "Dialog names the synthetic target and consequence",
+      "Cancel precedes the restrained danger action"
+    ],
+    "forbiddenClaims": ["focus", "ARIA", "keyboard", "touch", "state-transition", "mutation", "authorization"]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "Cancel and Remove are native buttons",
+      "focus": "test-local composition gives initial focus to Cancel",
+      "screenReader": "UiModal exposes a titled modal dialog and explicit button names",
+      "reducedMotion": "confirmation does not rely on animation",
+      "validationBusyDisabledStatus": "no busy or server-conflict behavior is claimed by this harness",
+      "zoom": "target and consequence remain visible text",
+      "darkLight": "composition renders in zai-dark and zai-light wrappers",
+      "narrow": "UiModal stays full-width within its max-width constraint"
+    }
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "targetId": "settings-group",
+  "owner": "src/features/settings-panel",
+  "layer": "feature",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical composition: SettingsGroup + SettingsRow stacks in SettingsPanel sections (e.g. Providers, Users).",
+      "Domain accordion disclosure is NOT duplicated — see domains-accordion parity target.",
+      "settings-row parity covers row shell; this target covers grouped section chrome (title, description, bordered body).",
+      "Inventory: docs/_scratch/p9-01-ui-inventory.md.",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or server payloads."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "groupTitle": "Providers",
+      "groupDescription": "Credentials are write-only; values are never displayed.",
+      "rowLabel": "Synthetic provider",
+      "statusConfigured": "Configured",
+      "statusNotConfigured": "Not configured"
+    },
+    "variants": [
+      "with-description",
+      "with-status-rows"
+    ],
+    "states": [
+      "bordered-group-body",
+      "settings-row-stack"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--ui-fg",
+      "--ui-muted",
+      "--ui-border",
+      "--ui-surface",
+      "--ui-separator",
+      "--fs-md",
+      "--fs-sm"
+    ],
+    "geometry": {
+      "layout": "group title + optional description above bordered rounded body",
+      "density": "SettingsRow px-3.5 py-2.5 inside group; separator hairlines between rows"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": [
+      "theme-dark-with-rows",
+      "theme-light-with-rows",
+      "theme-dark-description"
+    ],
+    "expectedTokenGeometry": [
+      "Group title uses --fs-md semibold muted",
+      "Body uses rounded border and inset shadow",
+      "Rows separated by --ui-separator hairlines"
+    ],
+    "forbiddenClaims": [
+      "focus",
+      "ARIA",
+      "keyboard",
+      "touch",
+      "state-transition"
+    ]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "row controls inside group remain keyboard reachable via settings-row",
+      "focus": "group title is presentational; focus lands on row controls",
+      "screenReader": "group heading text and row labels present",
+      "reducedMotion": "no motion-dependent group correctness",
+      "validationBusyDisabledStatus": "status slot hosts StatusPill in row children",
+      "zoom": "group title and row labels remain present",
+      "darkLight": "render under data-theme zai-dark and zai-light wrappers",
+      "narrow": "group body spans full width; rows stack on narrow via settings-row grid"
+    }
+  }
+}

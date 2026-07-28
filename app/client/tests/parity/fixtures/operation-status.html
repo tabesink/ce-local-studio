@@ -1,0 +1,60 @@
+<!-- Not product authority. Synthetic data only. Script-free, network-free, and non-routable. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Operation status parity fixture</title>
+    <style>
+      :root {
+        --ui-bg: #141414;
+        --ui-fg: #f2f2f2;
+        --ui-muted: #9a9a9a;
+        --ui-surface: #1e1e1e;
+        --ui-border: #303030;
+        --link: #78a9ff;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --ui-bg: #f4f5f5;
+        --ui-fg: #1a1a1a;
+        --ui-muted: #666;
+        --ui-surface: #fff;
+        --ui-border: #d8d8d8;
+        --link: #245fbd;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--ui-bg); color: var(--ui-fg); }
+      .region { padding: 20px; border-bottom: 1px solid var(--ui-border); background: var(--ui-bg); }
+      .caption { margin: 0 0 10px; color: var(--ui-muted); font: 11px Geist Mono, monospace; text-transform: uppercase; }
+      .card { max-width: 440px; padding: 14px; border: 1px solid var(--ui-border); border-radius: 8px; background: var(--ui-surface); }
+      .top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+      .title { margin: 0; font-size: 14px; font-weight: 600; }
+      .attempt { color: var(--ui-muted); font: 11px Geist Mono, monospace; }
+      .stage { margin: 10px 0 6px; font-size: 13px; }
+      .track { height: 5px; overflow: hidden; border-radius: 999px; background: var(--ui-border); }
+      .fill { width: 58%; height: 100%; background: var(--link); }
+      .complete .fill { width: 100%; }
+      .message { margin: 9px 0 0; color: var(--ui-muted); font-size: 12px; line-height: 1.5; }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-active">
+      <p class="caption">Synthetic operation · active</p>
+      <div class="card">
+        <div class="top"><h2 class="title">Synthetic operation</h2><span class="attempt">Attempt 1</span></div>
+        <p class="stage">Preparing</p>
+        <div class="track"><div class="fill"></div></div>
+        <p class="message">Synthetic progress for visual review only.</p>
+      </div>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light-complete">
+      <p class="caption">Synthetic operation · complete</p>
+      <div class="card complete">
+        <div class="top"><h2 class="title">Synthetic operation</h2><span class="attempt">Attempt 1</span></div>
+        <p class="stage">Complete</p>
+        <div class="track"><div class="fill"></div></div>
+        <p class="message">Synthetic progress for visual review only.</p>
+      </div>
+    </section>
+  </body>
+</html>

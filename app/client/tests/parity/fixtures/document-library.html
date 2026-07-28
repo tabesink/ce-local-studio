@@ -1,0 +1,224 @@
+<!--
+  Synthetic parity fixture for Documents library column.
+  Not product authority. Not routable. Script-free and network-free.
+  Shared scenarios mirror tests/parity/manifests/document-library.json.
+  Viewer chrome is covered by document-viewer.html.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Document library parity fixture (synthetic)</title>
+    <style>
+      :root {
+        --ui-bg: #141414;
+        --ui-fg: #f2f2f2;
+        --ui-muted: #9a9a9a;
+        --ui-border: #2a2a2a;
+        --ui-success: #3fbf6a;
+        --fs-sm: 12px;
+        --fs-xs: 11px;
+        font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        --ui-bg: #f4f5f5;
+        --ui-fg: #1a1a1a;
+        --ui-muted: #6b6b6b;
+        --ui-border: #0d0d0d1a;
+        --ui-success: #1e8a3e;
+      }
+      body {
+        margin: 0;
+        background: var(--ui-bg);
+        color: var(--ui-fg);
+      }
+      .region {
+        padding: 16px;
+        border-bottom: 1px solid var(--ui-border);
+      }
+      .caption {
+        margin: 0 0 10px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .eyebrow {
+        font-size: var(--fs-xs);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .title {
+        margin: 2px 0 0;
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .select,
+      .filter {
+        height: 32px;
+        border: 1px solid var(--ui-border);
+        border-radius: 6px;
+        background: var(--ui-bg);
+        color: var(--ui-fg);
+        font-size: var(--fs-sm);
+        padding: 0 10px;
+      }
+      .filter {
+        width: 220px;
+        margin-bottom: 12px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: var(--fs-sm);
+      }
+      th {
+        text-align: left;
+        padding: 8px 10px;
+        color: var(--ui-muted);
+        font-weight: 500;
+        border-bottom: 1px solid var(--ui-border);
+      }
+      th.num {
+        text-align: right;
+      }
+      td {
+        padding: 10px;
+        border-bottom: 1px solid color-mix(in oklab, var(--ui-border) 60%, transparent);
+      }
+      td.num {
+        text-align: right;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: var(--fs-xs);
+        color: var(--ui-muted);
+      }
+      .filename {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: var(--fs-xs);
+        color: var(--ui-success);
+      }
+      .pill .dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 9999px;
+        background: var(--ui-success);
+      }
+      .empty {
+        padding: 24px;
+        border: 1px dashed var(--ui-border);
+        border-radius: 8px;
+        color: var(--ui-muted);
+        font-size: var(--fs-sm);
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-with-rows">
+      <p class="caption">zai-dark · member-with-rows</p>
+      <div class="header">
+        <div>
+          <div class="eyebrow">Library</div>
+          <h2 class="title">Source Documents</h2>
+        </div>
+        <div class="actions">
+          <span class="select">Synthetic Alpha Domain</span>
+          <span class="select">↻</span>
+        </div>
+      </div>
+      <input class="filter" type="search" placeholder="Filter by filename..." readonly />
+      <table>
+        <thead>
+          <tr>
+            <th>Filename</th>
+            <th>Preview</th>
+            <th>Domain</th>
+            <th class="num">Pages</th>
+            <th class="num">Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="filename">Synthetic Policy Guide.pdf</span></td>
+            <td><span class="pill"><span class="dot"></span>pdf</span></td>
+            <td>Synthetic Alpha Domain</td>
+            <td class="num">12</td>
+            <td class="num">Jul 1, 2026</td>
+          </tr>
+          <tr>
+            <td><span class="filename">Synthetic Handbook.pdf</span></td>
+            <td><span class="pill"><span class="dot"></span>pdf</span></td>
+            <td>Synthetic Alpha Domain</td>
+            <td class="num">48</td>
+            <td class="num">Jun 15, 2026</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="region" data-theme="zai-light" data-snapshot="theme-light-with-rows">
+      <p class="caption">zai-light · member-with-rows</p>
+      <div class="header">
+        <div>
+          <div class="eyebrow">Library</div>
+          <h2 class="title">Source Documents</h2>
+        </div>
+        <div class="actions">
+          <span class="select">Synthetic Alpha Domain</span>
+        </div>
+      </div>
+      <input class="filter" type="search" placeholder="Filter by filename..." readonly />
+      <table>
+        <thead>
+          <tr>
+            <th>Filename</th>
+            <th>Preview</th>
+            <th>Domain</th>
+            <th class="num">Pages</th>
+            <th class="num">Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Synthetic Policy Guide.pdf</td>
+            <td><span class="pill"><span class="dot"></span>pdf</span></td>
+            <td>Synthetic Alpha Domain</td>
+            <td class="num">12</td>
+            <td class="num">Jul 1, 2026</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="region" data-theme="zai-dark" data-snapshot="theme-dark-empty">
+      <p class="caption">zai-dark · member-empty</p>
+      <div class="header">
+        <div>
+          <div class="eyebrow">Library</div>
+          <h2 class="title">Source Documents</h2>
+        </div>
+      </div>
+      <div class="empty">No Source Documents available for this Knowledge Domain.</div>
+    </section>
+  </body>
+</html>

@@ -26,4 +26,6 @@ For frontend work, read in this order:
 
 `src/ui` is the eventual physical home for API-free, router-free, product-neutral primitives. Settings compositions remain under the Settings feature. Existing `components/ui` and `_shared/ui` trees are brownfield inventory and cannot justify a second physical kit or new legacy imports.
 
-Documentation acceptance does not prove application parity. Factory-ready status requires the later React, accessibility, browser, and production-boundary evidence defined by the brownfield tracker.
+**Option A (P9-06):** steer look through script-free HTML parity fixtures for every Phase 1 catalog target (primitives, shared compositions, and feature composites including chat). Compose only from targets that have HTML fixtures; missing target → stop and add catalog + HTML first. HTML never authorizes product behavior — React and the live BFF/API remain authoritative.
+
+Documentation acceptance does not prove application parity. Factory-ready status requires the React, accessibility, and (where owned) production-boundary evidence defined by the brownfield tracker and P9-06 / P12-07.
