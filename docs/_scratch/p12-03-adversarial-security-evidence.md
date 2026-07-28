@@ -4,7 +4,7 @@ Date: 2026-07-28
 
 Slice: P12-03
 
-Status: DONE (API / service / PostgreSQL-altitude gap-fill)
+Status: DONE (API / service gap-fill on default SQLite path; PostgreSQL barriers remain credit citations)
 
 Plan: `docs/plans/2026-07-28-004-feat-p12-03-adversarial-security-review-plan.md`
 
@@ -15,9 +15,11 @@ Inventory: `docs/_scratch/p12-03-adversarial-security-inventory.md`
 | Item | Detail |
 | --- | --- |
 | Inventory | Four-lane credit / gap-fill / out-of-scope freeze |
-| Gap suite | `app/tests/test_p12_03_adversarial_security.py` (G1–G6) |
-| Credit citations | P1-03 authz, P8 privacy triad, P7-05 redact/omission, P6 mapping/fences |
+| Gap suite | `app/tests/test_p12_03_adversarial_security.py` (G1–G6) on default SQLite |
+| Cross-sink plant | `test_cross_sink_privacy_scan.py` uses `enqueue_delete_source` (not helper-only redact) |
+| Credit citations | P1-03 authz (PG), P8 privacy triad, P7-05 redact/omission, P6 mapping/fences (incl. PG) |
 | Product fixes | None required — existing fence/redact/mapping behavior satisfied gap tests |
+| PG altitude note | New gap tests are service/SQLite; lease/concurrency PG proofs stay credit-only under `pytest -m postgresql` |
 
 ## Gap tests added
 
@@ -28,7 +30,7 @@ Inventory: `docs/_scratch/p12-03-adversarial-security-inventory.md`
 | G3 | `test_g3_composer_consume_after_delete_driven_expiry_is_unavailable` | M-09, A-09 |
 | G4 | `test_g4_all_adversarial_hits_map_empty_then_grounded_refusal` | M-03 |
 | G5 | `test_g5_post_domain_delete_new_domain_rag_fails_closed` | A-04, A-08, A-09 |
-| G6 | `test_g6_enqueue_delete_public_projection_omits_answer_sentinel` | M-11, FR-09 |
+| G6 | `test_g6_enqueue_delete_public_projection_omits_answer_sentinel` + cross-sink `enqueue_delete_source` plant | M-11, FR-09 |
 
 ## Commands
 
@@ -54,7 +56,7 @@ uv run --frozen --python 3.12 --extra test pytest \
   -q
 ```
 
-### Opted-in PostgreSQL 16 (credit barriers; not required to re-run for gap suite)
+### Opted-in PostgreSQL 16 (credit barriers only — gap suite is SQLite)
 
 ```text
 CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS=1 \
@@ -65,6 +67,8 @@ uv run --frozen --python 3.12 --extra test pytest -m postgresql \
   tests/test_postgres_scoped_retrieval.py \
   -q
 ```
+
+Observed in this slice: **not re-run** (credit citations from prior P1/P6/P7-05 evidence). Gap-fill DONE does not claim new postgresql-marked barrier tests.
 
 ## Case ID matrix
 

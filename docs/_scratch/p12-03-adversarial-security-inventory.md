@@ -8,7 +8,8 @@ Status: DONE — inventory freeze before gap-fill tests
 
 Plan: `docs/plans/2026-07-28-004-feat-p12-03-adversarial-security-review-plan.md`
 
-Altitude: FastAPI / service / PostgreSQL only. Deployed-ingress TLS/direct-API → P12-05.
+Altitude: FastAPI / service gap-fill (default SQLite) plus cited prior PostgreSQL credit barriers.
+Deployed-ingress TLS/direct-API → P12-05.
 Browser storage / BFCache / two-user cache / Playwright → P12-07.
 Backup/restore → P12-04. P11-04 Evidence attach → product DEFER.
 
@@ -85,7 +86,7 @@ Backup/restore → P12-04. P11-04 Evidence attach → product DEFER.
 | G3 | Composer consume / turn-start after delete-driven token expiry | `app/tests/test_composer_refs_consume.py` or `test_delete_redaction.py` |
 | G4 | Only unmapped/wrong-domain hits → orchestration grounded refusal | `app/tests/test_chat_orchestration.py` |
 | G5 | Post-`enqueue_delete` new domain_rag / retrieve fail closed | `app/tests/test_delete_redaction.py` + chat turn / scoped retrieval helpers |
-| G6 | Cross-sink plant includes full source/domain enqueue path | `app/tests/test_cross_sink_privacy_scan.py` |
+| G6 | Cross-sink plant includes full `enqueue_delete_source` path | `app/tests/test_cross_sink_privacy_scan.py` (+ DTO omission in `test_p12_03_adversarial_security.py`) |
 
 ## Explicit non-claims
 

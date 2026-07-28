@@ -66,13 +66,41 @@ from context_engine.services.domains import enqueue_delete_domain
 from context_engine.services.evidence import (
     FrozenRetrievalScope,
     FrozenSourceIdentity,
+    InternalMappedEvidence,
     ScopedRetrievalCandidate,
     map_retrieval_hits_to_internal_evidence,
 )
+from context_engine.services.indexing import source_is_query_eligible
 from context_engine.services.runtime_config import TrustedModelRuntimeConfig
 from context_engine.services.sources import SourceDeleteWorker, enqueue_delete_source
-from tests.test_chat_orchestration import CountingRetrievalPort, ScriptedSynthesis, _completed_payload
+from tests.test_chat_orchestration import ScriptedSynthesis, _completed_payload
 from tests.test_scoped_retrieval import _MappingSession
+
+
+class _AdversarialDiscardRetrievalPort:
+    """Maps only adversarial raw hits inside retrieve — empty Evidence reaches orchestration."""
+
+    def __init__(self, hits: list[ScopedRetrievalCandidate], frozen_scope: FrozenRetrievalScope) -> None:
+        self.hits = hits
+        self.frozen_scope = frozen_scope
+        self.calls = 0
+        self.last_mapped: list[InternalMappedEvidence] | None = None
+
+    def retrieve(self, db: Session, *_args: Any, **_kwargs: Any) -> list[InternalMappedEvidence]:
+        self.calls += 1
+        mapping_db = _MappingSession([])
+        mapped = map_retrieval_hits_to_internal_evidence(
+            mapping_db,  # type: ignore[arg-type]
+            hits=self.hits,
+            frozen_scope=self.frozen_scope,
+        )
+        self.last_mapped = list(mapped)
+        return list(mapped)
+
+
+class _AlwaysHealthyController:
+    def health(self, domain: Domain) -> Any:
+        return type("H", (), {"healthy": True})()
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -306,6 +334,12 @@ def test_g2_cleanup_failure_then_retry_keeps_redaction_tokens_and_fence(
         assert turn.assistant_answer is None
         assert source.state == SOURCE_STATE_DELETING
         assert token is not None and token.expires_at <= utc_now() + timedelta(seconds=1)
+        assert (
+            source_is_query_eligible(
+                db, source, domain, settings=settings, controller=_AlwaysHealthyController()
+            )
+            is False
+        )
         dto = safe_turn_dto(db, settings, turn)
         assert dto["assistantAnswer"] is None
         assert "SENTINEL_ANSWER_MUST_STAY_REDACTED" not in str(dto)
@@ -331,11 +365,11 @@ def test_g2_cleanup_failure_then_retry_keeps_redaction_tokens_and_fence(
 
 
 def test_g3_composer_consume_after_delete_driven_expiry_is_unavailable(tmp_path: Path) -> None:
-    """M-09 ∩ A-09 — consume after delete fence fails closed without echoing token/id."""
+    """M-09 ∩ A-09 — validate/consume/turn-start after delete fence fail closed."""
     db = _session(tmp_path)
     try:
         admin, domain, source = _seed_domain_source(db)
-        owner, conversation, _, settings = _owner_conversation(db)
+        owner, conversation, auth_session, settings = _owner_conversation(db)
         raw = f"ce-p12-03-consume-{uuid4().hex}"
         now = utc_now()
         db.add(
@@ -376,12 +410,28 @@ def test_g3_composer_consume_after_delete_driven_expiry_is_unavailable(tmp_path:
             consume_composer_ref_tokens(db, owner=owner, tokens=(raw,))
         assert consume_error.value.code == "composer_ref_unavailable"
         assert raw not in consume_error.value.message
+
+        with pytest.raises(ChatTurnError) as start_error:
+            start_or_replay_turn(
+                db,
+                settings=settings,
+                owner=owner,
+                auth_session=auth_session,
+                conversation_id=conversation.public_ref,
+                client_request_id=f"composer-after-delete-{uuid4().hex}",
+                message="What is 2+2?",
+                domain_id=None,
+                composer_ref_tokens=[raw],
+            )
+        assert start_error.value.code == "composer_ref_unavailable"
+        assert raw not in start_error.value.message
+        assert source.id not in start_error.value.message
     finally:
         db.close()
 
 
 def test_g4_all_adversarial_hits_map_empty_then_grounded_refusal(tmp_path: Path) -> None:
-    """M-03 — only unmapped/wrong-domain hits → empty Evidence → no synthesis."""
+    """M-03 — adapter-shaped adversarial hits map empty inside retrieve → no synthesis."""
     source = SourceDocument(
         id="source-adv",
         public_ref="docref-source-adv",
@@ -414,27 +464,21 @@ def test_g4_all_adversarial_hits_map_empty_then_grounded_refusal(tmp_path: Path)
             ),
         ),
     )
-    mapping_db = _MappingSession([])
-    mapped = map_retrieval_hits_to_internal_evidence(
-        mapping_db,  # type: ignore[arg-type]
-        hits=[
-            ScopedRetrievalCandidate(text="[CE_BLOCK id=block-legacy order=1]\nlegacy"),
-            ScopedRetrievalCandidate(
-                text=(
-                    f"[CE_BLOCK schema=2 source_id=wrong-source source_sha256={source.original_sha256} "
-                    "block_id=block-1 order=1]\nwrong source"
-                )
-            ),
-            ScopedRetrievalCandidate(
-                text=(
-                    f"[CE_BLOCK schema=2 source_id={source.id} source_sha256={'e' * 64} "
-                    "block_id=block-1 order=1]\nwrong hash"
-                )
-            ),
-        ],
-        frozen_scope=scope,
-    )
-    assert mapped == []
+    adversarial_hits = [
+        ScopedRetrievalCandidate(text="[CE_BLOCK id=block-legacy order=1]\nlegacy"),
+        ScopedRetrievalCandidate(
+            text=(
+                f"[CE_BLOCK schema=2 source_id=wrong-source source_sha256={source.original_sha256} "
+                "block_id=block-1 order=1]\nwrong source"
+            )
+        ),
+        ScopedRetrievalCandidate(
+            text=(
+                f"[CE_BLOCK schema=2 source_id={source.id} source_sha256={'e' * 64} "
+                "block_id=block-1 order=1]\nwrong hash"
+            )
+        ),
+    ]
 
     settings = _settings(tmp_path)
     db = _session(tmp_path)
@@ -456,7 +500,7 @@ def test_g4_all_adversarial_hits_map_empty_then_grounded_refusal(tmp_path: Path)
         db.add(turn)
         db.commit()
         db.refresh(turn)
-        retrieval = CountingRetrievalPort([])  # post-mapping empty (all hits discarded)
+        retrieval = _AdversarialDiscardRetrievalPort(adversarial_hits, scope)
         synthesis = ScriptedSynthesis()
         start = TurnStartResult(
             turn=turn,
@@ -476,10 +520,11 @@ def test_g4_all_adversarial_hits_map_empty_then_grounded_refusal(tmp_path: Path)
             )
         )
         db.refresh(turn)
-        assert turn.status == "completed" or turn.status == TURN_STATUS_COMPLETED
+        assert retrieval.calls == 1
+        assert retrieval.last_mapped == []
+        assert turn.status == TURN_STATUS_COMPLETED
         assert turn.stop_reason == TURN_STOP_REASON_NO_GROUNDED_CONTEXT
         assert turn.assistant_answer is None
-        assert retrieval.calls == 1
         assert synthesis.grounded_calls == 0
         assert synthesis.direct_calls == 0
         payload = _completed_payload(db, turn)
@@ -577,7 +622,9 @@ def test_g6_enqueue_delete_public_projection_omits_answer_sentinel(tmp_path: Pat
         blob = str(dto)
         assert turn.status == TURN_STATUS_REDACTED
         assert "SECRET_ANSWER_SENTINEL" not in blob
+        assert "SECRET_EXCERPT_SENTINEL" not in blob
         assert dto["userMessage"] == "SECRET_PROMPT_SENTINEL"
         assert dto["assistantAnswer"] is None
+        assert dto["evidence"] == []
     finally:
         db.close()
