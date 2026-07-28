@@ -4,6 +4,7 @@
 **Not** TLS, `testing=false` HTTPS, production HA, or P12-05 stream-drain evidence.  
 Local-production MinIO object store: opt-in `compose.stack.minio.yml` (P10-04).  
 Parser/provider packaging and support matrix: `docs/operations/provider-deployment-profiles.md` (P10-05).  
+Credential-gated provider staging smoke: `python -m` / `scripts/provider_staging_smoke.py` with `CE_PROVIDER_STAGING_SMOKE=1` (never default verify).  
 Production incident/HA recovery: P12-04 / P12-08.
 
 ## Boot order

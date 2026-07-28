@@ -53,6 +53,26 @@ P12-04 residual unless proven separately.
 
 Filesystem-only success must not be labeled production object-store proof.
 
+## Staging smoke
+
+```bash
+cd app
+# Gate + profile check only (CI)
+CE_PROVIDER_STAGING_SMOKE=1 python scripts/provider_staging_smoke.py \
+  --mode check --profile docling
+
+# Network-free fixture proofs
+CE_PROVIDER_STAGING_SMOKE=1 python scripts/provider_staging_smoke.py \
+  --mode adapters --profile matrix
+
+# Live boundary (credentials required per profile; never commit secrets)
+CE_PROVIDER_STAGING_SMOKE=1 CE_OPENAI_API_KEY=... \
+  python scripts/provider_staging_smoke.py --mode live --profile openai-embedding
+```
+
+Missing `CE_PROVIDER_STAGING_SMOKE=1` refuses before network. Live Reducto needs
+`CE_REDUCTO_API_KEY` (or `REDUCTO_API_KEY`).
+
 ## Support upgrade rules
 
 1. Parser smoke does not imply embedding or synthesis support.
