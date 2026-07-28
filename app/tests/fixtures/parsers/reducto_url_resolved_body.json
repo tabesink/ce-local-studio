@@ -1,0 +1,16 @@
+{
+  "result": {
+    "type": "full",
+    "chunks": [
+      {
+        "blocks": [
+          {
+            "type": "Text",
+            "content": "Resolved from URL pointer.",
+            "page": 1
+          }
+        ]
+      }
+    ]
+  }
+}

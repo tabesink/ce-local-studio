@@ -3,6 +3,9 @@
 Default CI / root verify skip this module unless CE_P5_04_LIVE=1.
 Requires Docker daemon and CE_DOMAIN_CONTROLLER_IMAGE (default
 context-engine-live:local built with CE_STACK_LIVE_IMAGE=1).
+
+P10-05 owns parser/provider semantic end-to-end proof (CE_P10_05_PIPELINE_LIVE /
+provider_staging_smoke); this module remains topology credit from handcrafted handoffs.
 """
 
 from __future__ import annotations

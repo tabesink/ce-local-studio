@@ -81,6 +81,7 @@ from context_engine.models import (
 from context_engine.services.audit import AuditContext, AuditService, commit_protected_mutation
 from context_engine.services.auth import iso_utc
 from context_engine.services.indexing import SourceIndexError, cleanup_index_before_source_delete, queue_source_index_after_publish
+from context_engine.services.preview import queue_source_preview_after_publish
 from context_engine.services.runtime_config import SecretCrypto, ensure_runtime_settings, is_provider_configured
 from context_engine.services.source_upload import (
     UploadValidationError,
@@ -181,9 +182,29 @@ class SourceStorage:
         *,
         original_object_key: str | None = None,
         image_object_keys: list[str] | None = None,
+        preview_object_key: str | None = None,
+        preview_page_map_object_key: str | None = None,
+        preview_reuses_original: bool = False,
     ) -> None:
-        keys = [key for key in [original_object_key, *(image_object_keys or [])] if key]
-        self.delete_object_keys(keys)
+        preview_keys: list[str] = []
+        if preview_page_map_object_key:
+            preview_keys.append(preview_page_map_object_key)
+        if preview_object_key and not preview_reuses_original:
+            preview_keys.append(preview_object_key)
+        keys = [
+            key
+            for key in [original_object_key, *(image_object_keys or []), *preview_keys]
+            if key
+        ]
+        # De-dupe while preserving order (PDF pass-through may equal original).
+        seen: set[str] = set()
+        unique_keys: list[str] = []
+        for key in keys:
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_keys.append(key)
+        self.delete_object_keys(unique_keys)
         source_dir = self.source_dir(domain_id, source_id)
         try:
             if source_dir.exists():
@@ -1161,6 +1182,7 @@ def publish_prepared_source(
                 storage.delete_object_keys(written_image_keys)
             return False
         queue_source_index_after_publish(db, source)
+        queue_source_preview_after_publish(db, source)
         db.commit()
     except Exception:
         db.rollback()
@@ -1355,6 +1377,9 @@ class SourceDeleteWorker:
         domain_id = source.domain_id
         source_id = source.id
         original_object_key = source.original_object_key
+        preview_object_key = source.preview_object_key
+        preview_page_map_object_key = source.preview_page_map_object_key
+        preview_reuses_original = bool(source.preview_reuses_original)
         try:
             if not _heartbeat_prep_lease(db, operation, owner=owner, lease_seconds=lease_seconds):
                 return True
@@ -1371,6 +1396,9 @@ class SourceDeleteWorker:
                 source_id,
                 original_object_key=original_object_key,
                 image_object_keys=image_object_keys,
+                preview_object_key=preview_object_key,
+                preview_page_map_object_key=preview_page_map_object_key,
+                preview_reuses_original=preview_reuses_original,
             )
         except SourceIndexError as exc:
             db.rollback()

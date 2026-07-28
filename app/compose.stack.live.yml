@@ -23,6 +23,7 @@ services:
       dockerfile: Dockerfile
       args:
         CE_STACK_LIVE_IMAGE: "1"
+        CE_STACK_PARSERS_IMAGE: "1"
     image: ${CE_DOMAIN_CONTROLLER_IMAGE:-context-engine-live:local}
     networks:
       - ce_stack
@@ -44,6 +45,7 @@ services:
       dockerfile: Dockerfile
       args:
         CE_STACK_LIVE_IMAGE: "1"
+        CE_STACK_PARSERS_IMAGE: "1"
     image: ${CE_DOMAIN_CONTROLLER_IMAGE:-context-engine-live:local}
     networks:
       - ce_stack

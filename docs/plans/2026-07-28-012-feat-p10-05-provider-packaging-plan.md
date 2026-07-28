@@ -7,6 +7,7 @@ phase_compatibility: phase-1-active
 title: P10-05 Production Parser and Provider Pipeline - Plan
 type: feat
 date: 2026-07-28
+deepened: 2026-07-28
 ---
 
 # P10-05 Production Parser and Provider Pipeline - Plan
@@ -14,11 +15,11 @@ date: 2026-07-28
 ## Goal Capsule
 
 - **Objective:** Close P10-05 by making the existing Docling/Reducto → canonical Source Block → LightRAG → mapped Evidence pipeline production-real: package the supported dependencies, preserve parser-independent canonical DTOs, bind immutable domain embedding profiles to real provider calls, and prove the complete path with no-network CI plus credential-gated staging evidence.
-- **Authority:** docs/tech-stack.md; as-built-gaps parsers/providers; P4-03/P7-03; docs/master-build-plan.md P10-05.
+- **Authority:** docs/tech-stack.md; as-built-gaps parsers/providers; P4-03/P7-03; docs/master-build-plan.md P10-05; post-P10-04 MinIO composition at docs/_scratch/p10-04-minio-object-store-evidence.md.
 - **Execution profile:** Characterization-first adapter hardening, packaging, provider bindings, and dual-lane proof; do not force live providers into root verify.
-- **Readiness checkpoint:** Implementation-ready after 2026-07-28 bundle packaging.
+- **Readiness checkpoint:** Implementation-ready after 2026-07-28 deepen against P10-04 and current parser/shim seams.
 - **Stop conditions:** Stop if real parser output would change the approved canonical block/Evidence contract, if LightRAG cannot preserve exact schema-v2 markers across realistic chunk boundaries, if a provider cannot honor the frozen embedding dimensions, if unsupported providers would be claimed green, or if root CI would require network providers.
-- **Tail ownership:** P12-06 locks/SBOM; P12-07 failure paths; P12-08 acceptance.
+- **Tail ownership:** P12-06 locks/SBOM; P12-07 failure paths; P12-08 acceptance; combined live+MinIO matrix residual may remain with P12-04.
 
 ---
 
@@ -28,11 +29,11 @@ date: 2026-07-28
 
 Define and prove the supported parser/model deployment profiles. Provider-native payloads terminate at the parser anti-corruption layer; LightRAG receives only versioned canonical-block handoffs; retrieved candidates become Evidence only after exact local reauthorization and mapping.
 
-Product Contract preservation: authored from P10-05 bootstrap.
+Product Contract preservation: R/AE/scope IDs unchanged; Problem Frame updated for post-P10-04 grounding only.
 
 ### Problem Frame
 
-The current control plane, canonical Source Block persistence, schema-v2 LightRAG handoff, per-domain runtime, and Evidence mapper are strong, but production semantics remain incomplete. Parser extras are not installed in the stack images; Docling and Reducto are proven mainly through injected dictionaries; Reducto URL-backed results and remote figure assets are not resolved; Docling conversion has no enforced killable timeout; the private LightRAG shim consumes model name and dimensions but still generates deterministic synthetic vectors and a stub entity response. Existing live runtime tests begin from handcrafted Source Blocks, so they do not prove upload → real parser → PostgreSQL publish → real provider embedding → retrieval → mapped Evidence.
+The current control plane, canonical Source Block persistence, schema-v2 LightRAG handoff, per-domain runtime, Evidence mapper, and P10-04 S3/MinIO object-store path are strong, but production parser/provider semantics remain incomplete. Parser extras are not installed in the stack images; Docling and Reducto are proven mainly through injected dictionaries; Reducto URL-backed results still fail closed instead of private resolve; Docling conversion has no killable wall-clock timeout; the private LightRAG shim still emits deterministic synthetic vectors and a stub entity LLM. Existing live runtime tests begin from handcrafted Source Blocks, so they do not prove upload → real parser → PostgreSQL publish → real provider embedding → retrieval → mapped Evidence.
 
 ### Actors
 
@@ -96,6 +97,7 @@ The current control plane, canonical Source Block persistence, schema-v2 LightRA
 - Reusing Reducto `embed` as authoritative canonical text without an approved parser-contract change
 - Multimodal image embeddings, OCR enrichment, generated image descriptions, or retrieval ranking optimization
 - Pre-migration corpus re-preparation and non-PDF governed-preview generation
+- Combined three-file `live.yml` + `minio.yml` operator matrix (P12-04 residual unless trivial to prove here)
 
 #### Outside this product's identity
 
@@ -115,8 +117,36 @@ The current control plane, canonical Source Block persistence, schema-v2 LightRA
 | KTD4 | `PreparedSource` remains the parser anti-corruption boundary | Provider DTOs and private metadata never become LightRAG or public contracts |
 | KTD5 | Canonical Markdown is the sole LightRAG document input | Docling/Reducto remain interchangeable and retrieval maps to authoritative local blocks |
 | KTD6 | Real embedding adapters are selected only from the frozen domain profile | Index and query vectors cannot drift in model or dimensions |
-| KTD7 | Local Docling runs behind a killable timeout boundary | Lease heartbeat is recovery fencing, not permission for unbounded parsing |
+| KTD7 | Local Docling runs behind a killable timeout boundary | Lease heartbeat is recovery fencing, not permission for unbounded parsing; today's in-process `TimeoutError` map is insufficient |
 | KTD8 | Full-pipeline proof complements rather than replaces layer tests | Handcrafted handoffs prove runtime topology but not parser/provider integration |
+| KTD9 | Embedding adapters live in the private LightRAG runtime from sealed server-resolved profile/credentials | FastAPI never exposes provider URLs; index and query share one shim-constructed embedding function |
+| KTD10 | Full-pipeline staging that claims production object-store altitude uses P10-04 S3/MinIO composition; default CI stays filesystem | Filesystem-only success must not be labeled production object-store proof |
+| KTD11 | Reducto URL/job resolution is transport-only; normalization sees only inlined chunks/bytes | Private resolve before `normalize_reducto_parse_response`; never persist URLs/job IDs; canonical Markdown beats Reducto `embed` |
+
+### High-Level Technical Design
+
+```mermaid
+flowchart TB
+  upload[Upload source bytes] --> store[Object store put]
+  store --> prep[Prep worker lease]
+  prep --> parser{Parser kind}
+  parser -->|Docling| docling[Killable Docling convert]
+  parser -->|Reducto| reducto[Private transport]
+  reducto --> urlResolve[Resolve URL/job + assets]
+  docling --> prepared[PreparedSource normalize]
+  urlResolve --> prepared
+  prepared --> publish[Atomic blocks/images publish]
+  publish --> handoff[Schema-v2 handoff]
+  handoff --> runtime[Private per-domain LightRAG]
+  runtime --> embed[Real embedding adapter]
+  embed --> ready[Index ready]
+  ready --> retrieve[Retrieve candidates]
+  retrieve --> map[Exact local Evidence map]
+  ciLane[CI fixture lane] -.->|no network| prepared
+  stagingLane[Credential-gated staging] -.->|MinIO + live runtime| upload
+```
+
+CI fixtures and staging smokes are proof altitudes for the same product path, not alternate architectures.
 
 ### Assumptions
 
@@ -124,6 +154,8 @@ The current control plane, canonical Source Block persistence, schema-v2 LightRA
 - OpenAI and approved Bedrock catalog entries are the initial real embedding candidates.
 - Ollama is local-only egress and stays unsupported until an approved profile exists.
 - P4-05 region extraction and authorized projection are complete; this slice only regression-tests those fields through real parser fixtures.
+- P10-04 MinIO/S3 adapter and opt-in overlay are DONE; this slice consumes them for staging altitude rather than re-implementing object storage.
+- P5-04 private per-domain LightRAG topology remains the runtime proof baseline; this slice adds parser/provider semantic proof on that topology.
 
 ### Risks and Dependencies
 
@@ -131,11 +163,24 @@ The current control plane, canonical Source Block persistence, schema-v2 LightRA
 | --- | --- |
 | Secret leakage in smoke logs | Allowlisted logging; redaction |
 | Scope creep to new vendors | Tech-stack closed list |
-| SDK response drift silently empties tables or images | Versioned sanitized fixtures plus credential-gated staging characterization |
+| SDK response drift silently empties tables or images | Versioned sanitized fixtures plus credential-gated staging characterization; Reducto MCP/docs as characterization aids only |
 | LightRAG splits a block away from its marker | Oversized/multi-block tests; discard unmarked candidates; stop if exact mapping cannot be proven |
 | Provider dimensions differ from the immutable profile | Validate every returned vector shape before storage/readiness |
 | Hung local parser retains work forever | Killable process timeout plus generation/lease fence and cleanup tests |
 | Provider-optimized Reducto text conflicts with canonical portability | Keep canonical Markdown authoritative; require an explicit contract decision before changing semantics |
+| Staging claims production object-store altitude on filesystem-only | U4/U8 profile labels; opt-in MinIO overlay or composed S3 settings for that claim |
+| Sealed `provider.env` permission or leak in runtime containers | Keep mode checks; never dump env in health/errors/logs |
+| Combined live+MinIO three-file matrix incomplete | Name as P12-04 residual; do not block P10-05 if single-overlay staging proves parser/provider path |
+
+**Dependencies:** P4-03, P5-04, P6-02, P7-03, P10-03, P10-04 DONE. Live full-pipeline evidence must cite the P5-04 runtime revision and P10-04 store composition used.
+
+### System-Wide Impact
+
+- **Worker/API vs LightRAG runtime:** Parser deps and prep leases stay in the stack worker/API image; embedding deps and sealed credentials stay in the per-domain LightRAG container; cross-talk only via schema-v2 handoff and private HTTP.
+- **Object store:** Prep publish and figure bytes use `object_store_from_settings` (filesystem for default CI; MinIO/S3 for production-store staging). Missing objects keep the P10-04 safe `503 document_content_unavailable` path.
+- **Credential surfaces:** Reducto/OpenAI/Bedrock secrets flow only through server-resolved runtime config into sealed env. Never appear in logs, DTOs, SSE, evidence artifacts, or browser storage.
+- **Downstream:** P12-06 pins parser/provider/runtime digests from this matrix; P12-07 consumes the staging path for browser/capacity/failure cases; P10-06 preview keys remain a separate derivative lane on the same object-store census shape.
+- **Failure propagation:** Parser timeout → retryable prep failure without stuck lease; embedding dimension mismatch → never ready; uncertain index timeout keeps existing readiness-probe reclaim semantics.
 
 ---
 
@@ -152,9 +197,9 @@ The current control plane, canonical Source Block persistence, schema-v2 LightRA
 **Files:**
 - Create: `docs/_scratch/p10-05-provider-packaging-inventory.md`
 
-**Approach:** Table parser/synthesis kinds vs package/image/CI/smoke status.
+**Approach:** Table parser/synthesis/embedding kinds vs package/image/CI/smoke status. Record worker/API vs LightRAG runtime image ownership and P10-04 object-store packaging gate as adjacent seams, not owned deliverables.
 
-**Patterns to follow:** as-built-gaps bullets
+**Patterns to follow:** as-built-gaps bullets; `docs/_scratch/p10-04-minio-object-store-inventory.md` disposition shape
 
 **Test scenarios:**
 - Test expectation: none -- inventory.
@@ -175,9 +220,9 @@ The current control plane, canonical Source Block persistence, schema-v2 LightRA
 - Modify: `app/pyproject.toml` / Dockerfiles as needed
 - Test: existing parser/synthesis fixture suites; missing-dep fail-closed checks
 
-**Approach:** Split parser and provider dependencies into explicit reproducible image profiles. The stack worker image must include the parser profile it claims; the private LightRAG runtime image must include only the approved embedding bindings it claims. Keep the default CI lane fixture-only and expose no browser configuration.
+**Approach:** Split parser and provider dependencies into explicit reproducible image profiles. The stack worker/API image must include the parser profile it claims; the private LightRAG runtime image must include only the approved embedding bindings it claims. Do not place parser SDKs in the LightRAG image or embedding SDKs in the browser/BFF. Prefer image gates parallel to `CE_STACK_OBJECT_STORE_IMAGE` / live LightRAG packaging. Keep the default CI lane fixture-only and expose no browser configuration.
 
-**Patterns to follow:** as-built-gaps optional extras notes; P10-01 compose config
+**Patterns to follow:** as-built-gaps optional extras notes; P10-01 compose config; P10-04 object-store image gate
 
 **Test scenarios:**
 - Happy: image build with declared extras still succeeds in verify Docker step.
@@ -206,11 +251,11 @@ The current control plane, canonical Source Block persistence, schema-v2 LightRA
 - Modify: `app/tests/test_postgres_source_preparation.py`
 - Add: parser timeout/cleanup tests under `app/tests/`
 
-**Approach:** Characterize supported SDK versions before changing normalizers. Configure Docling for table/picture extraction, derive canonical Markdown from supported native exports, and materialize only governed image bytes. Resolve Reducto URL-pointer results and bounded remote assets inside the private transport, then strip URLs, job IDs, confidence, and native IDs before `PreparedSource`. Run local Docling conversion in a killable process with a hard deadline and bounded temporary storage. Do not introduce provider chunk IDs or Reducto `embed` into product persistence or the canonical LightRAG handoff.
+**Approach:** Characterize supported SDK versions before changing normalizers. Configure Docling for table/picture extraction, derive canonical Markdown from supported native exports, and materialize only governed image bytes. Today's Docling path is in-process without a hard killable deadline — introduce a killable process/timeout helper so a hung conversion cannot retain a prep lease indefinitely. For Reducto, resolve `type=url` / job-pointer results and bounded remote figure assets inside the private transport (SDK/`get_job`/bounded HTTP) before `normalize_reducto_parse_response`; strip URLs, job IDs, confidence, and native IDs. Do not introduce provider chunk IDs or Reducto `embed` into product persistence or the canonical LightRAG handoff. Reducto MCP and official docs are characterization aids only, not runtime dependencies.
 
 **Execution note:** Add characterization fixtures and failure tests before changing the live adapters; compare canonical output rather than retaining raw provider payload snapshots.
 
-**Patterns to follow:** `app/context_engine/adapters/parsers.py`; `app/context_engine/services/sources.py` preparation lease/generation fence; legacy behavior evidence in `.references/code/context_engine/app/document_processing/` only where it survives current privacy and canonical-block rules.
+**Patterns to follow:** `app/context_engine/adapters/parsers.py` (current URL fail-closed and `PreparedSource` boundary); `app/context_engine/services/sources.py` preparation lease/generation fence; legacy behavior evidence in `.references/code/context_engine/app/document_processing/` only where it survives current privacy and canonical-block rules.
 
 **Test scenarios:**
 - Covers AE5. A representative Docling PDF produces ordered heading/text/table/figure blocks, normalized pages/regions, and governed image bytes.
@@ -241,11 +286,11 @@ The current control plane, canonical Source Block persistence, schema-v2 LightRA
 - Modify: `app/tests/test_lightrag_real_runtime_integration.py`
 - Add: provider embedding adapter tests under `app/tests/`
 
-**Approach:** Build a closed private adapter registry for the embedding provider kinds already present in the approved catalog. The shim consumes sealed provider kind/model/dimensions/credential, constructs one embedding function, validates every returned vector count and dimension, and supplies that same function to LightRAG indexing and retrieval. Synthetic embeddings remain available only behind the explicit non-production test/dev path. Do not log credentials, provider payloads, source text, or vectors.
+**Approach:** Build a closed private adapter registry for the embedding provider kinds already present in the approved catalog, patterned after synthesis’s fail-closed registry but constructed inside the per-domain LightRAG runtime from sealed env (kind/model/dimensions/credential). The shim consumes that sealed profile, constructs one embedding function, validates every returned vector count and dimension, and supplies that same function to LightRAG indexing and retrieval. Remove the production hard-coded deterministic embed and stub entity LLM from the production path; synthetic embeddings remain only behind an explicit non-production test/dev path with no silent fallback once a production binding is configured. Do not log credentials, provider payloads, source text, or vectors.
 
 **Execution note:** Start with injectable provider transports proving model/dimension propagation and fail-closed shape validation; run live calls only in the gated staging lane.
 
-**Patterns to follow:** `TrustedRuntimeResolver.resolve_embedding_profile`; sealed runtime environment handling; existing bounded synthesis adapter error mapping.
+**Patterns to follow:** `TrustedRuntimeResolver.resolve_embedding_profile`; sealed runtime environment handling in `ce_lightrag_shim.py`; `app/context_engine/adapters/synthesis.py` closed registry and error mapping.
 
 **Test scenarios:**
 - Covers AE7. OpenAI and each claimed Bedrock embedding adapter receive the frozen model/dimensions and return the exact validated shape for document and query contexts.
@@ -270,9 +315,9 @@ The current control plane, canonical Source Block persistence, schema-v2 LightRA
 - Create: `docs/operations/provider-deployment-profiles.md` (name flexible)
 - Modify: `docs/operations/compose-stack-runbook.md` / `docs/tech-stack.md` profile notes
 
-**Approach:** Record parser, embedding, and synthesis support independently. Include packaged dependency, image/profile, network boundary, required credential source, fixture proof, live smoke revision, and final status. A parser or synthesis smoke does not imply embedding support.
+**Approach:** Record parser, embedding, and synthesis support independently. Include packaged dependency, image/profile, network boundary, required credential source, fixture proof, live smoke revision, object-store altitude (filesystem vs MinIO/S3), and final status. A parser or synthesis smoke does not imply embedding support. Filesystem-only staging must not be labeled production object-store proof.
 
-**Patterns to follow:** `docs/tech-stack.md`
+**Patterns to follow:** `docs/tech-stack.md`; P10-04 runbook/object-store notes
 
 **Test scenarios:**
 - Happy: matrix lists each tech-stack provider/parser with status.
@@ -295,14 +340,14 @@ The current control plane, canonical Source Block persistence, schema-v2 LightRA
 - Modify: runbook
 - Create: tests that smoke refuses without gate env
 
-**Approach:** Script requires explicit profile and environment allowlists; exercises parser success plus embedding/synthesis success, timeout, auth failure, and malformed-response mapping; records package/image versions and a secret-safe evidence artifact. Never wire live calls into default `scripts/verify.sh`.
+**Approach:** Script requires explicit profile and environment allowlists; exercises parser success plus embedding/synthesis success, timeout, auth failure, and malformed-response mapping; records package/image versions and a secret-safe evidence artifact. When the profile claims production object-store altitude, compose through P10-04 MinIO/`object_store_from_settings` rather than filesystem-only. Never wire live calls into default `scripts/verify.sh`.
 
-**Patterns to follow:** `app/scripts/stack_smoke_*.py`
+**Patterns to follow:** `app/scripts/stack_smoke_*.py`; `app/scripts/stack_object_store_recon.py` closed CLI errors
 
 **Test scenarios:**
 - Error: missing gate env → refuse before network.
 - Happy: with fixtures/injectable, mappings stay typed (CI).
-- Integration: live parser/provider smoke runs only under explicit credentials and records the exact deployment profile and artifact digest.
+- Integration: live parser/provider smoke runs only under explicit credentials and records the exact deployment profile, object-store kind, and artifact digest.
 
 **Verification:** Default path refuses live access without the explicit gate; live evidence is mandatory before that parser/provider profile is labeled production-supported.
 
@@ -322,11 +367,11 @@ The current control plane, canonical Source Block persistence, schema-v2 LightRA
 - Modify: `app/tests/test_lightrag_real_runtime_integration.py`
 - Modify: `docs/operations/compose-stack-runbook.md`
 
-**Approach:** Use the production worker/service boundaries with PostgreSQL, governed test object storage, one private per-domain LightRAG runtime, and an explicitly selected real parser/embedding profile. Drive upload and queued preparation, wait for canonical publication and index readiness, issue semantic queries, and assert that every returned Evidence item maps to the expected local block/hash/order. Add oversized and multi-block fixtures that force LightRAG chunk-boundary behavior; unmarked continuations must be discarded rather than repaired heuristically.
+**Approach:** Use the production worker/service boundaries with PostgreSQL, governed object storage via P10-04 composition when claiming production-store altitude, one private per-domain LightRAG runtime, and an explicitly selected real parser/embedding profile. Drive upload and queued preparation, wait for canonical publication and index readiness, issue semantic queries, and assert that every returned Evidence item maps to the expected local block/hash/order. Add oversized and multi-block fixtures that force LightRAG chunk-boundary behavior; unmarked continuations must be discarded rather than repaired heuristically. Cite P5-04 runtime and P10-04 store revisions in evidence. Combined three-file live+MinIO matrix may remain a P12-04 residual if single-overlay staging already proves the parser/provider path.
 
 **Execution note:** Keep the deterministic local Docling lane runnable without external credentials where packaging permits, then layer Reducto and external embedding profiles behind explicit staging gates.
 
-**Patterns to follow:** P5-04 live runtime integration; P6 PostgreSQL frozen-scope mapping tests; P4 source-preparation fixtures.
+**Patterns to follow:** P5-04 live runtime integration; P6 PostgreSQL frozen-scope mapping tests; P4 source-preparation fixtures; P10-04 MinIO overlay.
 
 **Test scenarios:**
 - Covers AE9. Real PDF upload through Docling reaches prepared/ready and a semantic query returns the expected mapped text/table/figure Evidence.
@@ -336,7 +381,7 @@ The current control plane, canonical Source Block persistence, schema-v2 LightRA
 - Error: parser timeout, provider timeout with uncertain index outcome, runtime restart, malformed retrieval chunk, and source deletion each preserve their existing recovery/fencing semantics.
 - Isolation: two domains processed concurrently return no cross-domain markers or Evidence.
 
-**Verification:** Evidence records the complete path, package/image revisions, parser/provider profiles, and negative privacy/isolation assertions; P5-04 remains credited for topology while this unit owns semantic end-to-end proof.
+**Verification:** Evidence records the complete path, package/image revisions, parser/provider profiles, object-store kind, and negative privacy/isolation assertions; P5-04 remains credited for topology while this unit owns semantic end-to-end proof.
 
 ---
 
@@ -352,14 +397,15 @@ The current control plane, canonical Source Block persistence, schema-v2 LightRA
 - Create: `docs/_scratch/p10-05-provider-packaging-evidence.md`
 - Modify: `docs/master-build-plan.md`
 
-**Approach:** Publish matrix statuses and distinguish package import, fixture proof, live boundary smoke, and full-pipeline proof. Name P12-06/07/08 residuals and leave any unproven profile fail-closed.
+**Approach:** Publish matrix statuses and distinguish package import, fixture proof, live boundary smoke, full-pipeline proof, and object-store altitude. Name P12-04/06/07/08 residuals and leave any unproven profile fail-closed.
 
-**Patterns to follow:** `docs/_scratch/p10-03-worker-lifecycle-evidence.md`
+**Patterns to follow:** `docs/_scratch/p10-04-minio-object-store-evidence.md`
 
 **Test scenarios:**
 - Test expectation: none -- docs.
 - Edge: unsmoked kinds remain fail-closed explicitly.
 - Edge: parser success never upgrades an embedding or synthesis provider’s support status.
+- Edge: filesystem-only staging is not labeled production object-store proof.
 
 **Verification:** Tracker DONE.
 
@@ -374,6 +420,7 @@ The current control plane, canonical Source Block persistence, schema-v2 LightRA
 - Live evidence covers each production-supported parser/provider boundary.
 - At least one claimed parser + real embedding profile passes the complete upload-to-mapped-Evidence staging path.
 - Long/multi-block marker-survival and cross-domain isolation proofs are green.
+- Any production object-store altitude claim cites P10-04 MinIO/S3 composition.
 
 ## Definition of Done
 
@@ -388,4 +435,9 @@ R1–R13 and AE1–AE9 are satisfied; canonical parser independence and exact pr
 - docs/master-build-plan.md P10-05
 - docs/_scratch/p4-03-parser-adapters-inventory.md
 - docs/_scratch/p5-04-lightrag-real-runtime-evidence.md
+- docs/_scratch/p10-04-minio-object-store-evidence.md
+- app/context_engine/adapters/parsers.py (URL fail-closed; in-process Docling)
+- app/context_engine/tools/ce_lightrag_shim.py (synthetic embed / stub LLM)
+- app/context_engine/adapters/synthesis.py (closed provider registry pattern)
 - `.references/code/context_engine/app/document_processing/` as read-only behavioral evidence, not design authority
+- Reducto MCP/docs for URL/job result characterization only

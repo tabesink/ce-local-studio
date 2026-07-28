@@ -74,6 +74,28 @@ def create_app() -> FastAPI:
 
     embed_dim = int(os.environ.get("CE_EMBEDDING_DIMENSIONS", "8"))
     model_name = os.environ.get("CE_EMBEDDING_MODEL_NAME", "ce-domain-embedding")
+    provider_kind = os.environ.get("CE_EMBEDDING_PROVIDER_KIND", "").strip().lower()
+    credential = os.environ.get("CE_EMBEDDING_CREDENTIAL")
+    allow_synthetic = os.environ.get("CE_EMBEDDING_ALLOW_SYNTHETIC", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    from context_engine.adapters.embeddings import (
+        EmbeddingAdapterError,
+        EmbeddingRequest,
+        resolve_embedding_adapter,
+        synthetic_embedding_vectors,
+    )
+
+    if allow_synthetic:
+        embedding_mode = "synthetic"
+        embedding_adapter = None
+    elif provider_kind:
+        embedding_mode = "provider"
+        embedding_adapter = resolve_embedding_adapter(provider_kind)
+    else:
+        raise RuntimeError("Embedding provider is not configured for this runtime.")
 
     class _OfflineCharTokenizer:
         """Reversible char tokenizer — no tiktoken CDN (domain net is internal)."""
@@ -86,16 +108,27 @@ def create_app() -> FastAPI:
 
     @wrap_embedding_func_with_attrs(embedding_dim=embed_dim, max_token_size=8192, model_name=model_name)
     async def embed(texts, **_kwargs):
-        # Production containers receive real provider wiring via sealed env in a
-        # follow-on provider adapter; dimensions are already server-resolved.
-        # Until a concrete binding is configured, use a deterministic local embed
-        # matching CE_EMBEDDING_DIMENSIONS so schema/runtime wiring can be proven.
-        return np.array(
-            [[float((idx + len(text)) % 7) for idx in range(embed_dim)] for text in texts],
-            dtype=np.float32,
-        )
+        text_list = list(texts)
+        if embedding_mode == "synthetic":
+            vectors = synthetic_embedding_vectors(text_list, dimensions=embed_dim)
+            return np.array(vectors, dtype=np.float32)
+        assert embedding_adapter is not None
+        try:
+            vectors = embedding_adapter.embed(
+                EmbeddingRequest(
+                    texts=tuple(text_list),
+                    model_name=model_name,
+                    dimensions=embed_dim,
+                    credential=credential,
+                )
+            )
+        except EmbeddingAdapterError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=exc.code) from None
+        return np.array(vectors, dtype=np.float32)
 
     async def llm(_prompt, system_prompt=None, history_messages=None, **_kwargs):
+        # Entity extraction stub: Phase 1 retrieval uses naive chunk mode;
+        # grounded synthesis stays in the API worker, not the LightRAG container.
         return "entity"
 
     rag = LightRAG(

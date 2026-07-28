@@ -114,6 +114,22 @@ SOURCE_INDEX_REMOTE_STATES = (
     SOURCE_INDEX_STATE_ACCEPTED,
     SOURCE_INDEX_STATE_READY,
 )
+SOURCE_PREVIEW_STATE_NOT_REQUESTED = "not_requested"
+SOURCE_PREVIEW_STATE_QUEUED = "queued"
+SOURCE_PREVIEW_STATE_RUNNING = "running"
+SOURCE_PREVIEW_STATE_READY = "ready"
+SOURCE_PREVIEW_STATE_FAILED = "failed"
+SOURCE_PREVIEW_STATES = (
+    SOURCE_PREVIEW_STATE_NOT_REQUESTED,
+    SOURCE_PREVIEW_STATE_QUEUED,
+    SOURCE_PREVIEW_STATE_RUNNING,
+    SOURCE_PREVIEW_STATE_READY,
+    SOURCE_PREVIEW_STATE_FAILED,
+)
+SOURCE_PREVIEW_ACTIVE_STATES = (
+    SOURCE_PREVIEW_STATE_QUEUED,
+    SOURCE_PREVIEW_STATE_RUNNING,
+)
 TURN_ROUTE_DIRECT_LLM = "direct_llm"
 TURN_ROUTE_DOMAIN_RAG = "domain_rag"
 TURN_ROUTES = (TURN_ROUTE_DIRECT_LLM, TURN_ROUTE_DOMAIN_RAG)
@@ -449,11 +465,20 @@ class SourceDocument(Base):
         CheckConstraint("preparation_generation >= 1", name="ck_source_documents_generation_positive"),
         CheckConstraint("index_generation >= 0", name="ck_source_documents_index_generation_nonnegative"),
         CheckConstraint("version >= 1", name="ck_source_documents_version_positive"),
+        CheckConstraint(
+            "preview_state in ('not_requested', 'queued', 'running', 'ready', 'failed')",
+            name="ck_source_documents_preview_state",
+        ),
+        CheckConstraint("preview_generation >= 0", name="ck_source_documents_preview_generation_nonnegative"),
+        CheckConstraint("preview_version >= 0", name="ck_source_documents_preview_version_nonnegative"),
         Index("uq_source_documents_public_ref", "public_ref", unique=True),
         Index("uq_source_documents_domain_hash", "domain_id", "original_sha256", unique=True),
         Index("uq_source_documents_original_object_key", "original_object_key", unique=True),
+        Index("uq_source_documents_preview_object_key", "preview_object_key", unique=True),
+        Index("uq_source_documents_preview_page_map_object_key", "preview_page_map_object_key", unique=True),
         Index("ix_source_documents_domain_created", "domain_id", text("created_at DESC")),
         Index("ix_source_documents_domain_index_state", "domain_id", "index_state"),
+        Index("ix_source_documents_domain_preview_state", "domain_id", "preview_state"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -483,6 +508,26 @@ class SourceDocument(Base):
     index_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     index_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     index_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    preview_state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=SOURCE_PREVIEW_STATE_NOT_REQUESTED
+    )
+    preview_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    preview_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    preview_object_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    preview_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    preview_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    preview_page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    preview_renderer_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    preview_source_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    preview_page_map_object_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    preview_page_map_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    preview_reuses_original: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    preview_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    preview_error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    preview_lease_owner: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    preview_lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    preview_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    preview_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_by_user_id: Mapped[str | None] = mapped_column(
         String(36),

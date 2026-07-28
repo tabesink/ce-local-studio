@@ -8,7 +8,7 @@ from context_engine.config import Settings
 from context_engine.models import ROLE_ADMINISTRATOR, User
 
 
-SUPPORTED_ALEMBIC_HEAD = "c9e4b2d17a60"
+SUPPORTED_ALEMBIC_HEAD = "d4e7a1b92c80"
 
 
 class ReadinessError(Exception):

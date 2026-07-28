@@ -733,6 +733,9 @@ def seal_domain_embedding_runtime_env(
     ]
     if resolved.credential:
         lines.append(f"CE_EMBEDDING_CREDENTIAL={resolved.credential}")
+    else:
+        # Explicit topology-only synthetic gate — never a silent production fallback.
+        lines.append("CE_EMBEDDING_ALLOW_SYNTHETIC=1")
     return write_sealed_provider_env(runtime_dir, "\n".join(lines) + "\n")
 
 

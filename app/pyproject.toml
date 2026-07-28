@@ -30,9 +30,21 @@ object-store = [
 parsers = [
     "docling>=2.0.0",
     "reductoai>=0.1.0",
+    "httpx>=0.27.0",
 ]
 synthesis = [
     "openai>=1.40.0",
+]
+# Private LightRAG runtime embedding bindings (not browser/BFF).
+# OpenAI is the first packaged embedding provider; Bedrock/Ollama stay
+# fail-closed until U7 catalog + smoke prove them.
+embeddings = [
+    "openai>=1.40.0",
+]
+# Private governed-preview renderer (DOCX text extraction). Markdown/text/PDF
+# paths need no extra; LibreOffice-class packaging remains P12-06 if elevated.
+preview-renderer = [
+    "python-docx>=1.1.0",
 ]
 test = [
     "pytest>=8.2.0",
