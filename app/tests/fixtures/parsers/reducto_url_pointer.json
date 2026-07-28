@@ -1,0 +1,7 @@
+{
+  "job_id": "job-secret-do-not-persist",
+  "result": {
+    "type": "url",
+    "url": "https://example.invalid/presigned-result"
+  }
+}

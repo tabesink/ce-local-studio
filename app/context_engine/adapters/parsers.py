@@ -487,7 +487,11 @@ def _extension_for_content_type(content_type: str | None) -> str:
 
 
 def _reducto_result_to_payload(result: Any, *, timeout_seconds: float) -> dict[str, Any]:
-    del timeout_seconds
+    from context_engine.adapters.parser_runtime import (
+        materialize_reducto_remote_assets,
+        resolve_reducto_url_result,
+    )
+
     if isinstance(result, dict):
         payload = result
     else:
@@ -522,25 +526,43 @@ def _reducto_result_to_payload(result: Any, *, timeout_seconds: float) -> dict[s
             }
             nested = payload["result"]
 
-    if isinstance(nested, dict) and nested.get("type") == "url":
-        # URL results must be resolved by the transport before normalization so
-        # private presigned URLs never enter product persistence.
-        raise ParserAdapterError(
-            "parser_malformed_response",
-            "Parser response could not be normalized.",
-        )
+    # Resolve URL pointers and materialize remote figure bytes privately before
+    # normalization so presigned URLs / job IDs never enter PreparedSource.
+    payload = resolve_reducto_url_result(payload, timeout_seconds=timeout_seconds)
+    payload = materialize_reducto_remote_assets(payload, timeout_seconds=timeout_seconds)
+    payload.pop("job_id", None)
+    nested = payload.get("result")
+    if isinstance(nested, dict):
+        nested.pop("url", None)
+        nested.pop("job_id", None)
     return payload
 
 
 class DoclingDocumentParser:
-    def __init__(self, *, convert: DoclingConverter | None = None) -> None:
-        self._convert = convert or _default_docling_convert
+    def __init__(
+        self,
+        *,
+        convert: DoclingConverter | None = None,
+        timeout_seconds: float = 120.0,
+    ) -> None:
+        self._convert = convert
+        self._timeout_seconds = timeout_seconds
 
     def parse(self, request: ParserRequest) -> PreparedSource:
         if request.parser_kind != PARSER_DOCLING:
             raise ParserAdapterError("parser_unavailable", "Parser is not available.", 503)
         try:
-            payload = self._convert(request.original_bytes, request.content_type, request.filename)
+            if self._convert is not None:
+                payload = self._convert(request.original_bytes, request.content_type, request.filename)
+            else:
+                from context_engine.adapters.parser_runtime import run_docling_convert_killable
+
+                payload = run_docling_convert_killable(
+                    request.original_bytes,
+                    request.content_type,
+                    request.filename,
+                    timeout_seconds=self._timeout_seconds,
+                )
         except ParserAdapterError:
             raise
         except TimeoutError as exc:
@@ -579,7 +601,7 @@ class ReductoDocumentParser:
 
 def default_parser_registry(*, reducto_timeout_seconds: float = 60.0) -> dict[str, DocumentParser]:
     return {
-        PARSER_DOCLING: DoclingDocumentParser(),
+        PARSER_DOCLING: DoclingDocumentParser(timeout_seconds=reducto_timeout_seconds),
         PARSER_REDUCTO: ReductoDocumentParser(timeout_seconds=reducto_timeout_seconds),
     }
 

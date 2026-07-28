@@ -1,0 +1,64 @@
+{
+  "texts": [
+    {
+      "self_ref": "#/texts/0",
+      "label": "title",
+      "text": "Procedure",
+      "prov": [
+        {
+          "page_no": 1
+        }
+      ]
+    },
+    {
+      "self_ref": "#/texts/1",
+      "label": "text",
+      "text": "Step one completes the seal.",
+      "prov": [
+        {
+          "page_no": 1
+        }
+      ]
+    }
+  ],
+  "tables": [
+    {
+      "self_ref": "#/tables/0",
+      "label": "table",
+      "text": "| A | B |\n| 1 | 2 |",
+      "prov": [
+        {
+          "page_no": 2
+        }
+      ]
+    }
+  ],
+  "pictures": [
+    {
+      "self_ref": "#/pictures/0",
+      "label": "picture",
+      "text": "Figure A",
+      "prov": [
+        {
+          "page_no": 2
+        }
+      ]
+    }
+  ],
+  "body": {
+    "children": [
+      {
+        "$ref": "#/texts/0"
+      },
+      {
+        "$ref": "#/texts/1"
+      },
+      {
+        "$ref": "#/tables/0"
+      },
+      {
+        "$ref": "#/pictures/0"
+      }
+    ]
+  }
+}

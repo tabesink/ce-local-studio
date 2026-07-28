@@ -501,6 +501,7 @@ object-store = [
 ]
 parsers = [
     { name = "docling" },
+    { name = "httpx" },
     { name = "reductoai" },
 ]
 synthesis = [
@@ -522,6 +523,7 @@ requires-dist = [
     { name = "docling", marker = "extra == 'parsers'", specifier = ">=2.0.0" },
     { name = "fastapi", specifier = ">=0.111.0" },
     { name = "httpx", marker = "extra == 'lightrag-runtime'", specifier = ">=0.27.0" },
+    { name = "httpx", marker = "extra == 'parsers'", specifier = ">=0.27.0" },
     { name = "httpx", marker = "extra == 'test'", specifier = ">=0.27.0" },
     { name = "json-repair", marker = "extra == 'lightrag-runtime'", specifier = ">=0.29.0" },
     { name = "nano-vectordb", marker = "extra == 'lightrag-runtime'", specifier = ">=0.0.4" },
