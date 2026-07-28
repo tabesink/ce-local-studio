@@ -13,9 +13,9 @@ date: 2026-07-28
 
 ## Goal Capsule
 
-- **Objective:** Close P12-07 by running production Next build + BFF + FastAPI Playwright proofs for accessibility, visual matrix, CSRF product path, two-user cache/BFCache isolation, M-11 open-panel, real LightRAG capacity/isolation, provider/runtime failure, and deterministic fixture materialization — without inventing a RAG-triad observability product.
-- **Authority:** docs/frontend/browser-e2e-scenarios.md; visual-regression-plan.md; seeded-demo-and-test-data.md; DRIFT-07/09/19/29; docs/master-build-plan.md P12-07 (depends P5-04,P9-07,P10-04,P10-05,P12-02,P12-03).
-- **Execution profile:** Production-build E2E; blocked on P5-04/P9-07/P10-04/P10-05; fixtures first.
+- **Objective:** Close P12-07 by running production Next build + BFF + FastAPI Playwright proofs for accessibility, visual matrix, CSRF product path, two-user cache/BFCache isolation, M-11 open-panel, real parser→embedding→retrieval→Evidence behavior, governed preview navigation, LightRAG capacity/isolation, provider/runtime failure, and deterministic fixture materialization — without inventing a RAG-triad observability product.
+- **Authority:** docs/frontend/browser-e2e-scenarios.md; visual-regression-plan.md; seeded-demo-and-test-data.md; DRIFT-07/09/19/29; docs/master-build-plan.md P12-07 (depends P5-04,P9-07,P10-04,P10-05,P10-06,P12-02,P12-03).
+- **Execution profile:** Production-build E2E; blocked on P5-04/P9-07/P10-04/P10-05/P10-06; fixtures first.
 - **Readiness checkpoint:** Implementation-ready; implementation of live runtime E2E waits on prerequisites.
 - **Stop conditions:** Stop if mocking product DTOs for acceptance, inventing Phase 2 quality dashboards, or claiming B0 without Playwright job.
 - **Tail ownership:** P12-08 aggregates; B0 completes when this lands.
@@ -26,13 +26,13 @@ date: 2026-07-28
 
 ### Summary
 
-Materialize deterministic fixtures and prove contracted browser/multi-user/capacity behavior through the real stack and real LightRAG runtime.
+Materialize deterministic fixtures and prove contracted browser/multi-user/capacity behavior through the real stack, real supported parser/embedding profile, governed preview renderer, and private LightRAG runtime.
 
 Product Contract preservation: authored from P12-07 bootstrap.
 
 ### Problem Frame
 
-P9 closed component/Vitest altitude; B0 and DRIFT browser halves remain open. Seeded fixture world is specified but not fully materialized. Capacity/isolation through real LightRAG is unproven.
+P9 closed component/Vitest altitude; B0 and DRIFT browser halves remain open. Seeded fixture world is specified but not fully materialized. P10-05 owns service-level parser/provider pipeline proof and P10-06 owns governed preview generation; deployed browser behavior, capacity, failure recovery, and cross-user isolation remain unproven.
 
 ### Actors
 
@@ -47,7 +47,9 @@ P9 closed component/Vitest altitude; B0 and DRIFT browser halves remain open. Se
 
 **F2 — Playwright matrix.** Login/chat/documents/settings/graph-unavailable; CSRF; two-user cache; M-11 panel; a11y; visual baselines.
 
-**F3 — Capacity/failure.** Concurrent queries; provider/runtime failure paths; load shedding.
+**F3 — Real document pipeline.** Upload supported source → real parser/provider profile → index ready → expected mapped Evidence → governed preview/evidence focus.
+
+**F4 — Capacity/failure.** Concurrent queries; parser/provider/renderer/runtime failure paths; load shedding.
 
 ### Requirements
 
@@ -56,9 +58,10 @@ P9 closed component/Vitest altitude; B0 and DRIFT browser halves remain open. Se
 - R3. Playwright through production Next + BFF + FastAPI; no mocked product responses for acceptance.
 - R4. CSRF product path; two-user cache/BFCache; M-11 open-panel/cache half.
 - R5. Accessibility + visual matrix baselines at approved thresholds.
-- R6. Real LightRAG capacity/isolation + provider/runtime failure evidence (needs P5-04/P10-05).
+- R6. Real parser→embedding→LightRAG→mapped Evidence capacity/isolation plus parser/provider/runtime failure evidence (needs P5-04/P10-05).
 - R7. Expected-answer browser acceptance for seeded figure question only — not a RAG-triad product metric API.
 - R8. Evidence + tracker; close DRIFT-07/09/19/29 browser halves / B0 as applicable.
+- R9. Governed generated-preview navigation, range/cache behavior, region focus/fallback, and renderer failure evidence for supported non-PDF sources (needs P10-06).
 
 ### Acceptance Examples
 
@@ -165,7 +168,7 @@ P9 closed component/Vitest altitude; B0 and DRIFT browser halves remain open. Se
 
 **Requirements:** R3,R4,R5,AE2,AE3,AE4
 
-**Dependencies:** U2; P9-07; P10-04
+**Dependencies:** U2; P9-07; P10-04; P10-06
 
 **Files:**
 - Create/modify: `app/client/tests/e2e/**`
@@ -191,13 +194,13 @@ P9 closed component/Vitest altitude; B0 and DRIFT browser halves remain open. Se
 
 **Requirements:** R6,AE5
 
-**Dependencies:** U3; P5-04; P10-05
+**Dependencies:** U3; P5-04; P10-05; P10-06
 
 **Files:**
 - Create: capacity/failure scripts or e2e stress harness
 - Create: evidence commands
 
-**Approach:** Concurrent members on one domain; isolation assertions; provider/runtime failure → safe codes.
+**Approach:** Concurrent members on one domain through the production-supported parser/embedding path; exact mapped-Evidence and isolation assertions; parser/provider/renderer/runtime failure → safe contracted states; generated-preview Evidence navigation remains authorized and cache-isolated.
 
 **Patterns to follow:** C-01; deployment capacity section
 
@@ -236,7 +239,7 @@ P9 closed component/Vitest altitude; B0 and DRIFT browser halves remain open. Se
 ## Verification Contract
 
 - Fixture verify; Playwright CI; capacity evidence; privacy cache checks.
-- Cite P5-04/P9-07/P10-04/P10-05 revisions.
+- Cite P5-04/P9-07/P10-04/P10-05/P10-06 revisions.
 
 ## Definition of Done
 

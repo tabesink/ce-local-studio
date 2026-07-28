@@ -13,9 +13,9 @@ date: 2026-07-28
 
 ## Goal Capsule
 
-- **Objective:** Close P12-06 by producing an immutable release artifact manifest covering web/API/worker/LightRAG runtime image digests, MinIO/provider/runtime locks, schema and contract versions, SBOM, and provenance.
-- **Authority:** docs/quality/definition-of-done.md production release gate; docs/architecture/deployment-topology.md release sequence; docs/master-build-plan.md P12-06 (depends P0,P5-04,P10-04,P10-05,P12-02).
-- **Execution profile:** Manifest generation + verify hooks; blocked on P5-04/P10-04/P10-05 for pin completeness.
+- **Objective:** Close P12-06 by producing an immutable release artifact manifest covering web/API/worker/LightRAG runtime image digests, MinIO/parser/provider/renderer/runtime locks, schema and contract versions, SBOM, and provenance.
+- **Authority:** docs/quality/definition-of-done.md production release gate; docs/architecture/deployment-topology.md release sequence; docs/master-build-plan.md P12-06 (depends P0,P5-04,P10-04,P10-05,P10-06,P12-02).
+- **Execution profile:** Manifest generation + verify hooks; blocked on P5-04/P10-04/P10-05/P10-06 for pin completeness.
 - **Readiness checkpoint:** Implementation-ready; pin completeness waits on prerequisites.
 - **Stop conditions:** Stop if inventing product observability UI, or claiming production digests without built artifacts.
 - **Tail ownership:** P12-08 go/no-go attaches to this manifest.
@@ -52,7 +52,7 @@ Without pinned digests/SBOM/provenance, rollback and incident response cannot pr
 ### Requirements
 
 - R1. Inventory `docs/_scratch/p12-06-immutable-artifact-inventory.md`.
-- R2. Manifest schema listing digests, locks, schema head, contract versions, LightRAG/MinIO pins, provider profile ids.
+- R2. Manifest schema listing digests, locks, schema head, contract versions, LightRAG/MinIO pins, parser/renderer package versions, and provider profile ids.
 - R3. SBOM + provenance generation for release images.
 - R4. CI/verify hook checks manifest presence/integrity for release profile (not mandatory for every PR if too heavy — document boundary).
 - R5. Evidence + tracker DONE; residuals for external signing keys named.
@@ -62,7 +62,7 @@ Without pinned digests/SBOM/provenance, rollback and incident response cannot pr
 - AE1. Manifest records all required pin fields.
 - AE2. Mutating a digest breaks verify/manifest check.
 - AE3. SBOM artifact produced for API/web images.
-- AE4. Evidence cites P5-04/P10-04/P10-05 revisions for runtime/store/provider pins.
+- AE4. Evidence cites P5-04/P10-04/P10-05/P10-06 revisions for runtime/store/parser/provider/renderer pins.
 
 ### Scope Boundaries
 
@@ -134,7 +134,7 @@ Without pinned digests/SBOM/provenance, rollback and incident response cannot pr
 
 **Requirements:** R2,AE1,AE4
 
-**Dependencies:** U1; P5-04/P10-04/P10-05 for full pins
+**Dependencies:** U1; P5-04/P10-04/P10-05/P10-06 for full pins
 
 **Files:**
 - Create: `scripts/generate_release_manifest.py` (name flexible)
@@ -214,7 +214,7 @@ Without pinned digests/SBOM/provenance, rollback and incident response cannot pr
 - Create: `docs/_scratch/p12-06-immutable-artifact-evidence.md`
 - Modify: `docs/master-build-plan.md`
 
-**Approach:** Record commands and residual signing/registry promotion to P12-08; cite P5-04/P10-04/P10-05 pin revisions.
+**Approach:** Record commands and residual signing/registry promotion to P12-08; cite P5-04/P10-04/P10-05/P10-06 pin revisions.
 
 **Patterns to follow:** `docs/_scratch/p12-02-suite-contract-convergence-evidence.md`
 
@@ -228,7 +228,7 @@ Without pinned digests/SBOM/provenance, rollback and incident response cannot pr
 ## Verification Contract
 
 - Generator + mismatch tests.
-- Release-profile completeness including P5-04/P10-04/P10-05 pins.
+- Release-profile completeness including P5-04/P10-04/P10-05/P10-06 pins.
 
 ## Definition of Done
 

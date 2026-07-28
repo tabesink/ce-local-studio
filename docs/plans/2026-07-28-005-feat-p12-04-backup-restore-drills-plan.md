@@ -15,9 +15,9 @@ minio_amendment: 2026-07-28
 
 ## Goal Capsule
 
-- **Objective:** Close master-build-plan P12-04 by delivering Compose-matrix rehearsable drills for write-fenced backup consistency capture, isolated restore with PostgreSQL↔MinIO object version/key↔encryption-key reconciliation, post-restore continuity (auth, redactions, governed refs, audit, citations/tombstones), schema-compatible prior-image rollback, restore-coupled multi-failure worker/API recovery beyond P10-03, and post-restore rebuild/reconciliation of one private per-domain LightRAG runtime — with inventory, operator runbook, and evidence.
-- **Authority:** Root `AGENTS.md`; FR-11 in `docs/prd.md`; `docs/master-build-plan.md` P12-04 (depends P5-04,P10-04,P12-01) and populated-database compatibility barrier (backup/key-custody language); `docs/architecture/deployment-topology.md` (§ Backup/restore/DR, release/rollback, MinIO object-store decision); `docs/architecture/production-adaptation-blueprint.md`; `docs/architecture/data-and-lifecycle.md`; `docs/architecture/security-operations-and-quality.md` (deployment order and rollback); `docs/architecture/legacy-persistence-retirement.md` (Path 2 stop — out of scope); `docs/quality/definition-of-done.md` production restore gate; P10-03 / P10-04 / P12-01 / P12-03 residuals; DRIFT-15 advanced by P10-04.
-- **Execution profile:** Inventory-first brownfield; blocked on P5-04 and P10-04 DONE before implementation starts; Compose/MinIO local-production matrix altitude (filesystem adapter remains development-only residual, not the final DR boundary); scripted drills + PG/unit proofs where useful; live Compose evidence; honest residuals for staging/prod digests, KMS/escrow, Path 2, and P12-05/06/07/08.
+- **Objective:** Close master-build-plan P12-04 by delivering Compose-matrix rehearsable drills for write-fenced backup consistency capture, isolated restore with PostgreSQL↔MinIO original/preview object version/key↔encryption-key reconciliation, post-restore continuity (auth, redactions, governed refs, audit, previews, citations/tombstones), schema-compatible prior-image rollback, restore-coupled multi-failure worker/API recovery beyond P10-03, and post-restore rebuild/reconciliation of one private per-domain LightRAG runtime — with inventory, operator runbook, and evidence.
+- **Authority:** Root `AGENTS.md`; FR-11 in `docs/prd.md`; `docs/master-build-plan.md` P12-04 (depends P5-04,P10-04,P10-06,P12-01) and populated-database compatibility barrier (backup/key-custody language); `docs/architecture/deployment-topology.md` (§ Backup/restore/DR, release/rollback, MinIO object-store decision); `docs/architecture/production-adaptation-blueprint.md`; `docs/architecture/data-and-lifecycle.md`; `docs/architecture/security-operations-and-quality.md` (deployment order and rollback); `docs/architecture/legacy-persistence-retirement.md` (Path 2 stop — out of scope); `docs/quality/definition-of-done.md` production restore gate; P10-03 / P10-04 / P10-06 / P12-01 / P12-03 residuals; DRIFT-15 advanced by P10-04.
+- **Execution profile:** Inventory-first brownfield; blocked on P5-04, P10-04, and P10-06 DONE before implementation starts; Compose/MinIO local-production matrix altitude (filesystem adapter remains development-only residual, not the final DR boundary); scripted drills + PG/unit proofs where useful; live Compose evidence; honest residuals for staging/prod digests, KMS/escrow, Path 2, and P12-05/06/07/08.
 - **Readiness checkpoint:** Implementation-ready after 2026-07-28 scoping confirmation, P5-04 sequencing choice (full rebuild in-slice), and P10-04 MinIO hard dependency.
 - **Stop conditions:** Stop if DONE pressure claims production digests/RPO-RTO SLOs (P12-08), invents Path 2 contraction, treats LightRAG/runtime dirs as backup authority, treats filesystem object adapter as production/DR final boundary, uses `alembic downgrade` as production rollback, equates P10-03 single-worker reclaim with this slice, pulls TLS/stream-drain (P12-05), SBOM (P12-06), or browser E2E (P12-07), or starts implementation before P5-04 and P10-04 are DONE.
 - **Tail ownership:** P12-05 ingress TLS/stream-drain; P12-06 immutable artifact/SBOM; P12-07 browser/capacity; P12-08 production acceptance digests/KMS/escrow/Path-2 release decision; filesystem development-only residual (not DRIFT-15 production-store claim).
@@ -67,7 +67,7 @@ Architecture and FR-11 require backup/restore of PostgreSQL, governed objects, e
 
 **Prerequisites**
 
-- R3. Do not start implementation until P5-04 is DONE (real private LightRAG runtime per domain) and P10-04 is DONE (local-production MinIO + S3-compatible adapter + backup hooks). Inventory may be drafted earlier only if it does not claim rebuild proof or MinIO DR final-boundary proof.
+- R3. Do not start implementation until P5-04 is DONE (real private LightRAG runtime per domain), P10-04 is DONE (local-production MinIO + S3-compatible adapter + backup hooks), and P10-06 is DONE (governed preview derivatives and cleanup metadata). Inventory may be drafted earlier only if it does not claim rebuild or object/preview DR proof.
 
 **Backup consistency unit**
 
@@ -79,7 +79,7 @@ Architecture and FR-11 require backup/restore of PostgreSQL, governed objects, e
 **Isolated restore and recon**
 
 - R8. Restore into disposable Compose project/volumes distinct from the live stack volumes; never overwrite the live stack by default.
-- R9. Reconcile every `source_documents` / `source_images` referenced key against MinIO object bytes/version (or etag) and recorded sha256/content_hash using P10-04 recon/backup hooks; hard-fail on missing object, version/key mismatch, or digest mismatch; orphan store objects warn (do not alone fail the drill).
+- R9. Reconcile every `source_documents`, `source_images`, and governed-preview/page-map referenced key against MinIO object bytes/version (or etag) and recorded sha256/content_hash using P10-04/P10-06 hooks; hard-fail on missing object, version/key mismatch, or digest mismatch; orphan store objects warn (do not alone fail the drill).
 - R10. After restore, Path 1 migrate/readiness accepts exact current head + catalog; document refuse→restore/recreate actions already owned by P12-01.
 - R11. Verified cleanup of temporary export/restore material is part of the drill script success path.
 
@@ -150,7 +150,7 @@ Architecture and FR-11 require backup/restore of PostgreSQL, governed objects, e
 
 ### Dependencies / Assumptions
 
-- P5-04 and P10-04 must be DONE before implementation of this plan begins (full LightRAG rebuild in-slice; MinIO object version/key consistency via P10-04 hooks).
+- P5-04, P10-04, and P10-06 must be DONE before implementation of this plan begins (full LightRAG rebuild in-slice; MinIO original/preview object version/key consistency via P10-04/P10-06 hooks).
 - P12-01 Path 1 preflight/readiness and P10-03 worker reclaim remain green credit baselines.
 - Compose MinIO (local-production) is the governed-object drill boundary; filesystem adapter is development residual only.
 - Session/CSRF keys are re-login-only after restore (not cookie-continuity in the backup unit).
@@ -177,7 +177,7 @@ Architecture and FR-11 require backup/restore of PostgreSQL, governed objects, e
 
 ### Key Technical Decisions
 
-- KTD1. **Hard wait on P5-04 and P10-04.** Implementation starts only after real private LightRAG runtime and MinIO S3-compatible store + backup hooks exist; AE4 rebuild is in-scope, not residual; MinIO version/key recon is the DR object boundary.
+- KTD1. **Hard wait on P5-04, P10-04, and P10-06.** Implementation starts only after the real private LightRAG runtime, MinIO S3-compatible store + backup hooks, and governed preview derivatives/cleanup metadata exist; AE4 rebuild is in-scope, not residual; MinIO original/preview version-key reconciliation is the DR object boundary.
 - KTD2. **Compose/MinIO matrix altitude.** Drills use disposable Compose + MinIO-backed governed store (P10-04); filesystem adapter stays development-only and must not be the final DR evidence boundary; staging/prod registry digests and KMS/escrow → P12-08 residual.
 - KTD3. **Write-fenced consistency capture.** Before dump/archive: `compose stop` (or equivalent SIGTERM drain) for `api` and `worker` so no new claims/uploads; confirm idle/no in-flight put via health or process exit; then `pg_dump` + MinIO object version/key export (via P10-04 hooks); then restart. Hot torn capture is not success evidence. Fence is Compose-process level — not a new product freeze API.
 - KTD4. **Manifest without secrets.** Fingerprint `CONFIG_ENCRYPTION_KEY`; never embed key material in the dump; decrypt-proof fixture ciphertext proves recoverability.
