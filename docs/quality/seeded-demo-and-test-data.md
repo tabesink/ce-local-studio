@@ -113,6 +113,9 @@ Provider output is keyed by normalized request fixture, not arbitrary prompt mat
 | `token_mina_deleted_target` | source | deleted-target denial |
 | `token_mina_disabled_template` | template | disabled-template denial |
 | `token_mina_consumed_source` | source | already-consumed denial (`consumed_at` set; still unexpired) |
+| `token_mina_figure_bound_source` | source | consumed provenance for `turn_mina_figure` fingerprint (order 1) |
+| `token_mina_figure_bound_evidence` | evidence | consumed provenance for `turn_mina_figure` fingerprint (order 2) |
+| `token_mina_figure_bound_template` | template | consumed provenance for `turn_mina_figure` fingerprint (order 3) |
 
 | Accepted-ref public ref | Kind | Turn | Purpose |
 | --- | --- | --- | --- |
@@ -121,7 +124,9 @@ Provider output is keyed by normalized request fixture, not arbitrary prompt mat
 | `accepted_mina_template_01` | template | `turn_mina_figure` | durable accepted template projection |
 | `accepted_mina_redacted_01` | source | `turn_mina_redacted` | redacted labels cleared |
 
-Composer discovery returns one source, evidence, and template ref with fixed safe labels. Durable seeds persist token hashes only (`safe_description` holds the fixture key). Raw token plaintext is generated deterministically only in ephemeral tests, never committed under `expected/` or seed modules. Include expired, wrong-owner, wrong-domain, deleted-target, disabled-template, and already-consumed (`token_mina_consumed_source`) tokens.
+`turn_mina_figure.composer_ref_fingerprint` equals the production `composer_ref_fingerprint` over the ordered `token_mina_figure_bound_*` raw preimages (`ce-p11-01:…`). Denial-matrix `token_mina_*_valid` tokens stay unconsumed. `turn_mina_redacted` keeps the empty fingerprint (projection/redaction-only; not a fingerprint/replay demo). Seeded figure parents are not an SSE event ledger — live turn-start owns replay proofs.
+
+Composer discovery returns one source, evidence, and template ref with fixed safe labels. Durable seeds persist token hashes only (`safe_description` holds the fixture key). Raw token plaintext is generated deterministically only in ephemeral tests, never committed under `expected/` or seed modules. Include expired, wrong-owner, wrong-domain, deleted-target, disabled-template, already-consumed (`token_mina_consumed_source`), and figure-bound consumed tokens.
 
 Demo prompt templates and composer-ref parents install only through the gated composer seed entry (`CE_ENVIRONMENT=development|test` and `CE_ALLOW_TEST_SEED=true`). API lifespan must not upsert demo templates.
 
@@ -144,7 +149,7 @@ Use transaction barriers/latches, not timing sleeps:
 | Case | Actors/action | Required result |
 | --- | --- | --- |
 | M-10 | Mina tabs submit same request ID/fingerprint | one turn/provider call; both attach/replay |
-| M-10 conflict | second tab changes domain/message | one turn; second `idempotency_conflict` |
+| M-10 conflict | second tab changes domain/message/ordered refs | one turn; second `idempotency_conflict` |
 | A-05 | Ava stop vs Ren delete manuals clone | one legal generation; loser current-state conflict or delete supersedes |
 | A-06 | Ava/Ren upload identical bytes/different names | one `(domain,sha256)` source/preparation |
 | C-01 | Mina/Noah query manuals concurrently | isolated owner/trace/evidence/sequence |
