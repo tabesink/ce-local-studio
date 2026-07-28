@@ -15,7 +15,9 @@ DOCKERIGNORE = APP_ROOT / ".dockerignore"
 COMPOSE = APP_ROOT / "compose.stack.yml"
 COMPOSE_LIVE = APP_ROOT / "compose.stack.live.yml"
 COMPOSE_MINIO = APP_ROOT / "compose.stack.minio.yml"
+COMPOSE_TLS = APP_ROOT / "compose.stack.tls.yml"
 ENV_EXAMPLE = APP_ROOT / ".env.stack.example"
+CADDYFILE = APP_ROOT / "stack-tls" / "Caddyfile"
 VERIFY_SH = REPO_ROOT / "scripts" / "verify.sh"
 
 STACK_PUBLIC_ORIGIN = "http://127.0.0.1:3000"
@@ -165,10 +167,28 @@ def test_env_example_documents_live_docker_native_lane() -> None:
     assert "local/local" in text or "stays local/local" in text
 
 
+def test_tls_overlay_exists_and_documents_unbuffered_ingress() -> None:
+    assert COMPOSE_TLS.is_file()
+    assert CADDYFILE.is_file()
+    text = COMPOSE_TLS.read_text(encoding="utf-8")
+    caddy = CADDYFILE.read_text(encoding="utf-8")
+    assert "CONTEXT_ENGINE_TESTING: \"false\"" in text
+    assert "CE_SESSION_COOKIE_SECURE: \"true\"" in text
+    assert "CE_STACK_TLS_CERT_DIR" in text
+    assert "ingress:" in text
+    assert "ports: !reset []" in text
+    assert "flush_interval -1" in caddy
+    example = ENV_EXAMPLE.read_text(encoding="utf-8")
+    assert "compose.stack.tls.yml" in example
+    assert "stack_ingress_trust_proof.py" in example
+    assert "stack_ingress_sse_proof.py" in example
+
+
 def _compose_config_env(
     *,
     live_runtime_root: str | None = None,
     minio: bool = False,
+    tls: bool = False,
 ) -> dict[str, str]:
     env = os.environ.copy()
     env.update(
@@ -200,6 +220,11 @@ def _compose_config_env(
                 "CE_S3_RECON_SECRET_KEY": "ce-recon-secret-key",
             }
         )
+    if tls:
+        env["CE_STACK_PUBLIC_ORIGIN"] = "https://127.0.0.1:8443"
+        env["CE_STACK_TLS_CERT_DIR"] = str((APP_ROOT / ".stack-tls").resolve())
+        env["STACK_TLS_PORT"] = "8443"
+        env["CE_STACK_TLS_HOST"] = "127.0.0.1"
     return env
 
 
@@ -215,6 +240,29 @@ def test_compose_config_default_resolves_local_kinds() -> None:
     assert result.returncode == 0, result.stderr
     assert "CE_DOMAIN_RUNTIME_CONTROLLER_KIND: local" in result.stdout
     assert "CE_LIGHTRAG_CLIENT_KIND: local" in result.stdout
+
+
+def test_compose_tls_overlay_config_resolves_https_and_ingress() -> None:
+    result = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "-f",
+            str(COMPOSE),
+            "-f",
+            str(COMPOSE_TLS),
+            "config",
+        ],
+        cwd=str(APP_ROOT),
+        env=_compose_config_env(tls=True),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "CONTEXT_ENGINE_TESTING: \"false\"" in result.stdout or "CONTEXT_ENGINE_TESTING: 'false'" in result.stdout or "CONTEXT_ENGINE_TESTING: false" in result.stdout
+    assert "ingress" in result.stdout
+    assert "https://127.0.0.1:8443" in result.stdout
 
 
 def test_compose_live_overlay_config_resolves_docker_native() -> None:

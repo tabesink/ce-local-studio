@@ -1101,6 +1101,12 @@ def post_conversation_turn_stream(
     settings: Settings = Depends(get_settings),
 ) -> StreamingResponse:
     _reject_unknown_query(request)
+    if getattr(request.app.state, "accepting_new_turns", True) is False:
+        raise ApiError(
+            503,
+            "capacity_unavailable",
+            "Chat is temporarily unavailable.",
+        )
     events = stream_turn_events(
         db,
         settings=settings,

@@ -1,0 +1,20 @@
+# P12-05 Compose TLS ingress (certs mounted from host .stack-tls/; not baked into app images).
+# flush_interval -1 keeps SSE chunks unbuffered through the reverse proxy.
+
+{
+	auto_https off
+	admin off
+}
+
+https://{$CE_STACK_TLS_HOST:127.0.0.1}:{$CE_STACK_TLS_PORT:8443} {
+	tls /certs/cert.pem /certs/key.pem
+
+	# Idle timeout must exceed SSE heartbeat + reconnect margin (deployment-topology).
+	reverse_proxy frontend:3000 {
+		flush_interval -1
+		transport http {
+			read_timeout 3600s
+			write_timeout 3600s
+		}
+	}
+}

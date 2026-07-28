@@ -74,6 +74,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.settings = app_settings
         app.state.engine = engine
         app.state.session_factory = session_factory
+        app.state.accepting_new_turns = True
         db = session_factory()
         try:
             seed_runtime_config(db)
@@ -82,12 +83,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
+            # Topology shutdown: stop accepting new turns before disposing the engine.
+            # Resume/tail of already-accepted turns uses GET .../events (not gated here).
+            app.state.accepting_new_turns = False
+            safe_log(logger, "api.stop_new_turns", outcome="succeeded")
             engine.dispose()
 
     app = FastAPI(title=API_TITLE, version=API_VERSION, lifespan=lifespan)
     app.state.settings = app_settings
     app.state.engine = engine
     app.state.session_factory = session_factory
+    app.state.accepting_new_turns = True
 
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next):

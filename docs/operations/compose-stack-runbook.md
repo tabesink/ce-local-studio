@@ -1,7 +1,8 @@
 # Compose Stack Operator Runbook (Development Matrix)
 
 **Altitude:** local Compose / development matrix only.  
-**Not** TLS, `testing=false` HTTPS, production HA, or P12-05 stream-drain evidence.  
+TLS / `testing=false` HTTPS / stream-drain: opt-in P12-05 overlay (`compose.stack.tls.yml`) — see § TLS ingress (P12-05).  
+**Not** production HA.  
 Local-production MinIO object store: opt-in `compose.stack.minio.yml` (P10-04).  
 Parser/provider packaging and support matrix: `docs/operations/provider-deployment-profiles.md` (P10-05).  
 Governed preview (DOCX/Markdown/text→PDF): worker preview slot after prepare; optional image gate `CE_STACK_PREVIEW_IMAGE=1` / `--extra preview-renderer` (P10-06).  
@@ -106,15 +107,37 @@ Busy drain finishes the current `run_once_pass` only; hung work may be SIGKILLed
 Algorithm authority: PostgreSQL suites `test_postgres_turn_leases.py`, domain/index reclaim tests.  
 This drill is single-worker Compose-matrix reclaim — not multi-failure / restore-coupled incident recovery (see [`backup-restore-incident-runbook.md`](./backup-restore-incident-runbook.md) F5).
 
+## TLS ingress (P12-05)
+
+Opt-in evidence lane (not default `scripts/verify.sh`):
+
+```bash
+python app/scripts/generate_stack_tls_certs.py
+# Set CE_STACK_PUBLIC_ORIGIN=https://127.0.0.1:8443, CONTEXT_ENGINE_TESTING=false,
+# CE_SESSION_COOKIE_SECURE=true, CE_INLINE_TURN_WORKERS=false,
+# CE_STACK_TLS_CERT_DIR=<absolute app/.stack-tls> in .env.stack.local
+cd app
+docker compose --env-file .env.stack.local \
+  -f compose.stack.yml -f compose.stack.tls.yml up --build -d
+# Optional live LightRAG: also -f compose.stack.live.yml
+python app/scripts/stack_ingress_trust_proof.py --env-file .env.stack.local
+# AE1/AE2 require OPENAI_API_KEY or CE_OPENAI_API_KEY in the environment (never commit):
+# python app/scripts/stack_ingress_sse_proof.py --env-file .env.stack.local --domain-id <id>
+python app/scripts/stack_ingress_drain_proof.py --env-file .env.stack.local
+```
+
+API stop-new-turns returns contracted `503 capacity_unavailable` (unit-proven in `test_api_shutdown_drain.py`).
+
 ## Residuals (do not claim from this runbook)
 
 | Concern | Owner |
 | --- | --- |
-| TLS / `testing=false` HTTPS / deployed API denial | P12-05 |
-| Deployed ingress stream-drain | P12-05 |
+| Deployed PDF byte-range through ingress | P12-07 |
+| Ingress adversarial deletion | P12-07 |
+| Playwright / browser CSRF product / two-user cache | P12-07 |
+| Hard provider-I/O abort beyond cooperative drain | P12-08 |
 | Cloud AWS-only / KMS / HA object-store | **P12-08 only** |
 | Combined live + MinIO three-file stack matrix (operator digests) | P12-04 residual / operator attach |
 | Compose backup/restore/incident drill procedures | P12-04 — [`backup-restore-incident-runbook.md`](./backup-restore-incident-runbook.md) |
 | Production HA / RPO-RTO / KMS/escrow acceptance | **P12-08 only** |
-| Browser CSRF product fix | P9-05 residual |
-| Completed synthesis without live provider | needs credentials / later proof |
+| Browser CSRF product fix | P9-05 residual / P12-07 |

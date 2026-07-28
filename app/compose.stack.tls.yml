@@ -1,0 +1,65 @@
+# Opt-in P12-05 TLS ingress overlay (not default CI / verify).
+# Requires host-generated certs (see scripts/generate_stack_tls_certs.py).
+#
+#   python app/scripts/generate_stack_tls_certs.py
+#   docker compose --env-file .env.stack.local \
+#     -f compose.stack.yml -f compose.stack.tls.yml up --build -d
+#
+# With live LightRAG:
+#   docker compose --env-file .env.stack.local \
+#     -f compose.stack.yml -f compose.stack.live.yml -f compose.stack.tls.yml up --build -d
+#
+# Sets testing=false HTTPS public origin; clears api/frontend host ports;
+# publishes only the TLS ingress. Certificates stay on the host bind mount.
+
+services:
+  api:
+    environment:
+      CONTEXT_ENGINE_TESTING: "false"
+      CE_SESSION_COOKIE_SECURE: "true"
+      CE_PUBLIC_ORIGIN: ${CE_STACK_PUBLIC_ORIGIN:?set CE_STACK_PUBLIC_ORIGIN to https://… for TLS profile}
+      CE_INLINE_TURN_WORKERS: ${CE_INLINE_TURN_WORKERS:-false}
+    ports: !reset []
+    stop_grace_period: 60s
+
+  worker:
+    environment:
+      CONTEXT_ENGINE_TESTING: "false"
+      CE_SESSION_COOKIE_SECURE: "true"
+      CE_PUBLIC_ORIGIN: ${CE_STACK_PUBLIC_ORIGIN:?set CE_STACK_PUBLIC_ORIGIN to https://… for TLS profile}
+
+  frontend:
+    environment:
+      CONTEXT_ENGINE_PUBLIC_ORIGIN: ${CE_STACK_PUBLIC_ORIGIN:?set CE_STACK_PUBLIC_ORIGIN to https://… for TLS profile}
+    ports: !reset []
+
+  ingress:
+    image: caddy:2.8.4-alpine
+    networks:
+      ce_stack:
+        ipv4_address: 172.30.55.20
+    ports:
+      - "127.0.0.1:${STACK_TLS_PORT:-8443}:${STACK_TLS_PORT:-8443}"
+    environment:
+      CE_STACK_TLS_HOST: ${CE_STACK_TLS_HOST:-127.0.0.1}
+      CE_STACK_TLS_PORT: ${STACK_TLS_PORT:-8443}
+    volumes:
+      - ./stack-tls/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${CE_STACK_TLS_CERT_DIR:?set CE_STACK_TLS_CERT_DIR to host cert dir}:/certs:ro
+    depends_on:
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "-qO-",
+          "--no-check-certificate",
+          "https://127.0.0.1:${STACK_TLS_PORT:-8443}/login",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
