@@ -123,6 +123,12 @@ This is the machine-read D0 boundary. The table is sorted bytewise by record cla
 | scan-file | docs/plans/2026-07-27-014-feat-p10-02-stack-smoke-bootstrap-plan.md | active | P10-02 stack smoke plan |
 | scan-file | docs/plans/2026-07-27-015-feat-p10-03-worker-lifecycle-runbook-plan.md | active | P10-03 worker lifecycle plan |
 | scan-file | docs/plans/2026-07-27-016-feat-p11-01-composer-ref-schema-seeds-plan.md | active | P11-01 composer-ref schema seeds plan |
+| scan-file | docs/plans/2026-07-27-017-feat-p11-02-composer-ref-discover-consume-plan.md | active | P11-02 composer-ref discover/consume plan |
+| scan-file | docs/plans/2026-07-27-018-feat-p11-03-assembly-fingerprint-replay-plan.md | active | P11-03 assembly fingerprint replay plan |
+| scan-file | docs/plans/2026-07-28-001-feat-p11-04-evidence-attach-deferral-plan.md | active | P11-04 Evidence attach deferral plan |
+| scan-file | docs/plans/2026-07-28-002-feat-full-workstation-html-gallery-plan.md | active | P9-06 full workstation HTML gallery plan |
+| scan-file | docs/plans/2026-07-28-002-feat-p12-01-populated-compatibility-plan.md | active | P12-01 populated compatibility plan |
+| scan-file | docs/plans/2026-07-28-003-feat-p12-02-suite-contract-convergence-plan.md | active | P12-02 suite/contract convergence plan |
 | scan-file | docs/prd.md | active | product authority |
 | scan-file | docs/quality/definition-of-done.md | active | completion gates |
 | scan-file | docs/quality/seeded-demo-and-test-data.md | active | deterministic fixture contract |

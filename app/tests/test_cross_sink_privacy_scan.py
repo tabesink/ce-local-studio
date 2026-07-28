@@ -36,6 +36,7 @@ from context_engine.services.auth import create_user
 from context_engine.services.chat_turns import redact_turns_for_domain
 from context_engine.services.conversations import create_conversation, update_conversation_title
 from context_engine.services.metrics import METRIC_LABEL_KEYS, reset_metrics, safe_increment, snapshot_metrics
+from context_engine.services import readiness as readiness_module
 from context_engine.services.readiness import SUPPORTED_ALEMBIC_HEAD
 from context_engine.services.runtime_config import SecretCrypto, rotate_provider_credential, seed_runtime_config
 from context_engine.services.sources import upload_source_bytes
@@ -64,6 +65,16 @@ def _reset_metrics() -> None:
     reset_metrics()
     yield
     reset_metrics()
+
+
+@pytest.fixture(autouse=True)
+def _bypass_catalog_compatibility_for_sqlite(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SQLite create_all DBs are not Path 1 catalog targets.
+
+    Live PG catalog refusal belongs to test_postgres_migration_preflight / foundation.
+    """
+
+    monkeypatch.setattr(readiness_module, "check_catalog_compatibility", lambda _db: None)
 
 
 def _serialize_audit_row(event: AuditEvent) -> str:
