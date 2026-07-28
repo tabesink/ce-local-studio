@@ -6,7 +6,7 @@ Owner: P10-05 / U1
 
 Plan: `docs/plans/2026-07-28-012-feat-p10-05-provider-packaging-plan.md`
 
-Status: inventory complete (implementation not started)
+Status: inventory complete; U2 packaging gates landed (live+parsers image args; `embeddings` extra)
 
 ## Boundary
 

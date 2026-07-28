@@ -150,6 +150,7 @@ def test_live_overlay_exists_and_pins_docker_native() -> None:
     assert "CE_DOMAIN_RUNTIME_CONTROLLER_KIND: docker" in text
     assert "CE_LIGHTRAG_CLIENT_KIND: native" in text
     assert "CE_STACK_LIVE_IMAGE" in text
+    assert "CE_STACK_PARSERS_IMAGE" in text
     assert "ce-domain-runtimes" in text
     assert "/var/run/docker.sock" in text
     assert "CE_STACK_LIVE_RUNTIME_ROOT" in text

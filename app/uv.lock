@@ -483,6 +483,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+embeddings = [
+    { name = "openai" },
+]
 lightrag-runtime = [
     { name = "aiohttp" },
     { name = "httpx" },
@@ -524,6 +527,7 @@ requires-dist = [
     { name = "nano-vectordb", marker = "extra == 'lightrag-runtime'", specifier = ">=0.0.4" },
     { name = "networkx", marker = "extra == 'lightrag-runtime'", specifier = ">=3.2.0" },
     { name = "numpy", marker = "extra == 'lightrag-runtime'", specifier = ">=1.26.0" },
+    { name = "openai", marker = "extra == 'embeddings'", specifier = ">=1.40.0" },
     { name = "openai", marker = "extra == 'synthesis'", specifier = ">=1.40.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.2.0" },
@@ -534,7 +538,7 @@ requires-dist = [
     { name = "tiktoken", marker = "extra == 'lightrag-runtime'", specifier = ">=0.7.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
 ]
-provides-extras = ["lightrag-runtime", "object-store", "parsers", "synthesis", "test"]
+provides-extras = ["lightrag-runtime", "object-store", "parsers", "synthesis", "embeddings", "test"]
 
 [[package]]
 name = "cryptography"
