@@ -96,6 +96,96 @@ def test_phase_one_public_refs_and_cancelled_status_match_contract() -> None:
     assert TURN_STATUSES == ("running", "completed", "failed", "cancelled", "redacted")
 
 
+def test_phase_one_composer_ref_tables_match_schema_contract() -> None:
+    prompt_templates = Base.metadata.tables["prompt_templates"]
+    tokens = Base.metadata.tables["composer_ref_tokens"]
+    accepted = Base.metadata.tables["conversation_turn_composer_refs"]
+
+    assert set(prompt_templates.columns.keys()) == {
+        "id",
+        "name",
+        "description",
+        "body",
+        "state",
+        "created_at",
+        "updated_at",
+    }
+    assert set(tokens.columns.keys()) == {
+        "id",
+        "token_hash",
+        "owner_user_id",
+        "ref_kind",
+        "target_id",
+        "domain_id",
+        "safe_label",
+        "safe_description",
+        "expires_at",
+        "created_at",
+    }
+    assert "token" not in tokens.columns
+    assert "raw_token" not in tokens.columns
+    assert "used_at" not in tokens.columns
+    assert "consumed_at" not in tokens.columns
+    assert set(accepted.columns.keys()) == {
+        "id",
+        "public_ref",
+        "turn_id",
+        "ref_order",
+        "ref_kind",
+        "safe_label",
+        "safe_description",
+        "domain_id",
+        "source_document_id",
+        "source_block_id",
+        "evidence_ref_id",
+        "prompt_template_id",
+        "redacted_at",
+        "created_at",
+    }
+    assert "wiki_page_id" not in accepted.columns
+    assert "wiki_revision_id" not in accepted.columns
+
+    prompt_sql = " ".join(
+        str(constraint.sqltext)
+        for constraint in prompt_templates.constraints
+        if hasattr(constraint, "sqltext")
+    )
+    token_sql = " ".join(
+        str(constraint.sqltext)
+        for constraint in tokens.constraints
+        if hasattr(constraint, "sqltext")
+    )
+    accepted_sql = " ".join(
+        str(constraint.sqltext)
+        for constraint in accepted.constraints
+        if hasattr(constraint, "sqltext")
+    )
+    assert "approved" in prompt_sql and "disabled" in prompt_sql
+    assert "source" in token_sql and "evidence" in token_sql and "template" in token_sql
+    assert "wiki" not in token_sql.casefold()
+    assert "length(token_hash) = 64" in token_sql
+    assert "redacted_at" in accepted_sql
+    assert "ref_order >= 1" in accepted_sql
+
+    assert any(
+        index.unique and tuple(column.name for column in index.columns) == ("name",)
+        for index in prompt_templates.indexes
+    )
+    assert any(
+        index.unique and tuple(column.name for column in index.columns) == ("token_hash",)
+        for index in tokens.indexes
+    )
+    assert any(
+        not index.unique
+        and tuple(column.name for column in index.columns) == ("owner_user_id", "expires_at")
+        for index in tokens.indexes
+    )
+    assert any(
+        index.unique and tuple(column.name for column in index.columns) == ("turn_id", "ref_order")
+        for index in accepted.indexes
+    )
+
+
 def test_canonical_sse_encoder_uses_event_id_and_versioned_envelope() -> None:
     event = TurnStreamEvent(
         event_id="evt_123",
