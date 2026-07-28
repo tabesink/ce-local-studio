@@ -22,6 +22,7 @@ from context_engine.config import Settings
 from context_engine.db import utc_now
 from context_engine.models import (
     AUDIT_EVENT_CHAT_TURN_REDACTED,
+    SOURCE_BLOCK_KIND_FIGURE,
     TURN_EVENT_ACCEPTED,
     TURN_EVENT_ANSWER_DELTA,
     TURN_EVENT_CANCELLED,
@@ -56,6 +57,7 @@ from context_engine.models import (
     Domain,
     SourceBlock,
     SourceDocument,
+    SourceImage,
     AuthSession,
     User,
 )
@@ -79,9 +81,9 @@ from context_engine.services.evidence import (
     InternalMappedEvidence,
     ScopedRetrievalError,
     ScopedRetrievalPort,
+    project_persisted_evidence_anchor,
     resolve_available_domain,
     retrieve_internal_scoped_evidence,
-    safe_section_label,
 )
 from context_engine.services.prompt_assembly import (
     PromptAssemblyContext,
@@ -779,44 +781,80 @@ def safe_turn_summary(turn: ConversationTurn) -> dict[str, Any]:
     }
 
 
+def _image_pages_for_blocks(db: Session, blocks: Iterable[SourceBlock]) -> dict[str, set[int]]:
+    figure_ids = [
+        block.id
+        for block in blocks
+        if block.kind == SOURCE_BLOCK_KIND_FIGURE and block.page_start is None
+    ]
+    if not figure_ids:
+        return {}
+    pages_by_block: dict[str, set[int]] = {}
+    for block_id, page_number in db.execute(
+        select(SourceImage.source_block_id, SourceImage.page_number).where(
+            SourceImage.source_block_id.in_(figure_ids),
+            SourceImage.page_number.is_not(None),
+        )
+    ):
+        pages_by_block.setdefault(str(block_id), set()).add(int(page_number))
+    return pages_by_block
+
+
+def _projected_turn_evidence_item(
+    ref: ConversationTurnEvidenceRef,
+    *,
+    source: SourceDocument,
+    block: SourceBlock,
+    image_pages: set[int],
+) -> dict[str, Any] | None:
+    if (
+        block.source_document_id != source.id
+        or ref.citation_label is None
+        or ref.source_label is None
+        or ref.excerpt is None
+    ):
+        return None
+    anchor = project_persisted_evidence_anchor(block, image_pages=image_pages)
+    if anchor is None:
+        return None
+    return {
+        "id": ref.public_ref,
+        "citationLabel": ref.citation_label,
+        "sourceLabel": ref.source_label,
+        "excerpt": ref.excerpt,
+        "kind": block.kind,
+        "documentRef": source.public_ref,
+        "documentLabel": sanitize_original_filename(source.original_filename),
+        "anchor": {
+            "pageNumber": anchor["pageNumber"],
+            "region": anchor.get("region"),
+            "sectionLabel": anchor.get("sectionLabel"),
+            "fallback": anchor["fallback"],
+        },
+    }
+
+
 def _turn_evidence_items(
     turn: ConversationTurn,
     *,
     sources: dict[str, SourceDocument],
     blocks: dict[str, SourceBlock],
+    image_pages_by_block: dict[str, set[int]],
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     for ref in _public_evidence_refs(turn):
         source = sources.get(ref.source_document_id)
         block = blocks.get(ref.source_block_id)
-        if (
-            source is None
-            or block is None
-            or block.source_document_id != source.id
-            or block.page_start is None
-            or ref.citation_label is None
-            or ref.source_label is None
-            or ref.excerpt is None
-        ):
+        if source is None or block is None:
             continue
-        section_label = safe_section_label(block.section_path)
-        items.append(
-            {
-                "id": ref.public_ref,
-                "citationLabel": ref.citation_label,
-                "sourceLabel": ref.source_label,
-                "excerpt": ref.excerpt,
-                "kind": block.kind,
-                "documentRef": source.public_ref,
-                "documentLabel": sanitize_original_filename(source.original_filename),
-                "anchor": {
-                    "pageNumber": block.page_start,
-                    "region": None,
-                    "sectionLabel": section_label,
-                    "fallback": "section" if section_label else "page",
-                },
-            }
+        item = _projected_turn_evidence_item(
+            ref,
+            source=source,
+            block=block,
+            image_pages=image_pages_by_block.get(block.id, set()),
         )
+        if item is not None:
+            items.append(item)
     return items
 
 
@@ -865,6 +903,7 @@ def _project_turn_dto(
     *,
     sources: dict[str, SourceDocument],
     blocks: dict[str, SourceBlock],
+    image_pages_by_block: dict[str, set[int]],
     domains: dict[str, Domain],
     domain_eligibility: dict[str, bool],
 ) -> dict[str, Any]:
@@ -877,7 +916,14 @@ def _project_turn_dto(
         "domain": _turn_domain(turn, domains, domain_eligibility),
         "userMessage": turn.user_message,
         "assistantAnswer": _public_assistant_answer(turn),
-        "evidence": [] if redacted else _turn_evidence_items(turn, sources=sources, blocks=blocks),
+        "evidence": []
+        if redacted
+        else _turn_evidence_items(
+            turn,
+            sources=sources,
+            blocks=blocks,
+            image_pages_by_block=image_pages_by_block,
+        ),
         "acceptedRefs": [] if redacted else _turn_accepted_refs(turn),
         "error": None if redacted else _turn_safe_error(turn),
         "createdAt": iso_utc(turn.created_at),
@@ -892,6 +938,7 @@ def _turn_projection_lookups(
 ) -> tuple[
     dict[str, SourceDocument],
     dict[str, SourceBlock],
+    dict[str, set[int]],
     dict[str, Domain],
     dict[str, bool],
 ]:
@@ -922,15 +969,20 @@ def _turn_projection_lookups(
         if source_ids
         else ()
     )
-    block_rows = (
+    block_rows = list(
         db.scalars(
             select(SourceBlock)
             .options(
                 load_only(
                     SourceBlock.id,
+                    SourceBlock.source_document_id,
                     SourceBlock.kind,
                     SourceBlock.page_start,
                     SourceBlock.section_path,
+                    SourceBlock.region_x,
+                    SourceBlock.region_y,
+                    SourceBlock.region_width,
+                    SourceBlock.region_height,
                 )
             )
             .where(SourceBlock.id.in_(block_ids))
@@ -952,17 +1004,21 @@ def _turn_projection_lookups(
     return (
         {row.id: row for row in source_rows},
         {row.id: row for row in block_rows},
+        _image_pages_for_blocks(db, block_rows),
         domains,
         {domain_id: domain_available(db, domain, controller) for domain_id, domain in domains.items()},
     )
 
 
 def safe_turn_dto(db: Session, settings: Settings, turn: ConversationTurn) -> dict[str, Any]:
-    sources, blocks, domains, domain_eligibility = _turn_projection_lookups(db, settings, [turn])
+    sources, blocks, image_pages_by_block, domains, domain_eligibility = _turn_projection_lookups(
+        db, settings, [turn]
+    )
     return _project_turn_dto(
         turn,
         sources=sources,
         blocks=blocks,
+        image_pages_by_block=image_pages_by_block,
         domains=domains,
         domain_eligibility=domain_eligibility,
     )
@@ -984,12 +1040,15 @@ def conversation_turn_summaries(
             .order_by(ConversationTurn.created_at, ConversationTurn.id)
         )
     )
-    sources, blocks, domains, domain_eligibility = _turn_projection_lookups(db, settings, turns)
+    sources, blocks, image_pages_by_block, domains, domain_eligibility = _turn_projection_lookups(
+        db, settings, turns
+    )
     return [
         _project_turn_dto(
             turn,
             sources=sources,
             blocks=blocks,
+            image_pages_by_block=image_pages_by_block,
             domains=domains,
             domain_eligibility=domain_eligibility,
         )
@@ -1199,30 +1258,31 @@ def _completed_payload(turn: ConversationTurn, *, replay: bool) -> dict[str, Any
 
 
 def _public_evidence_items(db: Session, turn: ConversationTurn) -> list[dict[str, Any]]:
+    refs = list(_public_evidence_refs(turn))
+    block_ids = {ref.source_block_id for ref in refs}
+    blocks = {
+        block.id: block
+        for block in (
+            db.scalars(select(SourceBlock).where(SourceBlock.id.in_(block_ids))).all()
+            if block_ids
+            else ()
+        )
+    }
+    image_pages_by_block = _image_pages_for_blocks(db, blocks.values())
     items: list[dict[str, Any]] = []
-    for ref in _public_evidence_refs(turn):
+    for ref in refs:
         source = db.get(SourceDocument, ref.source_document_id)
-        block = db.get(SourceBlock, ref.source_block_id)
+        block = blocks.get(ref.source_block_id)
         if source is None or block is None:
             continue
-        anchor: dict[str, Any] = {
-            "pageNumber": block.page_start or 1,
-            "fallback": "section" if block.section_path else "page",
-        }
-        if block.section_path:
-            anchor["sectionLabel"] = block.section_path[:160]
-        items.append(
-            {
-                "id": ref.public_ref,
-                "citationLabel": ref.citation_label,
-                "sourceLabel": ref.source_label,
-                "excerpt": ref.excerpt,
-                "kind": block.kind,
-                "documentRef": source.public_ref,
-                "documentLabel": source.original_filename,
-                "anchor": anchor,
-            }
+        item = _projected_turn_evidence_item(
+            ref,
+            source=source,
+            block=block,
+            image_pages=image_pages_by_block.get(block.id, set()),
         )
+        if item is not None:
+            items.append(item)
     return items
 
 
