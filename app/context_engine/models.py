@@ -3,7 +3,18 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from context_engine.db import Base, utc_now
@@ -955,6 +966,81 @@ class ConversationTurnComposerRef(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now)
 
     turn: Mapped[ConversationTurn] = relationship(back_populates="composer_refs")
+
+
+HTTP_IDEMPOTENCY_ROUTE_CONVERSATION_CREATE = "conversation.create"
+HTTP_IDEMPOTENCY_ROUTE_MODEL_PROFILE_CREATE = "model_profile.create"
+HTTP_IDEMPOTENCY_ROUTE_DOMAIN_CREATE = "domain.create"
+HTTP_IDEMPOTENCY_ROUTE_DOMAIN_START = "domain.start"
+HTTP_IDEMPOTENCY_ROUTE_DOMAIN_STOP = "domain.stop"
+HTTP_IDEMPOTENCY_ROUTE_DOMAIN_DELETE = "domain.delete"
+HTTP_IDEMPOTENCY_ROUTE_SOURCE_UPLOAD = "source.upload"
+HTTP_IDEMPOTENCY_ROUTE_SOURCE_RETRY = "source.retry"
+HTTP_IDEMPOTENCY_ROUTE_SOURCE_INDEX_RETRY = "source.index_retry"
+HTTP_IDEMPOTENCY_ROUTE_SOURCE_DELETE = "source.delete"
+HTTP_IDEMPOTENCY_ROUTE_CLASSES = (
+    HTTP_IDEMPOTENCY_ROUTE_CONVERSATION_CREATE,
+    HTTP_IDEMPOTENCY_ROUTE_MODEL_PROFILE_CREATE,
+    HTTP_IDEMPOTENCY_ROUTE_DOMAIN_CREATE,
+    HTTP_IDEMPOTENCY_ROUTE_DOMAIN_START,
+    HTTP_IDEMPOTENCY_ROUTE_DOMAIN_STOP,
+    HTTP_IDEMPOTENCY_ROUTE_DOMAIN_DELETE,
+    HTTP_IDEMPOTENCY_ROUTE_SOURCE_UPLOAD,
+    HTTP_IDEMPOTENCY_ROUTE_SOURCE_RETRY,
+    HTTP_IDEMPOTENCY_ROUTE_SOURCE_INDEX_RETRY,
+    HTTP_IDEMPOTENCY_ROUTE_SOURCE_DELETE,
+)
+HTTP_IDEMPOTENCY_STATE_PENDING = "pending"
+HTTP_IDEMPOTENCY_STATE_COMPLETED = "completed"
+HTTP_IDEMPOTENCY_STATES = (HTTP_IDEMPOTENCY_STATE_PENDING, HTTP_IDEMPOTENCY_STATE_COMPLETED)
+
+
+class HttpIdempotencyRecord(Base):
+    __tablename__ = "http_idempotency_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "principal_user_id",
+            "route_class",
+            "key_hash",
+            name="uq_http_idempotency_principal_route_key",
+        ),
+        CheckConstraint(
+            f"route_class in {HTTP_IDEMPOTENCY_ROUTE_CLASSES}",
+            name="ck_http_idempotency_route_class",
+        ),
+        CheckConstraint(
+            f"state in {HTTP_IDEMPOTENCY_STATES}",
+            name="ck_http_idempotency_state",
+        ),
+        CheckConstraint("length(key_hash) = 64", name="ck_http_idempotency_key_hash_size"),
+        CheckConstraint("length(fingerprint) = 64", name="ck_http_idempotency_fingerprint_size"),
+        CheckConstraint(
+            "(state = 'pending' AND http_status IS NULL AND response_kind IS NULL "
+            "AND response_refs_json IS NULL AND completed_at IS NULL) OR "
+            "(state = 'completed' AND http_status IS NOT NULL AND response_kind IS NOT NULL "
+            "AND response_refs_json IS NOT NULL AND completed_at IS NOT NULL)",
+            name="ck_http_idempotency_state_payload",
+        ),
+        Index("ix_http_idempotency_principal_created", "principal_user_id", text("created_at DESC")),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    principal_user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    route_class: Mapped[str] = mapped_column(String(64), nullable=False)
+    key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default=HTTP_IDEMPOTENCY_STATE_PENDING)
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    response_kind: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    response_refs_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+
+    principal: Mapped[User] = relationship()
 
 
 class AuditEvent(Base):

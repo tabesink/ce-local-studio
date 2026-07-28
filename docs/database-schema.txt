@@ -214,6 +214,27 @@ conversation_turn_composer_refs
   redacted_at NULL; created_at
   UNIQUE(turn_id, ref_order); CHECK redacted -> safe fields NULL
 
+HTTP IDEMPOTENCY
+----------------
+
+http_idempotency_records
+  id PK varchar(36)
+  principal_user_id FK users.id ON DELETE CASCADE NOT NULL
+  route_class varchar(64) NOT NULL CHECK IN closed create/operation vocabulary
+    (conversation.create, model_profile.create, domain.create/start/stop/delete,
+     source.upload/retry/index_retry/delete)
+  key_hash varchar(64) NOT NULL — SHA-256 of raw Idempotency-Key; never store raw key
+  fingerprint varchar(64) NOT NULL — SHA-256 of canonical effective inputs (no secrets/bodies)
+  state CHECK IN ('pending','completed')
+  http_status integer NULL; response_kind varchar(64) NULL; response_refs_json text NULL
+  created_at timestamp NOT NULL; completed_at timestamp NULL
+  UNIQUE (principal_user_id, route_class, key_hash)
+  CHECK pending -> status/kind/refs/completed_at NULL;
+       completed -> status/kind/refs/completed_at present
+  INDEX (principal_user_id, created_at DESC)
+  Privacy: never store raw request bodies, credentials, passwords, or assembled prompts.
+  Principal is authenticated user id (not session id). Chat turns use client_request_id separately.
+
 AUDIT
 -----
 
@@ -237,6 +258,8 @@ CRITICAL CROSS-TABLE INVARIANTS
 3. Query eligibility requires authorized running domain + ready runtime + eligible sources.
 4. Direct turns have no domain/evidence; domain turns have exactly one domain.
 5. Turn idempotency compares message, effective domain, and composer-ref fingerprint.
+5b. HTTP create/operation Idempotency-Key reuses by (principal_user_id, route_class, key_hash)
+    plus fingerprint; mismatch is conflict; completed rows store only safe refs/status.
 6. Source/domain deletion redacts whole affected turns before source rows disappear.
 7. Redacted evidence rows remain private for audit but public projections omit them.
 8. Protected state mutations and their audit row commit or roll back together.

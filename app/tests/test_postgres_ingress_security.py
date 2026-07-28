@@ -39,7 +39,7 @@ from context_engine.services.request_security import (
 APP_ROOT = Path(__file__).resolve().parents[1]
 ADMIN_URL_ENV = "CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL"
 OPT_IN_ENV = "CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS"
-HEAD_REVISION = "f1a8c3d04e92"
+HEAD_REVISION = "a2c7e9f14b80"
 DATABASE_NAME_PATTERN = re.compile(r"^ce_p105_[a-z_]+_[0-9a-f]{32}$")
 PUBLIC_ORIGIN = "http://ce.example.test"
 CLIENT_BUCKET = "ingress-bucket-a"
