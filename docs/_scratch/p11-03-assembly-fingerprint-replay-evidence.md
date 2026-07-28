@@ -46,11 +46,11 @@ python -m pytest tests/test_delete_redaction.py::test_m11_source_delete_clears_a
 | Residual | Owner |
 | --- | --- |
 | Browser References discover UI unlock / E2E | later gates |
-| P11-04 Evidence reattachment | product-gated BLOCKED |
+| P11-04 Evidence attach UX (suggest / attach chips) | DEFERRED — `docs/_scratch/p11-04-evidence-reattachment-evidence.md` |
 | P12 adversarial privacy breadth / deployed-ingress SSE | P12 |
 | Opt-in PostgreSQL race suites for fingerprint concurrency | operator matrix (existing M-10 / consume race patterns) |
 
 ## Tracker updates
 
-- `docs/master-build-plan.md` P11-03 → DONE; P11 phase → DONE (P11-04 remains BLOCKED product gate).
-- `docs/brownfield-refactor-register.md` DRIFT-26 → DONE; hashed-token foundation row notes consume + replay-without-reconsume closed.
+- `docs/master-build-plan.md` P11-03 → DONE; P11 phase → DONE (P11-04 Evidence attach UX DEFERRED).
+- `docs/brownfield-refactor-register.md` DRIFT-26 → DONE; hashed-token foundation row notes consume + replay-without-reconsume closed; P11-04 deferred residual named.
