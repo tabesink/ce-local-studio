@@ -452,9 +452,12 @@ def csrf(response: Response, settings: Settings = Depends(get_settings)) -> dict
     response_model=ReadyHealthResponse,
     responses={503: {"model": ErrorEnvelope, "description": "Service is not ready."}},
 )
-def ready(db: Session = Depends(get_db)) -> dict[str, str]:
+def ready(
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, str]:
     try:
-        check_readiness(db)
+        check_readiness(db, settings)
     except ReadinessError as exc:
         raise ApiError(503, "dependency_unavailable", "Service unavailable.") from exc
     return {"status": "ready"}

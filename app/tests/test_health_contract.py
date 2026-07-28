@@ -21,6 +21,8 @@ from context_engine.config import Settings
 from context_engine.db import Base
 from context_engine.models import DOMAIN_STATE_STOPPED, ROLE_ADMINISTRATOR, Domain, ProviderConfig
 from context_engine.services.auth import create_user
+from context_engine.adapters.object_storage import ObjectStorageError
+from context_engine.services import readiness as readiness_module
 from context_engine.services.readiness import SUPPORTED_ALEMBIC_HEAD, ReadinessError, check_readiness
 from context_engine.services.runtime_config import is_provider_configured, seed_runtime_config
 
@@ -60,9 +62,10 @@ class NoAdministratorDatabase(HealthyDatabase):
         return None
 
 
-def test_health_handlers_return_catalog_statuses() -> None:
+def test_health_handlers_return_catalog_statuses(tmp_path: Path) -> None:
+    settings = Settings(testing=True, source_storage_root=str(tmp_path / "source-storage"))
     assert live() == {"status": "live"}
-    assert ready(HealthyDatabase()) == {"status": "ready"}
+    assert ready(HealthyDatabase(), settings) == {"status": "ready"}
 
 
 def test_health_openapi_uses_closed_response_schemas() -> None:
@@ -95,7 +98,11 @@ def test_health_openapi_uses_closed_response_schemas() -> None:
 
 def test_readiness_failure_returns_closed_safe_error_envelope(tmp_path: Path) -> None:
     database_path = tmp_path / "health.db"
-    settings = Settings(database_url=f"sqlite+pysqlite:///{database_path}", testing=True)
+    settings = Settings(
+        database_url=f"sqlite+pysqlite:///{database_path}",
+        testing=True,
+        source_storage_root=str(tmp_path / "source-storage"),
+    )
     app = create_app(settings)
     Base.metadata.create_all(app.state.engine)
     app.dependency_overrides[get_db] = lambda: UnhealthyDatabase()
@@ -118,7 +125,11 @@ def test_readiness_failure_returns_closed_safe_error_envelope(tmp_path: Path) ->
 
 def test_live_stays_ok_when_ready_dependencies_fail(tmp_path: Path) -> None:
     database_path = tmp_path / "health-live.db"
-    settings = Settings(database_url=f"sqlite+pysqlite:///{database_path}", testing=True)
+    settings = Settings(
+        database_url=f"sqlite+pysqlite:///{database_path}",
+        testing=True,
+        source_storage_root=str(tmp_path / "source-storage"),
+    )
     app = create_app(settings)
     Base.metadata.create_all(app.state.engine)
     app.dependency_overrides[get_db] = lambda: UnhealthyDatabase()
@@ -145,9 +156,72 @@ def test_readiness_bootstrap_incomplete_without_enabled_administrator() -> None:
     assert exc_info.value.reason == "bootstrap_incomplete"
 
 
+def test_readiness_object_store_unavailable_when_probe_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    settings = Settings(testing=True, source_storage_root=str(tmp_path / "source-storage"))
+
+    def _fail(_root: object) -> None:
+        raise ObjectStorageError("Object unavailable.")
+
+    monkeypatch.setattr(readiness_module, "probe_object_store", _fail)
+    with pytest.raises(ReadinessError) as exc_info:
+        check_readiness(HealthyDatabase(), settings)
+    assert exc_info.value.reason == "object_store_unavailable"
+
+
+def test_readiness_object_store_probe_uses_composed_root(tmp_path: Path) -> None:
+    settings = Settings(testing=True, source_storage_root=str(tmp_path / "source-storage"))
+    check_readiness(HealthyDatabase(), settings)
+    objects_root = tmp_path / "source-storage" / "objects"
+    assert objects_root.is_dir()
+
+
+def test_ready_http_object_store_failure_is_safe_503(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    database_path = tmp_path / "health-store.db"
+    settings = Settings(
+        database_url=f"sqlite+pysqlite:///{database_path}",
+        testing=True,
+        source_storage_root=str(tmp_path / "source-storage"),
+    )
+    app = create_app(settings)
+    Base.metadata.create_all(app.state.engine)
+
+    with Session(app.state.engine) as db:
+        db.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL)"))
+        db.execute(text("DELETE FROM alembic_version"))
+        db.execute(
+            text("INSERT INTO alembic_version (version_num) VALUES (:version)"),
+            {"version": SUPPORTED_ALEMBIC_HEAD},
+        )
+        create_user(db, "store-admin@example.test", "Password123!", role=ROLE_ADMINISTRATOR)
+        db.commit()
+
+    def _fail(_root: object) -> None:
+        raise ObjectStorageError("Object unavailable.")
+
+    monkeypatch.setattr(readiness_module, "probe_object_store", _fail)
+
+    with TestClient(app) as client:
+        live_response = client.get("/health/live")
+        ready_response = client.get("/health/ready")
+
+    assert live_response.status_code == 200
+    assert live_response.json() == {"status": "live"}
+    assert ready_response.status_code == 503
+    body = ready_response.json()
+    assert body["error"]["code"] == "dependency_unavailable"
+    assert body["error"]["fields"] == {}
+    assert "object" not in ready_response.text.lower()
+    assert "storage" not in ready_response.text.lower()
+    assert str(tmp_path) not in ready_response.text
+
+
 def test_ready_stays_ok_with_stopped_domain_and_unready_provider(tmp_path: Path) -> None:
     database_path = tmp_path / "health-domain.db"
-    settings = Settings(database_url=f"sqlite+pysqlite:///{database_path}", testing=True)
+    settings = Settings(
+        database_url=f"sqlite+pysqlite:///{database_path}",
+        testing=True,
+        source_storage_root=str(tmp_path / "source-storage"),
+    )
     app = create_app(settings)
     Base.metadata.create_all(app.state.engine)
 
@@ -189,7 +263,11 @@ def test_ready_stays_ok_with_stopped_domain_and_unready_provider(tmp_path: Path)
 
 def test_schema_edge_ready_http_shares_safe_envelope(tmp_path: Path) -> None:
     database_path = tmp_path / "health-schema.db"
-    settings = Settings(database_url=f"sqlite+pysqlite:///{database_path}", testing=True)
+    settings = Settings(
+        database_url=f"sqlite+pysqlite:///{database_path}",
+        testing=True,
+        source_storage_root=str(tmp_path / "source-storage"),
+    )
     app = create_app(settings)
     Base.metadata.create_all(app.state.engine)
     app.dependency_overrides[get_db] = lambda: _RevisionDatabase("ahead-of-head-revision")
