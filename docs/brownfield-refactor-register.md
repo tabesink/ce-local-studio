@@ -36,7 +36,7 @@ Disposition values are `retain-and-reverify`, `modify`, `replace`, `add`, and `r
 | DRIFT-24 | chat uses retired buffered stream events | FR-06; M-03, M-10, C-01 | replace | P7-04, P9-02 | SSE catalog | incremental parser, cursor gap/regression, version and canonical reducer tests | DONE — P7-04 producer + P9-02 CRLF-safe parser/canonical reducer/resume (deployed ingress residual P12) |
 | DRIFT-25 | turn execution is coupled to socket lifetime | FR-06; M-03, M-10, C-01 | replace | P7-04 | durable worker/event model | disconnect-survives, resume/replay, explicit-cancel and stream-drain evidence | DONE — P7-04 leased turn worker; disconnect ≠ cancel; resume/replay + cooperative cancel proven; deployed stream-drain residual P12 |
 | DRIFT-26 | composer tokens have no one-use consumption | FR-07; M-09, M-10 | modify | P11-02, P11-03 | accepted-ref schema | atomic consume/bind/rollback, reuse denial and replay-without-token tests | DONE — P11-02 consume + P11-03 HTTP replay-without-reconsume / refs-changed conflict (`docs/_scratch/p11-03-assembly-fingerprint-replay-evidence.md`) |
-| DRIFT-27 | native LightRAG uses a global blocking call without deadline | FR-05; A-08, C-01 | replace | P5-02, P5-03 | native adapter approval | bounded timeout/cancel, per-domain isolation and recovery fixtures | IN_PROGRESS — P5-02 timeout bound + P5-03 uncertain/cancel recovery proven; process-wide native lock retained until per-domain concurrency is separately proven |
+| DRIFT-27 | native LightRAG uses a global blocking call without deadline | FR-05; A-08, C-01 | replace | P5-02, P5-03, P5-04 | native adapter approval | bounded timeout/cancel, per-domain isolation and recovery fixtures | DONE — P5-02 timeout bound + P5-03 uncertain/cancel recovery + P5-04 per-container production isolation (`docs/_scratch/p5-04-lightrag-real-runtime-evidence.md`); in-process synthetic lock remains residual/dev only (`CE_LIGHTRAG_INPROCESS_SYNTHETIC`) |
 | DRIFT-28 | accepted index polling spins and starves other queues | FR-05; A-08, A-10 | modify | P5-01, P5-03 | operation scheduling | persisted backoff, fair queue scheduling and deletion-latency tests | DONE — P5-01 lease claim gates + P5-03 lease-expiry poll backoff / fair `index_updated_at` ordering proven on PostgreSQL 16 |
 | DRIFT-29 | deletion spans commits and can strand partial work | FR-08, FR-09; M-11, A-09, A-10, C-02 | replace | P4-04, P7-05, P8-01, P8-02, P8-03, P12-03 | operation/outbox primitive | atomic fence/redaction/ref-invalidation/audit intent plus leased idempotent cleanup/reconciliation | IN_PROGRESS — P4-04 source fence; P7-05 chat-redaction/omission; P8 privacy halves closed; P12-03 API/service adversarial re-proof (`docs/_scratch/p12-03-adversarial-security-evidence.md`); M-11 browser open-panel/cache half remains P12-07 |
 | DRIFT-30 | expired preparation workers can publish | FR-04; A-07, C-02 | modify | P4-03 | lease primitive | heartbeat under one-third lease and owner/expiry/generation publish fence races | DONE — prep heartbeat + owner/expiry/generation publish fence proven on PostgreSQL 16 |
@@ -81,3 +81,34 @@ At the recorded D0 baseline, client tests were 47/55, client typecheck failed, b
 D0 predates the application mutations recorded here. P0-04 now closes the shared ownership/privacy/port/state-machine conventions and adversarially pins them; it grants no completion credit to lifted adapters or state transitions before their P1/P3-P8 proofs. P0-01 subsequently verified the canonical application layout. P0-02 now has adversarial documentation-gate proof for authority precedence, canonical vocabulary, coding-agent rules, and explicit stop conditions. P0-03 completed the bounded shared API-convention package (closed envelope/code union, canonical prefix/request ID, and UTC serialization), P0-05 installed the root loop and subsequently repaired its inherited frontend failures; the current local checks pass, while the required contract parity and later real-boundary gates remain open. P0-07 completed active Phase 1 deferred-surface removal across registration, generated OpenAPI, physical route/module trees, source, production manifests, clean-install ORM metadata, composer vocabulary, audit read vocabulary and stale bytecode; generic unsupported refs fail closed without carrying a later-release compatibility layer. P1-01 now proves the present Alembic chain against disposable PostgreSQL 16, including fresh install, in-rebuild baseline-to-head retained data, metadata drift, incremental rollback/re-upgrade, and the canonical session factory; populated legacy compatibility remains blocked behind P12-01. P1-05 now proves trusted ingress, signed CSRF, idle/touch policy, logout `204`, and durable login throttling against PostgreSQL 16; deployed BFF stripping remains with P9-05/P10. P8 still owns the broader positive operational-safety evidence. P0 and B0 remain open because their other packages/gates remain incomplete.
 
 No row may become `DONE` because a matching file exists. B0 remains blocked until deferred runtime/build surfaces are absent, the retained private operational-safety baseline behaves positively, and the canonical application gate passes.
+
+## Legacy comparative-gap addendum (2026-07-28)
+
+Source: read-only comparison of `.references/code/context_engine` against Phase 1 authority and current evidence. A legacy feature is not a gap unless the approved contract still requires its behavior. Bundle index: `docs/_scratch/legacy-gap-plan-bundle.md`.
+
+| Gap | Disposition | Owner | Status | Notes |
+| --- | --- | --- | --- | --- |
+| Real per-domain LightRAG runtime | replace | P5-04 | DONE | Closes DRIFT-27 concurrency for production path; evidence `docs/_scratch/p5-04-lightrag-real-runtime-evidence.md` |
+| Local-production MinIO object store | add | P10-04 | NOT_STARTED | Advances DRIFT-15; filesystem stays development-only |
+| Parser/provider packaging + staging smoke | modify | P10-05 | NOT_STARTED | Credits P4-03/P7-03 fixture altitude; no unsupported provider claims |
+| Durable create-idempotency + keyset pagination | add | P1-07 | NOT_STARTED | Catalog already requires these; conversation create deferred note becomes implementable |
+| Figure/table region provenance + viewer focus | modify | P4-05 | NOT_STARTED | M-04/M-05; credits P6-02 page/section-only retrieval route and P9-03 PDF viewer |
+| Synthesis delimiter isolation + turn lease heartbeat | modify | P7-06 | NOT_STARTED | Credits P7-03/P7-04; closes P10-03 mid-turn heartbeat residual |
+| Contracted browser workflows (rename/delete, refs, If-Match, op history) | add | P9-07 | NOT_STARTED | Credits P9-02/P9-04/P11 backend; unlocks M-08/M-09/A-01/A-03 admin UX |
+| Backup/restore with MinIO consistency + LightRAG rebuild | retain-and-reverify | P12-04 | NOT_STARTED | Plan revised to require P10-04 |
+| Deployed ingress SSE / stream-drain / TLS | retain-and-reverify | P12-05 | NOT_STARTED | Advances DRIFT-05/24/25 deployed halves |
+| Immutable artifact / SBOM / provenance | add | P12-06 | NOT_STARTED | Production release gate |
+| Browser E2E / a11y / capacity / fixtures | retain-and-reverify | P12-07 | NOT_STARTED | Advances DRIFT-07/09/19/29 browser halves; CSRF product path |
+| Production acceptance aggregation | add | P12-08 | NOT_STARTED | Go/no-go only after P12-03..07 |
+
+### Deferred follow-ups (not active Phase 1 tasks)
+
+| Item | Trigger to open | Owner when opened |
+| --- | --- | --- |
+| Upload orphan object compensation after DB commit failure | Observed orphan rate or restore drill failure attributable to put-before-commit | New P4 task (not P4-05) |
+| Metric-based RAG triad / quality evaluation product surface | Observed grounding-quality gap after P11-04 reopen criteria, or Phase 2 observability contract | Phase 2 / P11-04 reopen — not a Phase 1 gate |
+| Legacy administrator user CRUD UI | Approved HTTP mutation contract (today `GET /admin/users` is read-only) | New contract + task — do not invent |
+
+### Intentionally rejected legacy surfaces
+
+Do not port: Redis/RQ/Celery; JSON domain manifest authority; public LightRAG/runtime URLs; graph UI before graph contract; Workspace entity / heuristic Evidence; hybrid/navigation fallback retrieval; audit/query-log/usage product screens; wiki/publication; browser-selected provider/model/controller/retrieval tuning.

@@ -66,6 +66,13 @@ class Settings:
     domain_runtime_controller_kind: str = field(default_factory=lambda: _env("CE_DOMAIN_RUNTIME_CONTROLLER_KIND", "docker") or "docker")
     domain_controller_command: str | None = field(default_factory=lambda: _env("CE_DOMAIN_CONTROLLER_COMMAND"))
     domain_controller_timeout_seconds: int = field(default_factory=lambda: _env_int("CE_DOMAIN_CONTROLLER_TIMEOUT_SECONDS", 30))
+    domain_controller_image: str = field(
+        default_factory=lambda: _env("CE_DOMAIN_CONTROLLER_IMAGE", "alpine:3.20") or "alpine:3.20"
+    )
+    domain_controller_network: str = field(
+        default_factory=lambda: _env("CE_DOMAIN_CONTROLLER_NETWORK", "ce-domain-runtimes") or "ce-domain-runtimes"
+    )
+    domain_lightrag_port: int = field(default_factory=lambda: _env_int("CE_DOMAIN_LIGHTRAG_PORT", 9621))
     domain_delete_worker_id: str = field(default_factory=lambda: _env("CE_DOMAIN_DELETE_WORKER_ID", "domain-delete-worker") or "domain-delete-worker")
     domain_delete_lease_seconds: int = field(default_factory=lambda: _env_int("CE_DOMAIN_DELETE_LEASE_SECONDS", 60))
     domain_lifecycle_worker_id: str = field(
@@ -106,6 +113,11 @@ class Settings:
     turn_tail_poll_milliseconds: int = field(default_factory=lambda: _env_int("CE_TURN_TAIL_POLL_MILLISECONDS", 250))
     turn_tail_idle_seconds: int = field(default_factory=lambda: _env_int("CE_TURN_TAIL_IDLE_SECONDS", 30))
     lightrag_client_kind: str = field(default_factory=lambda: _env("CE_LIGHTRAG_CLIENT_KIND", "native") or "native")
+    # Residual/dev only: in-process synthetic LightRAG behind the process-wide lock.
+    # Production live lane uses private HTTP (PrivateHttpLightRAGClient) when this is false.
+    lightrag_inprocess_synthetic: bool = field(
+        default_factory=lambda: _env_bool("CE_LIGHTRAG_INPROCESS_SYNTHETIC", False)
+    )
     worker_idle_seconds: int = field(default_factory=lambda: _env_int("CE_WORKER_IDLE_SECONDS", 2))
 
     def __post_init__(self) -> None:

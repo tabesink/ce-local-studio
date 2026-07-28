@@ -129,6 +129,19 @@ This is the machine-read D0 boundary. The table is sorted bytewise by record cla
 | scan-file | docs/plans/2026-07-28-002-feat-full-workstation-html-gallery-plan.md | active | P9-06 full workstation HTML gallery plan |
 | scan-file | docs/plans/2026-07-28-002-feat-p12-01-populated-compatibility-plan.md | active | P12-01 populated compatibility plan |
 | scan-file | docs/plans/2026-07-28-003-feat-p12-02-suite-contract-convergence-plan.md | active | P12-02 suite/contract convergence plan |
+| scan-file | docs/plans/2026-07-28-004-feat-p12-03-adversarial-security-review-plan.md | active | P12-03 adversarial security review plan |
+| scan-file | docs/plans/2026-07-28-005-feat-p12-04-backup-restore-drills-plan.md | active | P12-04 backup restore drills plan |
+| scan-file | docs/plans/2026-07-28-006-feat-p5-04-real-lightrag-runtime-plan.md | closed | P5-04 real LightRAG runtime plan — DONE evidence `docs/_scratch/p5-04-lightrag-real-runtime-evidence.md` |
+| scan-file | docs/plans/2026-07-28-007-feat-p1-07-idempotency-pagination-plan.md | active | P1-07 idempotency pagination plan |
+| scan-file | docs/plans/2026-07-28-008-feat-p4-05-region-provenance-plan.md | active | P4-05 region provenance plan |
+| scan-file | docs/plans/2026-07-28-009-feat-p7-06-synthesis-isolation-heartbeat-plan.md | active | P7-06 synthesis isolation heartbeat plan |
+| scan-file | docs/plans/2026-07-28-010-feat-p9-07-contracted-browser-workflows-plan.md | active | P9-07 contracted browser workflows plan |
+| scan-file | docs/plans/2026-07-28-011-feat-p10-04-minio-object-store-plan.md | active | P10-04 MinIO object store plan |
+| scan-file | docs/plans/2026-07-28-012-feat-p10-05-provider-packaging-plan.md | active | P10-05 provider packaging plan |
+| scan-file | docs/plans/2026-07-28-013-feat-p12-05-deployed-ingress-sse-drain-plan.md | active | P12-05 deployed ingress SSE drain plan |
+| scan-file | docs/plans/2026-07-28-014-feat-p12-06-immutable-artifact-manifest-plan.md | active | P12-06 immutable artifact manifest plan |
+| scan-file | docs/plans/2026-07-28-015-feat-p12-07-browser-e2e-capacity-plan.md | active | P12-07 browser E2E capacity plan |
+| scan-file | docs/plans/2026-07-28-016-feat-p12-08-production-acceptance-plan.md | active | P12-08 production acceptance plan |
 | scan-file | docs/prd.md | active | product authority |
 | scan-file | docs/quality/definition-of-done.md | active | completion gates |
 | scan-file | docs/quality/seeded-demo-and-test-data.md | active | deterministic fixture contract |

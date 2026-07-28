@@ -22,6 +22,7 @@ from context_engine.models import (
     AUDIT_EVENT_SOURCE_INDEX_CANCELLED,
     AUDIT_EVENT_SOURCE_INDEX_RETRY_QUEUED,
     DOMAIN_STATE_DELETING,
+    DOMAIN_STATE_RUNNING,
     SOURCE_INDEX_REMOTE_STATES,
     SOURCE_INDEX_STATE_ACCEPTED,
     SOURCE_INDEX_STATE_CANCELLED,
@@ -693,10 +694,46 @@ class LightRAGClient:
 def index_client_from_settings(settings: Settings, controller: DomainRuntimeController | None = None) -> LightRAGClientProtocol:
     kind = settings.lightrag_client_kind.strip().lower()
     if kind == "native":
-        return LightRAGClient(settings)
+        # Production path: private HTTP to per-domain container. Residual in-process
+        # synthetic remains available only when explicitly opted in (unit tests / dev).
+        if settings.lightrag_inprocess_synthetic:
+            return LightRAGClient(settings)
+        from context_engine.adapters.lightrag_http_client import PrivateHttpLightRAGClient
+
+        return PrivateHttpLightRAGClient(settings)
     if kind == "local":
         return LocalLightRAGIndexClient(settings, controller)
     raise SourceIndexError(502, "source_index_unavailable", "Source index runtime unavailable.")
+
+
+def seal_domain_embedding_runtime_env(
+    db: Session,
+    settings: Settings,
+    domain: Domain,
+) -> Path | None:
+    """Write mode-600 sealed embedding env for the domain runtime mount (KTD5).
+
+    Returns None for local/stub clients that do not use a Docker runtime mount.
+    Never logs credential material.
+    """
+    if settings.lightrag_client_kind.strip().lower() != "native" or settings.lightrag_inprocess_synthetic:
+        return None
+    from context_engine.services.runtime_config import SecretCrypto, TrustedRuntimeResolver
+    from context_engine.tools.domain_runtime_controller import write_sealed_provider_env
+
+    resolved = TrustedRuntimeResolver(db, SecretCrypto.from_settings(settings)).resolve_embedding_profile(
+        domain.embedding_profile_id
+    )
+    runtime_dir = Path(settings.domain_runtime_root) / domain.id / domain.runtime_instance_id
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    lines = [
+        f"CE_EMBEDDING_DIMENSIONS={resolved.vector_dimensions}",
+        f"CE_EMBEDDING_MODEL_NAME={resolved.model_name}",
+        f"CE_EMBEDDING_PROVIDER_KIND={resolved.provider_kind}",
+    ]
+    if resolved.credential:
+        lines.append(f"CE_EMBEDDING_CREDENTIAL={resolved.credential}")
+    return write_sealed_provider_env(runtime_dir, "\n".join(lines) + "\n")
 
 
 def _remote_delete_required(source: SourceDocument) -> bool:
@@ -1038,9 +1075,20 @@ def mark_index_uncertain_if_current(
 
 
 class SourceIndexWorker:
-    def __init__(self, settings: Settings, client: LightRAGClientProtocol | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        client: LightRAGClientProtocol | None = None,
+        controller: DomainRuntimeController | None = None,
+    ) -> None:
         self._settings = settings
-        self._client = client or index_client_from_settings(settings)
+        self._controller = controller or controller_from_settings(settings)
+        self._client = client or index_client_from_settings(settings, self._controller)
+
+    def _domain_allows_new_submit(self, db: Session, domain: Domain) -> bool:
+        if domain.state != DOMAIN_STATE_RUNNING:
+            return False
+        return domain_available(db, domain, self._controller)
 
     def run_once(self, db: Session) -> bool:
         source = self._claim_next_source(db)
@@ -1140,6 +1188,30 @@ class SourceIndexWorker:
                 request_id=request_id,
                 code=readiness.error_code or "source_index_failed",
                 message=readiness.error_message or "Source index failed.",
+            )
+            return True
+
+        # New submits require a running, healthy domain (A-04 stop fence). In-flight
+        # readiness probes above may still complete under generation fences.
+        if not self._domain_allows_new_submit(db, domain):
+            now = utc_now()
+            source.index_lease_owner = None
+            source.index_lease_expires_at = now + timedelta(seconds=backoff_seconds)
+            source.index_updated_at = now
+            source.updated_at = now
+            db.commit()
+            return True
+
+        try:
+            seal_domain_embedding_runtime_env(db, self._settings, domain)
+        except Exception:  # noqa: BLE001 -- fail closed with safe index error
+            mark_index_failed_if_current(
+                db,
+                source_id=source.id,
+                generation=generation,
+                request_id=request_id,
+                code="source_index_unavailable",
+                message="Source index runtime unavailable.",
             )
             return True
 
