@@ -12,7 +12,8 @@ export type EmbeddingProfileLike = {
   id: string;
   name?: string;
   profileKind: string;
-  isDefault: boolean;
+  /** Optional; generated ModelProfileDto has no isDefault — first embedding wins when absent. */
+  isDefault?: boolean;
 };
 
 export type DeployDomainInput = {

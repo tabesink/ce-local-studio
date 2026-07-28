@@ -1,0 +1,418 @@
+<!--
+  Synthetic parity fixture for provider-settings.
+  Not product authority. Not routable. Script-free and network-free.
+  Shared scenarios mirror tests/parity/manifests/provider-settings.json.
+  Guided by docs/_scratch/provider-settings-imagined.html (non-normative).
+  Composes settings-nav / settings-group / settings-row / button / select / status-pill grammar.
+-->
+<!doctype html>
+<html lang="en" data-theme="zai-dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Provider Settings parity fixture (synthetic)</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ui-bg: #181818;
+        --ui-fg: #ffffff;
+        --ui-muted: #ffffffb3;
+        --ui-subtle: #ffffff80;
+        --ui-surface: #212121;
+        --ui-border: #ffffff14;
+        --ui-separator: #ffffff0a;
+        --ui-info: #339cff;
+        --ui-success: #40c977;
+        --ui-warning: #ff8549;
+        --fs-xs: 11px;
+        --fs-sm: 12px;
+        --fs-md: 13px;
+        --fs-base: 14px;
+        --fs-xl: 18px;
+        font-family: Geist, "Geist Sans", ui-sans-serif, system-ui, sans-serif;
+      }
+      [data-theme="zai-light"] {
+        color-scheme: light;
+        --ui-bg: #ffffff;
+        --ui-fg: #1a1c1f;
+        --ui-muted: #5f6165;
+        --ui-subtle: #8c8e91;
+        --ui-surface: #f3f3f3;
+        --ui-border: #1a1c1f14;
+        --ui-separator: #1a1c1f0d;
+        --ui-info: #0285ff;
+        --ui-success: #00a240;
+        --ui-warning: #e25507;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-width: 320px;
+        background: var(--ui-bg);
+        color: var(--ui-fg);
+        font-size: var(--fs-base);
+      }
+      button,
+      select {
+        font: inherit;
+      }
+      .settings-layout {
+        display: grid;
+        grid-template-columns: 200px minmax(0, 1fr);
+        gap: 40px;
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 32px 24px;
+      }
+      .aside-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .settings-title,
+      .section-title {
+        margin: 0;
+        font-size: var(--fs-xl);
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .refresh {
+        width: 28px;
+        height: 28px;
+        border: 1px solid var(--ui-border);
+        border-radius: 6px;
+        background: transparent;
+        color: var(--ui-muted);
+      }
+      .nav {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .nav-item {
+        position: relative;
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr);
+        align-items: center;
+        gap: 10px;
+        height: 32px;
+        padding: 0 10px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--ui-muted);
+        text-align: left;
+      }
+      .nav-item.active {
+        background: var(--ui-surface);
+        color: var(--ui-fg);
+        font-weight: 500;
+      }
+      .nav-item.active::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 9px;
+        width: 2px;
+        height: 14px;
+        border-radius: 9999px;
+        background: var(--ui-info);
+      }
+      .icon {
+        color: inherit;
+        opacity: 0.75;
+        font-size: var(--fs-sm);
+      }
+      .active .icon {
+        color: var(--ui-info);
+        opacity: 0.9;
+      }
+      main {
+        min-width: 0;
+      }
+      .section-header {
+        margin: 7px 0 24px;
+      }
+      .section-header p,
+      .group-desc,
+      .description,
+      .note {
+        color: var(--ui-muted);
+      }
+      .section-header p {
+        margin: 5px 0 0;
+        font-size: var(--fs-sm);
+        line-height: 1.5;
+      }
+      .content {
+        display: grid;
+        gap: 24px;
+      }
+      .group-title {
+        margin: 0 0 6px;
+        padding: 0 14px;
+        color: var(--ui-muted);
+        font-size: var(--fs-md);
+        font-weight: 600;
+      }
+      .group-desc {
+        margin: 0 0 8px;
+        padding: 0 14px;
+        font-size: var(--fs-sm);
+        line-height: 1.5;
+      }
+      .group-body {
+        overflow: hidden;
+        border: 1px solid var(--ui-border);
+        border-radius: 6px;
+        background: var(--ui-surface);
+      }
+      .row {
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(160px, 0.42fr) minmax(0, 1fr);
+        gap: 20px;
+        align-items: center;
+        min-height: 48px;
+        padding: 10px 14px;
+      }
+      .row + .row::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto;
+        height: 1px;
+        background: var(--ui-separator);
+      }
+      .label {
+        color: var(--ui-fg);
+        font-size: var(--fs-md);
+        font-weight: 500;
+      }
+      .description {
+        margin-top: 2px;
+        font-size: var(--fs-xs);
+        line-height: 1.4;
+      }
+      .trailing {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 12px;
+        min-width: 0;
+      }
+      .pill-dot {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: 0 0 auto;
+        color: var(--ui-muted);
+        font-size: var(--fs-sm);
+      }
+      .pill-dot .dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 9999px;
+        background: currentColor;
+      }
+      .tone-good {
+        color: var(--ui-success);
+      }
+      .tone-warning {
+        color: var(--ui-warning);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        font-size: var(--fs-sm);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .btn-sm {
+        min-height: 28px;
+        padding: 6px 10px;
+      }
+      .btn-secondary {
+        border: 1px solid var(--ui-border);
+        background: transparent;
+        color: var(--ui-muted);
+      }
+      .select {
+        width: min(100%, 310px);
+        height: 32px;
+        border: 1px solid var(--ui-border);
+        border-radius: 6px;
+        background: var(--ui-bg);
+        color: var(--ui-fg);
+        padding: 0 10px;
+        font-size: var(--fs-md);
+      }
+      .btn:focus-visible,
+      .nav-item:focus-visible,
+      .refresh:focus-visible,
+      .select:focus-visible {
+        outline: 2px solid var(--ui-info);
+        outline-offset: 2px;
+      }
+      .profile-meta {
+        color: var(--ui-muted);
+        font-size: var(--fs-sm);
+      }
+      code {
+        color: var(--ui-subtle);
+        font-family: "Geist Mono", ui-monospace, monospace;
+        font-size: var(--fs-xs);
+        overflow-wrap: anywhere;
+      }
+      .note {
+        margin: 8px 14px 0;
+        font-size: var(--fs-xs);
+        line-height: 1.5;
+      }
+      @media (max-width: 767px) {
+        .settings-layout {
+          grid-template-columns: 1fr;
+          gap: 24px;
+          padding: 20px 16px;
+        }
+        .nav {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .row {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+        .trailing {
+          justify-content: flex-start;
+        }
+        .select {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="settings-layout">
+      <aside>
+        <div class="aside-head">
+          <h1 class="settings-title">Settings</h1>
+          <button class="refresh" aria-label="Refresh settings">↻</button>
+        </div>
+        <nav class="nav" aria-label="Settings sections">
+          <button class="nav-item"><span class="icon">◐</span><span>General</span></button>
+          <button class="nav-item active" aria-current="page"><span class="icon">⎕</span><span>Model Provider</span></button>
+          <button class="nav-item"><span class="icon">▣</span><span>Knowledge Domains</span></button>
+          <button class="nav-item"><span class="icon">◎</span><span>Users</span></button>
+        </nav>
+      </aside>
+
+      <main>
+        <header class="section-header">
+          <h2 class="section-title">Model Provider</h2>
+          <p>Provider access and the system-wide synthesis default.</p>
+        </header>
+
+        <div class="content">
+          <section>
+            <h3 class="group-title">Providers</h3>
+            <p class="group-desc">Credentials are write-only; stored values are never displayed.</p>
+            <div class="group-body">
+              <div class="row">
+                <div>
+                  <div class="label">OpenAI</div>
+                  <div class="description">Synthesis and embedding profiles</div>
+                </div>
+                <div class="trailing">
+                  <span class="pill-dot tone-good"><span class="dot"></span>Configured</span>
+                  <button class="btn btn-sm btn-secondary">Replace credential</button>
+                </div>
+              </div>
+              <div class="row">
+                <div>
+                  <div class="label">AWS Bedrock</div>
+                  <div class="description">Synthesis and embedding profiles</div>
+                </div>
+                <div class="trailing">
+                  <span class="pill-dot tone-warning"><span class="dot"></span>Not configured</span>
+                  <button class="btn btn-sm btn-secondary">Add credential</button>
+                </div>
+              </div>
+              <div class="row">
+                <div>
+                  <div class="label">Ollama</div>
+                  <div class="description">Local provider; runtime wiring is operator-managed</div>
+                </div>
+                <div class="trailing">
+                  <span class="pill-dot"><span class="dot"></span>No approved profiles</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h3 class="group-title">Synthesis default</h3>
+            <p class="group-desc">Applies to new direct and grounded turns for all users.</p>
+            <div class="group-body">
+              <div class="row">
+                <div>
+                  <div class="label">Active model</div>
+                  <div class="description">In-flight work keeps its resolved configuration</div>
+                </div>
+                <div class="trailing">
+                  <select class="select" aria-label="Active synthesis model">
+                    <option selected>OpenAI · GPT-4.1 Mini</option>
+                    <option>OpenAI · GPT-4.1</option>
+                    <option>OpenAI · GPT-4.1 Nano</option>
+                    <option>OpenAI · GPT-4o</option>
+                    <option>OpenAI · GPT-4o Mini</option>
+                    <option disabled>Bedrock · Claude Sonnet 4.5 — provider required</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h3 class="group-title">Embedding profiles</h3>
+            <p class="group-desc">Available when an administrator deploys a Knowledge Domain.</p>
+            <div class="group-body">
+              <div class="row">
+                <div>
+                  <div class="label">OpenAI Default Embedding</div>
+                  <div class="description"><code>text-embedding-3-small</code></div>
+                </div>
+                <div class="trailing profile-meta"><span>OpenAI</span><span>1536 dimensions</span></div>
+              </div>
+              <div class="row">
+                <div>
+                  <div class="label">OpenAI Embedding Large</div>
+                  <div class="description"><code>text-embedding-3-large</code></div>
+                </div>
+                <div class="trailing profile-meta"><span>OpenAI</span><span>3072 dimensions</span></div>
+              </div>
+              <div class="row">
+                <div>
+                  <div class="label">Bedrock Titan Embed v2</div>
+                  <div class="description"><code>amazon.titan-embed-text-v2:0</code></div>
+                </div>
+                <div class="trailing profile-meta"><span>Bedrock</span><span>1024 dimensions</span><span class="pill-dot tone-warning"><span class="dot"></span>Provider required</span></div>
+              </div>
+            </div>
+            <p class="note">The selected embedding profile is locked when the domain is created. Selection belongs in Knowledge Domains → Deploy.</p>
+          </section>
+        </div>
+      </main>
+    </div>
+  
+    <div class="region" data-theme="zai-light" data-region="theme-light-ready" style="border-top:1px solid var(--ui-border);padding:16px 24px;">
+      <p class="caption" style="margin:0 0 8px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ui-muted);">theme-light-ready</p>
+      <p style="margin:0;font-size:13px;color:var(--ui-fg);">Synthetic OpenAI · Configured · write-only credential action</p>
+    </div>
+</body>
+</html>

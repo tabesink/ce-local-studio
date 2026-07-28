@@ -34,6 +34,7 @@ import {
   isAdminActionEnabled,
   listAdminSources,
   listDocuments,
+  listSourceOperations,
   retrySourceIndex,
   retrySourcePreparation,
   uploadSource,
@@ -41,6 +42,7 @@ import {
   type DocumentSummary,
   type OutlineItem,
 } from "@/features/documents/api";
+import { OperationHistoryList } from "@/features/operations/OperationHistoryList";
 import { PdfPreview, type PdfPreviewAnchor } from "@/features/documents/PdfPreview";
 import {
   buildChatReturnHref,
@@ -963,6 +965,11 @@ function AdminOpsPanel({
   onCancelIndex: () => void;
   onDelete: () => void;
 }) {
+  const loadHistory = useCallback(
+    () => listSourceOperations(source.domainId, source.id).then((result) => ({ operations: result.operations })),
+    [source.domainId, source.id],
+  );
+
   return (
     <div className="mt-5 space-y-4" data-testid="documents-admin-ops">
       <div>
@@ -1009,6 +1016,8 @@ function AdminOpsPanel({
           </SettingsButton>
         </div>
       </div>
+
+      <OperationHistoryList testId="source-operation-history" load={loadHistory} />
 
       <div data-testid="documents-admin-outline">
         <p className="mb-2 font-mono text-[length:var(--fs-xs)] uppercase tracking-[0.12em] text-[var(--dim)]/70">

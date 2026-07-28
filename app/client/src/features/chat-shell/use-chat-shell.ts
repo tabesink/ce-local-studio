@@ -5,12 +5,16 @@ import { isApiError } from "@/lib/api/errors";
 import {
   cancelConversationTurn,
   createConversation,
+  deleteConversation,
+  discoverComposerRefs,
   getConversation,
   listConversations,
+  renameConversation,
   streamConversationTurn,
   streamConversationTurnEvents,
   type AcceptedRef,
   type ChatTurn,
+  type ComposerRef,
   type ConversationSummary,
   type TurnStreamEvent,
   type StreamTransportState,
@@ -141,6 +145,16 @@ export function useChatShell() {
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [pendingRefs, setPendingRefs] = useState<AcceptedRef[]>([]);
+  /** Memory-only composer attach chips (source/template). Never persist tokens. */
+  const [composerRefs, setComposerRefs] = useState<ComposerRef[]>([]);
+  const [refPickerOpen, setRefPickerOpen] = useState(false);
+  const [refPickerState, setRefPickerState] = useState<
+    "idle" | "loading" | "ready" | "empty" | "error"
+  >("idle");
+  const [refPickerResults, setRefPickerResults] = useState<ComposerRef[]>([]);
+  const [refPickerError, setRefPickerError] = useState<string | null>(null);
+  const [refPickerQuery, setRefPickerQuery] = useState("");
+  const refPickerGenerationRef = useRef(0);
   const [submittedSnapshot, setSubmittedSnapshot] = useState<SubmittedSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [streaming, setStreaming] = useState(false);
@@ -502,10 +516,11 @@ export function useChatShell() {
           clientRequestId,
           message,
           domainId: effectiveDomainId || undefined,
-          composerRefTokens: [],
+          composerRefTokens: composerRefs.map((ref) => ref.token),
           onEvent: handleStreamEvent,
           onTransportState: setStreamTransportState,
         });
+        setComposerRefs([]);
         if (
           streamOwnerConversationIdRef.current === conversationId &&
           viewConversationIdRef.current === conversationId
@@ -589,6 +604,7 @@ export function useChatShell() {
       applyCursorExpiredRecovery,
       bumpInspectorFence,
       clearPrivateView,
+      composerRefs,
       conversation,
       domainId,
       handleStreamEvent,
@@ -599,6 +615,101 @@ export function useChatShell() {
       streaming,
     ],
   );
+
+  const renameActiveConversation = useCallback(
+    async (title: string) => {
+      if (!conversation) return;
+      const trimmed = title.trim();
+      if (!trimmed) return;
+      try {
+        const updated = await renameConversation(conversation.id, trimmed, conversation.version);
+        setConversation(updated);
+        setConversations((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
+      } catch (err) {
+        setError(formatErrorMessage(err));
+        const refreshed = await listConversations().catch(() => null);
+        if (refreshed) {
+          setConversations(refreshed);
+          const next = refreshed.find((row) => row.id === conversation.id) ?? null;
+          if (next) setConversation(next);
+        }
+      }
+    },
+    [conversation],
+  );
+
+  const deleteActiveConversation = useCallback(async () => {
+    if (!conversation) return;
+    const targetId = conversation.id;
+    const version = conversation.version;
+    try {
+      await deleteConversation(targetId, version);
+      setComposerRefs([]);
+      clearPrivateView();
+      const rows = await listConversations();
+      setConversations(rows);
+      const next = rows[0] ?? null;
+      if (next) await loadConversation(next.id);
+      else {
+        setConversation(null);
+        setTurns([]);
+      }
+    } catch (err) {
+      setError(formatErrorMessage(err));
+      const refreshed = await listConversations().catch(() => null);
+      if (refreshed) {
+        setConversations(refreshed);
+        const next = refreshed.find((row) => row.id === targetId) ?? null;
+        if (next) setConversation(next);
+      }
+    }
+  }, [clearPrivateView, conversation, loadConversation]);
+
+  const openRefPicker = useCallback(async () => {
+    setRefPickerOpen(true);
+    setRefPickerState("loading");
+    setRefPickerError(null);
+    const generation = ++refPickerGenerationRef.current;
+    try {
+      const refs = await discoverComposerRefs({
+        conversationId: conversation?.id ?? null,
+        domainId: domainId.trim() || null,
+        kinds: ["source", "template"],
+        limit: 25,
+        query: refPickerQuery.trim() || null,
+      });
+      if (generation !== refPickerGenerationRef.current) return;
+      const allowed = refs.filter((ref) => ref.kind === "source" || ref.kind === "template");
+      setRefPickerResults(allowed);
+      setRefPickerState(allowed.length === 0 ? "empty" : "ready");
+    } catch (err) {
+      if (generation !== refPickerGenerationRef.current) return;
+      setRefPickerResults([]);
+      setRefPickerError(formatErrorMessage(err));
+      setRefPickerState("error");
+    }
+  }, [conversation?.id, domainId, refPickerQuery]);
+
+  const closeRefPicker = useCallback(() => {
+    refPickerGenerationRef.current += 1;
+    setRefPickerOpen(false);
+    setRefPickerState("idle");
+    setRefPickerError(null);
+  }, []);
+
+  const attachComposerRef = useCallback((ref: ComposerRef) => {
+    if (ref.kind === "evidence") return;
+    setComposerRefs((current) => {
+      if (current.some((row) => row.token === ref.token)) return current;
+      return [...current, ref];
+    });
+    setRefPickerOpen(false);
+    setRefPickerState("idle");
+  }, []);
+
+  const removeComposerRef = useCallback((token: string) => {
+    setComposerRefs((current) => current.filter((ref) => ref.token !== token));
+  }, []);
 
   const clearError = useCallback(() => setError(null), []);
 
@@ -829,6 +940,12 @@ export function useChatShell() {
     selectedReplayableTurnId,
     replayingTurnId,
     submittedSnapshot,
+    composerRefs,
+    refPickerOpen,
+    refPickerState,
+    refPickerResults,
+    refPickerError,
+    refPickerQuery,
     setPanelOpen,
     selectTurn,
     selectEvidence,
@@ -841,5 +958,12 @@ export function useChatShell() {
     cancelTurn,
     replayTurn,
     clearError,
+    renameActiveConversation,
+    deleteActiveConversation,
+    openRefPicker,
+    closeRefPicker,
+    attachComposerRef,
+    removeComposerRef,
+    setRefPickerQuery,
   };
 }

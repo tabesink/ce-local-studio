@@ -129,6 +129,24 @@ Administrator-only Settings section (`/settings?section=domains`). One-open disc
 
 Traceability: A-03, A-05, A-10 UI halves; C-05 section fallback.
 
+## Settings → Model Provider
+
+Administrator-only Settings section (`/settings?section=provider`). Compact grouped rows; no dashboard card grid.
+
+| UI state | Behavior |
+| --- | --- |
+| loading | Provider section skeleton/notice; no invent empty success |
+| ready | Providers show `configured` status; credential action only when `requiresCredentials` |
+| unconfigured provider | Warning status; cannot become active synthesis default until configured (where credentials required) |
+| Ollama / no-credential | Neutral status; no secret field |
+| credential modal / inline replace | Write-only input; clear on success/navigation; busy without disabling cancel |
+| synthesis change | If-Match from runtime `version`; copy that in-flight work keeps frozen config |
+| stale / conflict (428/409) | Preserve pending intent and typed secret; refresh snapshot; review/retry |
+| forbidden / not-found | Safe Settings failure; no secret or private ID disclosure |
+| embedding facts | Read-only list; no replacement control on this page |
+
+Traceability: A-01, A-02, A-13 UI halves; FE-10.
+
 ## Authentication and permission states
 
 - Resolving session: shell-private skeleton; no personalized data.

@@ -6,11 +6,11 @@
    getConversation(id)      GET /api/v1/conversations/{id}
    renameConversation(id)   PATCH /api/v1/conversations/{id}
    deleteConversation(id)   DELETE /api/v1/conversations/{id}
-   discoverComposerRefs()   POST /api/v1/composer-refs:discover (gated unused until P11)
+   discoverComposerRefs()   POST /api/v1/composer-refs:discover (source/template; Evidence attach deferred)
    streamConversationTurn() POST /api/v1/conversations/{id}/turns:stream
 */
 
-import { ceFetch } from "@/lib/api/client";
+import { ceFetch, ifMatchHeader } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/generated/openapi";
 import type { components as sseComponents } from "@/lib/api/generated/sse";
@@ -74,25 +74,38 @@ export async function getConversation(conversationId: string): Promise<Conversat
   return ceFetch<ConversationDetail>(`/conversations/${conversationId}`);
 }
 
-export async function renameConversation(conversationId: string, title: string): Promise<ConversationSummary> {
+export async function renameConversation(
+  conversationId: string,
+  title: string,
+  version: number,
+): Promise<ConversationSummary> {
+  const headers = ifMatchHeader(version);
+  if (!headers) {
+    throw new Error("Conversation version is required for rename (If-Match).");
+  }
   const payload: ConversationTitleRequest = { title };
   const body = await ceFetch<components["schemas"]["ConversationMutationResponse"]>(
     `/conversations/${conversationId}`,
     {
       method: "PATCH",
       body: JSON.stringify(payload),
+      headers,
     },
   );
   return body.conversation;
 }
 
-export async function deleteConversation(conversationId: string): Promise<void> {
-  await ceFetch<void>(`/conversations/${conversationId}`, { method: "DELETE" });
+export async function deleteConversation(conversationId: string, version: number): Promise<void> {
+  const headers = ifMatchHeader(version);
+  if (!headers) {
+    throw new Error("Conversation version is required for delete (If-Match).");
+  }
+  await ceFetch<void>(`/conversations/${conversationId}`, { method: "DELETE", headers });
 }
 
-/** Unused by P9-02 UI (KTD1); retained for P11. Do not call from chat-shell hook. */
+/** Discover governed composer refs. Callers must request only contracted kinds; Evidence attach stays deferred (P11-04). */
 export async function discoverComposerRefs(input: ComposerRefDiscoverRequest): Promise<ComposerRef[]> {
-  const body = await ceFetch<{ refs: ComposerRef[] }>("/composer-refs:discover", {
+  const body = await ceFetch<components["schemas"]["ComposerRefDiscoverResponse"]>("/composer-refs:discover", {
     method: "POST",
     body: JSON.stringify(input),
   });

@@ -153,6 +153,7 @@ Contracted-but-unused residuals may stay `NOT_STARTED` while listed. Agents must
 | status-pill | primitive | `src/ui` | FACTORY_READY | — |
 | settings-row | feature | `src/features/settings-panel` | FACTORY_READY | — |
 | domains-accordion | feature | `src/features/settings-panel` | FACTORY_READY | — |
+| provider-settings | feature | `src/features/settings-panel` | FACTORY_READY | P9-07 — compact Model Provider; no dashboard cards; Playwright F3 = P12-07 |
 | select | primitive | `src/_shared/ui` (migrate to `src/ui` later) | FACTORY_READY | P9-06 U2 |
 | toggle-switch | primitive | `src/_shared/ui` (migrate to `src/ui` later) | FACTORY_READY | P9-06 U2 |
 | ui-modal | shared | `src/_shared/ui` (migrate later) | FACTORY_READY | P9-06 U2 |

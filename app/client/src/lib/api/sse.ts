@@ -1,5 +1,6 @@
 import { ApiError, normalizeApiError } from "@/lib/api/errors";
-import { contextEngineApiPath } from "@/lib/api/client";
+import { contextEngineApiPath, resolveCsrfToken, refreshCsrfToken } from "@/lib/api/client";
+import { isUnsafeHttpMethod } from "@/lib/api/csrf";
 import { attachTerminalSnapshot } from "@/lib/stream/cursor-expired";
 import { InvalidSseEventError, SseParser, type SseEvent } from "@/lib/stream/sse-parser";
 
@@ -28,11 +29,19 @@ async function consumeSse(response: Response, onEvent: (event: SseEvent) => void
 }
 
 async function openSse(path: string, init: RequestInit, onEvent: (event: SseEvent) => void): Promise<void> {
-  const response = await fetch(contextEngineApiPath(path), {
+  const headers = new Headers(init.headers);
+  if (!headers.has("Accept")) headers.set("Accept", "text/event-stream");
+  if (isUnsafeHttpMethod(init.method) && !headers.has("X-CSRF-Token")) {
+    const token = await resolveCsrfToken();
+    if (token) headers.set("X-CSRF-Token", token);
+  }
+
+  let response = await fetch(contextEngineApiPath(path), {
     ...init,
     credentials: "include",
-    headers: { Accept: "text/event-stream", ...init.headers },
+    headers,
   });
+
   if (!response.ok) {
     const contentType = response.headers.get("content-type") ?? "";
     const payload = contentType.includes("application/json") ? await response.json().catch(() => null) : null;
@@ -40,6 +49,26 @@ async function openSse(path: string, init: RequestInit, onEvent: (event: SseEven
       normalizeApiError(response.status, payload),
       payload,
     ) as ApiError & { retryAfterMs?: number; terminalSnapshot?: unknown };
+    if (error.code === "csrf_invalid" && isUnsafeHttpMethod(init.method)) {
+      const token = await refreshCsrfToken();
+      if (token) {
+        headers.set("X-CSRF-Token", token);
+        response = await fetch(contextEngineApiPath(path), {
+          ...init,
+          credentials: "include",
+          headers,
+        });
+        if (response.ok) {
+          await consumeSse(response, onEvent);
+          return;
+        }
+        const retryType = response.headers.get("content-type") ?? "";
+        const retryPayload = retryType.includes("application/json")
+          ? await response.json().catch(() => null)
+          : null;
+        throw attachTerminalSnapshot(normalizeApiError(response.status, retryPayload), retryPayload);
+      }
+    }
     const retryAfter = response.headers.get("retry-after");
     if (retryAfter) {
       const seconds = Number(retryAfter);
@@ -55,5 +84,9 @@ export async function getSse(path: string, onEvent: (event: SseEvent) => void): 
   await openSse(path, { method: "GET" }, onEvent);
 }
 export async function postSse(path: string, body: unknown, onEvent: (event: SseEvent) => void): Promise<void> {
-  await openSse(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, onEvent);
+  await openSse(
+    path,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+    onEvent,
+  );
 }

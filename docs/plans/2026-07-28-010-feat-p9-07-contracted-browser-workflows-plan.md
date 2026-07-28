@@ -7,6 +7,7 @@ phase_compatibility: phase-1-active
 title: P9-07 Contracted Browser Workflows - Plan
 type: feat
 date: 2026-07-28
+deepened: 2026-07-28
 ---
 
 # P9-07 Contracted Browser Workflows - Plan
@@ -16,7 +17,7 @@ date: 2026-07-28
 - **Objective:** Close P9-07 by wiring contracted member/admin browser workflows: conversation rename/delete (M-08), ordered source/template composer-ref discovery/attach (M-09 with P11-04 Evidence attach still deferred), administrator Model Provider Settings for credentials/profile visibility/global synthesis defaults (A-01/A-02/A-13), and safe domain/source operation-history UX (A-03/A-07/A-09/A-10).
 - **Authority:** docs/prd.md FR-02 and closed Phase 1 chat capability manifest; interaction M-08/M-09/A-01/A-02/A-03/A-07/A-09/A-10/A-13; HTTP/DTO runtime-setting contracts; docs/frontend/* chat/settings/documents contracts and FE-10; P9-02/P9-04/P9-06/P11-02 dependencies; docs/master-build-plan.md P9-07.
 - **Execution profile:** Feature-layer UI against generated clients; Vitest/component altitude; Playwright residual P12-07.
-- **Readiness checkpoint:** Implementation-ready after 2026-07-28 bundle packaging.
+- **Readiness checkpoint:** Implementation-ready after 2026-07-28 deepen pass against live chat/settings adapters.
 - **Stop conditions:** Stop if the provider UI needs a field, model-discovery endpoint, runtime URL/target, credential shape, or provider capability absent from the approved contracts; do not expose member model selection, claim Bedrock/Ollama production support before P10-05, invent user-admin mutation UI, add wiki/observability screens, or claim production Playwright DONE.
 - **Tail ownership:** P12-07 production-boundary E2E/visual matrix.
 
@@ -28,11 +29,11 @@ date: 2026-07-28
 
 Unlock contracted browser controls that backend/contracts already support but UI leaves disabled, incomplete, or incorrectly adapted. This includes a compact administrator Model Provider section composed from existing Settings primitives and guided by `docs/_scratch/provider-settings-imagined.html`.
 
-Product Contract preservation: authored from master-build-plan P9-07 bootstrap.
+Product Contract preservation: unchanged (deepen pass strengthened Planning Contract only).
 
 ### Problem Frame
 
-Rename/delete adapters exist without product controls; source/template composer-ref picker remains disabled despite P11-02; Settings uses lifted provider fields (`providerKind`/`isConfigured`) and omits required conditional/idempotent request headers; operation-history APIs exist while Settings/Documents show only coarse state. The current provider concept is intentionally quieter than a dashboard, but it is not yet an approved parity target or live implementation. Browser model-profile create/edit forms remain blocked because the private `MODEL_CATALOG` has no approved public projection.
+Rename/delete adapters exist without product controls and currently omit required `If-Match`; source/template composer-ref picker remains hard-disabled despite P11-02; Settings uses lifted provider fields (`providerKind`/`isConfigured`) and omits required conditional/idempotent request headers; operation-history GETs exist in OpenAPI while Settings/Documents show only coarse current-operation actions. The current provider concept is intentionally quieter than a dashboard, but it is not yet an approved parity target. Browser model-profile create/edit forms remain blocked because the private `MODEL_CATALOG` has no approved public projection.
 
 ### Actors
 
@@ -61,8 +62,8 @@ Rename/delete adapters exist without product controls; source/template composer-
 - R3. Enable ordered source/template composer-ref discovery/attach using P11-02 APIs (M-09); no raw tokens in storage; retain Evidence attach chips as deferred under P11-04.
 - R4. Implement the approved mutation-header matrix: credential PUT, model-profile PATCH, and runtime-settings PATCH use If-Match/ETag; model-profile POST uses a stable Idempotency-Key; model-profile DELETE sends only its contracted headers. Handle missing/stale preconditions, idempotent replay, and authoritative refresh without weakening CSRF.
 - R5. Render domain/source operation history with safe failure/request IDs. Bind retry/cancel only to separately contracted current-operation endpoints and advisory allowedActions; historical cleanup rows remain read-only when no mutation endpoint exists.
-- R7. Evidence `docs/_scratch/p9-07-contracted-browser-workflows-evidence.md`; mark P9-07 DONE; P9 phase DONE if no other open P9 tasks.
-- R8. Amend the provider Settings component/state/accessibility/parity contracts and add a `provider-settings` parity target. Use `docs/_scratch/provider-settings-imagined.html` as non-normative visual guidance, promote the approved result to `app/client/tests/parity/fixtures/provider-settings.html`, and compose only existing `settings-nav`, `settings-group`, `settings-row`, `button`, `select`, `status-pill`, `input`, and `ui-modal` targets.
+- R7. Evidence `docs/_scratch/p9-07-contracted-browser-workflows-evidence.md`; mark P9-07 DONE; P9 phase DONE if no other open P9 tasks. (R6 was never assigned; R-IDs remain stable.)
+- R8. Amend the provider Settings component/state/accessibility/parity contracts and add a `provider-settings` parity target. Use `docs/_scratch/provider-settings-imagined.html` as non-normative visual guidance, promote the approved result to `app/client/tests/parity/fixtures/provider-settings.html`, and compose only existing `settings-nav`, `settings-group`, `settings-row`, `button`, `select`, `status-pill`, `input`, and `ui-modal` targets. Reuse `operation-status`, `source-operation-panel`, and `confirm-action-dialog` where those surfaces apply.
 - R9. Replace lifted Settings API types with generated `ProviderSummaryDto`, `ModelProfileDto`, and `RuntimeSettingsDto`; retain ETag/version metadata outside unsafe browser storage. The default provider view shows OpenAI/Bedrock write-only credential actions, Ollama local/no-credential status, one deployment-wide active synthesis selector, and a compact read-only embedding-profile list. Do not add browser model-profile create/edit/delete until an approved public catalog projection and interaction contract exist.
 - R10. Keep scope explicit in the UI: synthesis defaults apply to all users' new turns; embedding profiles are selected in the per-domain creation/deploy form and rendered locked afterward; members never receive a provider/model picker. The browser may project only contracted `configured` and profile facts; it must not infer or claim provider runtime readiness from those fields. P10-05 owns production-support proof.
 
@@ -110,11 +111,17 @@ Rename/delete adapters exist without product controls; source/template composer-
 | KTD5 | Keep the provider page quiet: rows and on-demand modals, not provider cards, dashboards, or always-open secret fields | Matches the compact workstation and existing Settings primitives |
 | KTD6 | Separate global synthesis defaults from per-domain immutable embeddings | Preserves FR-02, A-02, A-13 and prevents per-user/model-selection drift |
 | KTD7 | Do not equate `configured` with runtime-ready or mirror the private model catalog in TypeScript | Closed DTOs expose neither runtime readiness nor safe catalog choices |
+| KTD8 | Conversation PATCH/DELETE send `If-Match` from `ConversationSummaryDto.version` (same helper pattern as `domains/api.ts` `ifMatchHeader`); reject missing version before call; on 428/409 preserve intent and refresh | OpenAPI requires `If-Match`; current adapters omit it |
+| KTD9 | Prefer DTO `version` for If-Match when the closed response exposes it; use a narrow feature/shared helper that can also surface response ETag when contracts require header-only concurrency. Do not treat JSON-only `ceFetch` body return as sufficient for conditional Settings work, and never persist version/ETag in browser storage | `ceFetch` today drops headers; runtime/provider/model-profile DTOs already carry `version` |
+| KTD10 | Attach session CSRF on every unsafe browser call through one shared path; reuse chat's `csrf_invalid` recovery. U1 must locate or introduce that accessor — BFF allowlists `x-csrf-token` but `ceFetch` does not attach it today | Avoid a second CSRF stack; Vitest mocks must not hide missing headers |
+| KTD11 | Delete lifted Settings aliases (`providerKind`/`isConfigured`) and project only generated `ProviderSummaryDto` / `ModelProfileDto` / `RuntimeSettingsDto` field names | Live provider section already mounts; drift is a correctness bug |
+| KTD12 | Operation history is read-only list UX from catalog GETs; retry/cancel bind only to existing documents current-operation endpoints + advisory `allowedActions` | Prevents invented historical-row mutations |
 
 ### Assumptions
 
 - P11-02 discover/consume APIs remain green.
 - P10-05 owns real Bedrock/Ollama/embedding provider packaging and staging smoke; this plan must not convert catalog presence into a production-support claim.
+- Users section remains a read-only list; no mutation UI in this slice.
 
 ### Risks and Dependencies
 
@@ -124,9 +131,21 @@ Rename/delete adapters exist without product controls; source/template composer-
 | Scope creep into users CRUD | Explicit out of scope |
 | HTML concept mistaken for product authority | Amend normative contracts first; fixture is static appearance guidance only |
 | Provider UI implies unsupported runtime readiness | Never derive readiness from `configured` or profile facts; use neutral copy and preserve the P10-05 proof boundary |
-| ETag lost by JSON-only adapter | Return response metadata through a feature-owned adapter; never persist it in browser storage |
+| ETag/version lost by JSON-only adapter | KTD9 feature-owned metadata helper; prefer DTO `version`; never persist in browser storage |
 | Private model catalog duplicated in the browser | Keep profile rows read-only and defer browser CRUD until a closed public projection is approved |
-| Unsafe mutations fail CSRF validation | Use the approved transient CSRF accessor/header path for every unsafe method and test valid, missing, mismatched, and refreshed tokens |
+| Unsafe mutations fail CSRF validation | KTD10: inventory must find/add one shared CSRF attach path; test valid, missing, mismatched, and refreshed tokens |
+| Rename/delete adapters omit required If-Match today | KTD8 before enabling UI controls; treat as correctness gap |
+| Lifted provider DTO drift (`providerKind`/`isConfigured`) | KTD11 before credential/synthesis UX polish |
+| `reducto` appears in `ProviderSummaryDto.kind` | Project only contracted facts; credential action only when `requiresCredentials`; no parser-readiness claim |
+| Operation-history vs current-op confusion | KTD12 + AE4 tests; reuse existing documents retry/cancel |
+
+### System-Wide Impact
+
+- **Surfaces:** `chat-shell` (rename/delete, ref picker, submit tokens), `settings-panel` (provider section + domains concurrency consumers), `documents` (current-op retry/cancel + source operation history), shared API transport, parity catalog (`provider-settings` plus reuse of `settings-*`, `operation-status`, `source-operation-panel`, `confirm-action-dialog`), generated OpenAPI client.
+- **Failure propagation:** Missing/stale If-Match preserves intent and refreshes; never unconditional retry. CSRF refresh must not drop typed secrets or pending synthesis changes.
+- **Cache/privacy:** Composer-ref tokens, credentials, ETags/versions stay memory-only; clear on logout/identity change with existing auth-store boundaries. No new local/session storage keys.
+- **Parity knock-on:** `provider-settings` catalog + docs + fixture/manifest/React trio land before or with live chrome (P9-06 integrity gate).
+- **Non-impact:** Users read-only list unchanged; Evidence attach deferred (P11-04); browser model-profile CRUD deferred; Playwright/visual matrix P12-07; provider packaging smoke P10-05.
 
 ---
 
@@ -134,7 +153,7 @@ Rename/delete adapters exist without product controls; source/template composer-
 
 ### U1. Browser workflow inventory
 
-**Goal:** Freeze disabled controls, provider Settings drift, and API readiness.
+**Goal:** Freeze disabled controls, provider Settings drift, CSRF/header readiness, and API readiness.
 
 **Requirements:** R1
 
@@ -143,32 +162,37 @@ Rename/delete adapters exist without product controls; source/template composer-
 **Files:**
 - Create: `docs/_scratch/p9-07-contracted-browser-workflows-inventory.md`
 
-**Approach:** Add a call-site table for rename/delete, source/template refs picker, CSRF and conditional/idempotent mutation headers, provider/model DTO mappings, the HTML guidance disposition, and read/action operation endpoints. Record Evidence attach and browser profile CRUD as explicit deferrals.
+**Approach:** Call-site table covering: `chat-shell/api.ts` rename/delete missing If-Match; hard-disabled `data-testid="ref-picker"` and unused `discoverComposerRefs`; hardcoded `composerRefTokens: []` in `use-chat-shell.ts`; Settings lifted DTO field map vs generated `kind`/`configured`/`requiresCredentials`/`version`; whether a browser CSRF accessor exists (today: BFF allowlist only, `ceFetch` does not attach); conditional/idempotent header matrix; operation history GETs vs documents current-op retry/cancel; HTML guidance disposition; Evidence attach and browser profile CRUD deferrals.
 
 **Patterns to follow:** p9-02/p9-04 inventories
 
 **Test scenarios:**
 - Test expectation: none -- inventory.
 
-**Verification:** Every required workflow has disposition.
+**Verification:** Every required workflow has disposition, including CSRF accessor find-or-add.
 
 ---
 
 ### U2. Chat rename/delete and composer refs
 
-**Goal:** M-08 plus the non-Evidence portion of M-09 UI.
+**Goal:** M-08 plus the non-Evidence portion of M-09 UI (F1, F2).
 
 **Requirements:** R2,R3,AE1,AE2,AE5
 
 **Dependencies:** U1
 
 **Files:**
-- Modify: `app/client/src/features` chat discovery/composer modules
-- Create/modify: chat feature tests
+- Modify: `app/client/src/features/chat-shell/api.ts`
+- Modify: `app/client/src/features/chat-shell/ChatShell.tsx`
+- Modify: `app/client/src/features/chat-shell/use-chat-shell.ts`
+- Modify: `app/client/tests/chat.test.mjs`
+- Modify: `app/client/tests/chat-inspector.test.tsx`
+- Create: `app/client/tests/chat-rename-delete.test.mjs` (or equivalent focused file if suite conventions prefer colocating in `chat.test.mjs`)
+- Create: `app/client/tests/composer-refs.test.mjs` (or equivalent focused file)
 
-**Approach:** Wire rename/delete to generated APIs using each conversation's authoritative version as If-Match; preserve pending rename/delete intent across 428/409, refresh server truth, and avoid optimistic deletion. Unlock ordered source/template discovery/attach while Evidence attach remains deferred; preserve drafts on recoverable failures; never persist raw tokens.
+**Approach:** Fix rename/delete adapters to send `If-Match` from conversation `version` (KTD8) before enabling UI. Preserve pending rename/delete intent across 428/409; refresh server truth; no optimistic deletion. Unlock ordered source/template discovery/attach via existing `discoverComposerRefs`; keep Evidence attach deferred; wire submit to real `composerRefTokens` while preserving drafts on recoverable failures; never persist raw tokens. Reuse `confirm-action-dialog` for delete confirmation.
 
-**Patterns to follow:** P9-02 workbench; P11-02 contracts
+**Patterns to follow:** P9-02 workbench; P11-02 contracts; `domains/api.ts` `ifMatchHeader`
 
 **Test scenarios:**
 - Happy: rename commits on the contracted action, delete uses a target-and-consequence confirmation, and both update only after server confirmation.
@@ -180,26 +204,33 @@ Rename/delete adapters exist without product controls; source/template composer-
 - Error: each contracted invalid source/template ref state uses safe labels and preserves the draft.
 - Privacy: no token in storage.
 
-**Verification:** Node/Vitest tests green.
+**Verification:** Node/Vitest tests green; adapters reject calls without version.
 
 ---
 
 ### U3. Settings concurrency and operation history
 
-**Goal:** Shared unsafe-request, conditional/idempotent mutation handling plus safe operations UX.
+**Goal:** Shared unsafe-request, conditional/idempotent mutation handling plus safe operations UX (F4).
 
 **Requirements:** R4,R5,AE3,AE4,AE5
 
 **Dependencies:** U1
 
 **Files:**
-- Modify: `app/client/src/lib/api/client.ts` and the narrow Settings API adapter
-- Modify: Settings domains/documents operation-history features
-- Create/modify: Settings/documents API and component tests
+- Modify: `app/client/src/lib/api/client.ts` (and/or a narrow shared helper beside it for CSRF attach + optional metadata return)
+- Modify: `app/client/src/features/settings-panel/api.ts`
+- Modify: `app/client/src/features/domains/api.ts` (domain operations list wrapper if absent)
+- Modify: `app/client/src/features/documents/api.ts` (source operations list wrapper if absent)
+- Modify: `app/client/src/features/settings-panel/SettingsPanel.tsx` and/or domain accordion helpers for domain history UX
+- Modify: `app/client/src/features/documents/DocumentsPage.tsx` for source history UX beside existing retry/cancel
+- Modify: `app/client/tests/domains-settings.test.mjs`
+- Modify: `app/client/tests/domains-api.test.mjs`
+- Create: `app/client/tests/api-mutation-headers.test.mjs` (CSRF/If-Match/Idempotency-Key transport)
+- Create: `app/client/tests/operation-history.test.mjs` (domain/source history UX)
 
-**Approach:** Use the approved transient CSRF accessor and attach `X-CSRF-Token` to every unsafe request. Preserve response ETag/version in memory and expose explicit conditional/idempotent mutation paths to feature adapters. Handle CSRF refresh and 428/409 without discarding pending intent or retained secret input. Render operation-history lists from cataloged GET endpoints; expose retry/cancel only through separately contracted current-operation endpoints, never by inferring actions for historical cleanup rows. U2 and U6 consume these shared transport mechanics.
+**Approach:** Implement KTD9/KTD10: shared CSRF attach for unsafe methods; prefer DTO `version` for If-Match on provider/runtime/model-profile mutations; expose Idempotency-Key path for model-profile POST. Handle CSRF refresh and 428/409 without discarding pending intent or retained secret input. Add list wrappers for `GET /admin/domains/{domainId}/operations` and `GET /admin/domains/{domainId}/sources/{sourceId}/operations`. Keep retry/cancel on existing documents current-operation endpoints only (KTD12). U2 and U6 consume these shared transport mechanics. Reuse parity targets `operation-status` and `source-operation-panel`.
 
-**Patterns to follow:** P2-02 ETag; P9-04 domains accordion
+**Patterns to follow:** P2-02 ETag; P9-04 domains accordion; `domains/api.ts` `ifMatchHeader`
 
 **Test scenarios:**
 - Happy: matching If-Match succeeds.
@@ -218,7 +249,7 @@ Rename/delete adapters exist without product controls; source/template composer-
 
 ### U5. Provider Settings contracts and parity target
 
-**Goal:** Approve the compact provider/model Settings interaction and visual target before live implementation.
+**Goal:** Approve the compact provider/model Settings interaction and visual target before live implementation (F3, F5 visual).
 
 **Requirements:** R8,R10,AE6,AE8,AE9
 
@@ -235,9 +266,9 @@ Rename/delete adapters exist without product controls; source/template composer-
 - Create: `app/client/tests/parity/react/provider-settings.test.tsx`
 - Guidance input: `docs/_scratch/provider-settings-imagined.html`
 
-**Approach:** Convert the scratch concept into an approved provider Settings target without treating its sample data as contract truth. Preserve compact grouped rows, semantic status, dark/light token use, and the normative Settings section-list/detail behavior: persistent section navigation at 1024 px and above, accessible section navigation/drawer behavior below 1024 px, and stacked row content where required. Add only interaction states the static concept cannot show: loading, stale/refresh, credential-modal validation, safe failure with request ID, conflict, forbidden/not-found, and unconfigured-provider states. Use neutral profile/configuration copy; do not encode runtime readiness. Reuse existing primitives and record any genuinely missing composition contract before creating it.
+**Approach:** Convert the scratch concept into an approved provider Settings target without treating its sample data as contract truth. Preserve compact grouped rows, semantic status, dark/light token use, and the normative Settings section-list/detail behavior: persistent section navigation at 1024 px and above, accessible section navigation/drawer behavior below 1024 px, and stacked row content where required. Add only interaction states the static concept cannot show: loading, stale/refresh, credential-modal validation, safe failure with request ID, conflict, forbidden/not-found, and unconfigured-provider states. Use neutral profile/configuration copy; do not encode runtime readiness. Reuse existing primitives (`settings-nav`, `settings-group`, `settings-row`, `button`, `select`, `status-pill`, `input`, `ui-modal`) and record any genuinely missing composition contract before creating it.
 
-**Patterns to follow:** P9-04 Settings Domain accordion amendment; P9-06 catalog/fixture/manifest/React parity trio; existing settings-nav/settings-group/settings-row/button/input/select/status-pill/ui-modal targets.
+**Patterns to follow:** P9-04 Settings Domain accordion amendment; P9-06 catalog/fixture/manifest/React parity trio.
 
 **Test scenarios:**
 - Happy: fixture and React target agree on provider rows, global synthesis selector, and compact embedding-profile facts in both themes.
@@ -252,7 +283,7 @@ Rename/delete adapters exist without product controls; source/template composer-
 
 ### U6. Provider credentials, profile visibility, and runtime defaults
 
-**Goal:** Implement the contracted administrator Model Provider section against generated DTOs and conditional mutations.
+**Goal:** Implement the contracted administrator Model Provider section against generated DTOs and conditional mutations (F3, F5).
 
 **Requirements:** R4,R8,R9,R10,AE3,AE5,AE6,AE7,AE8,AE9
 
@@ -260,10 +291,11 @@ Rename/delete adapters exist without product controls; source/template composer-
 
 **Files:**
 - Modify: `app/client/src/features/settings-panel/api.ts`
-- Modify or split: `app/client/src/features/settings-panel/SettingsPanel.tsx`
-- Create/modify: provider Settings API, state, and component tests under `app/client/tests/`
+- Modify or split: `app/client/src/features/settings-panel/SettingsPanel.tsx` (`ProviderSection` already mounts at `/settings?section=provider`)
+- Create: `app/client/tests/settings-provider.test.mjs`
+- Modify: `app/client/tests/domains-settings.test.mjs` only if shared Settings fixtures require it
 
-**Approach:** Remove lifted `ProviderStatus`/`ModelProfile` fields in favor of generated contract types. Project safe view models only inside the feature. Keep credential values write-only in an on-demand modal; after mutation clear the field and reload the authoritative snapshot. Offer active synthesis choices from the profiles already returned by the snapshot, requiring `configured` only where the provider contract says credentials are required; describe the deployment-wide effect and do not label a choice runtime-ready. Render embedding profiles as compact read-only facts here and retain actual selection in the existing Knowledge Domain creation/deploy flow. Do not mirror the private model catalog or expose profile create/edit/delete controls. Ollama receives no credential action because its operator-managed local configuration is not a browser secret flow.
+**Approach:** Apply KTD11: remove lifted `ProviderStatus`/`ModelProfile`/`RuntimeSettings` aliases; use generated DTO field names (`kind`, `configured`, `requiresCredentials`, `displayName`, `inUse`, `version`). Keep credentials write-only in an on-demand modal; after mutation clear the field and reload the authoritative snapshot with If-Match from DTO version (KTD9). Offer active synthesis choices from snapshot profiles; require `configured` only where credentials are required; describe deployment-wide effect; never label runtime-ready. Render embedding profiles as compact read-only facts; keep selection in Knowledge Domain creation/deploy. No browser profile CRUD. Ollama: no credential action. `reducto`: project contracted facts only; no invented credential/model flows. Members never see provider chrome.
 
 **Patterns to follow:** U3 conditional mutation adapter; U5 parity target; P9-04 server-truth Settings mutation pattern; generated client usage from P9-02.
 
@@ -272,7 +304,7 @@ Rename/delete adapters exist without product controls; source/template composer-
 - Happy: OpenAI/Bedrock credential replacement submits once with If-Match, never displays the stored value, clears typed secret on completion, and reloads the snapshot.
 - Happy: changing active synthesis updates new-work default while copy states that in-flight work keeps its frozen configuration.
 - Boundary: model profiles are read-only on this page; existing domains show the immutable embedding profile and no replacement control.
-- Boundary: Ollama has no credential action; unconfigured credential-requiring providers cannot become active; no UI state claims runtime readiness.
+- Boundary: Ollama has no credential action; unconfigured credential-requiring providers cannot become active; no UI state claims runtime readiness; `reducto` does not invent unsupported credential UX.
 - Error: 428/409 retains safe intent and presents refresh/retry; 404/403 use the contracted indistinguishable/safe state; failures show request ID without raw exception data.
 - Accessibility: credential modal validation, busy/cancel behavior, focus trap/return, and keyboard/touch operation match U5.
 - Privacy: no credential, model payload, runtime endpoint, private ID, prompt, or ETag is written to browser storage or logs.
@@ -293,7 +325,7 @@ Rename/delete adapters exist without product controls; source/template composer-
 - Create: `docs/_scratch/p9-07-contracted-browser-workflows-evidence.md`
 - Modify: `docs/master-build-plan.md`
 
-**Approach:** Record residuals for P12-07 Playwright and P10-05 real provider smoke, preserve the provider HTML concept/final fixture relationship, and record browser profile CRUD/Evidence attach as deferred contract work.
+**Approach:** Record residuals for P12-07 Playwright and P10-05 real provider smoke, preserve the provider HTML concept/final fixture relationship, and record browser profile CRUD/Evidence attach as deferred contract work. Mark P9 phase DONE if no other open P9 tasks.
 
 **Patterns to follow:** p9-04 evidence
 
@@ -306,7 +338,7 @@ Rename/delete adapters exist without product controls; source/template composer-
 
 ## Verification Contract
 
-- Frontend typecheck + focused Vitest/node tests.
+- Frontend typecheck + focused Vitest/node tests (`chat.test.mjs`, rename/delete/ref-picker coverage, domains/settings/provider/header tests).
 - Provider Settings contract/catalog/files/parity trio gate.
 - Generated-client drift check; no handwritten substitute provider/model/runtime DTO.
 - No Playwright required for P9-07 DONE.
@@ -316,15 +348,17 @@ Rename/delete adapters exist without product controls; source/template composer-
 
 ## Definition of Done
 
-All active requirements (R1–R5 and R7–R10) and AE1–AE9 are satisfied at component altitude; the provider Settings contracts and parity trio are approved; generated DTOs and the endpoint-specific CSRF/If-Match/Idempotency-Key matrix govern unsafe workflows; immutable embedding selection remains in the Knowledge Domain creation/deploy flow; Evidence attach and browser profile CRUD stay deferred; P9-07 is DONE; P10-05 provider smoke and P12-07 Playwright/visual residuals are explicit.
+All active requirements (R1–R5 and R7–R10) and AE1–AE9 are satisfied at component altitude; the provider Settings contracts and parity trio are approved; generated DTOs and the endpoint-specific CSRF/If-Match/Idempotency-Key matrix govern unsafe workflows; immutable embedding selection remains in the Knowledge Domain creation/deploy form; Evidence attach and browser profile CRUD stay deferred; P9-07 is DONE; P10-05 provider smoke and P12-07 Playwright/visual residuals are explicit.
 
 ## Sources & Research
 
 - docs/frontend/chat-and-evidence-workbench.md
 - docs/frontend/route-and-workspace-spec.md
-- docs/frontend/implementation-slices.md FE-10
+- docs/frontend/implementation-slices.md FE-04/FE-06/FE-10
 - docs/contracts/http-api-catalog.md
 - docs/contracts/dto-schema-catalog.md
+- docs/interaction-behavior-prd.md M-08/M-09/A-01/A-02/A-03/A-07/A-09/A-10/A-13
 - docs/_scratch/provider-settings-imagined.html
 - docs/master-build-plan.md P9-07
 - docs/_scratch/legacy-gap-plan-bundle.md
+- Live adapters audited 2026-07-28: `app/client/src/features/chat-shell/*`, `settings-panel/*`, `documents/api.ts`, `domains/api.ts`, `lib/api/client.ts`, `lib/api/generated/openapi.ts`

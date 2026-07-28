@@ -58,7 +58,20 @@ Product-specific compositions belong to their features:
 
 - chat: ConversationRail, Transcript, Composer, EvidenceInspector
 - documents: DocumentLibrary, DocumentViewer, SourceOperationPanel
-- settings: SettingsNav, SettingsGroup, SettingsRow, Settings Domain accordion (Settings-owned; not a shared Accordion primitive)
+- settings: SettingsNav, SettingsGroup, SettingsRow, Settings Domain accordion (Settings-owned; not a shared Accordion primitive), Model Provider section (Settings-owned composition)
+
+### Model Provider Settings
+
+Administrator `/settings?section=provider` composition over existing Settings primitives. Guided by `docs/_scratch/provider-settings-imagined.html` (non-normative); parity target `provider-settings`.
+
+| Element | Contract |
+| --- | --- |
+| Ownership | `src/features/settings-panel` `ProviderSection`; compose `settings-nav`, `settings-group`, `settings-row`, `button`, `select`, `status-pill`, `input`, `ui-modal` only |
+| Providers | Project generated `ProviderSummaryDto` (`kind`, `displayName`, `configured`, `requiresCredentials`, `version`); credential replacement is write-only and on-demand; Ollama and non-credential providers show no secret field |
+| Synthesis default | One deployment-wide active synthesis selector from returned profiles; copy states new turns use the default and in-flight work keeps frozen config; never label `configured` as runtime-ready |
+| Embedding profiles | Compact read-only facts here; selection only in Knowledge Domain create/deploy; existing domains show locked embedding |
+| Concurrency | Credential PUT and runtime PATCH require `If-Match` from DTO `version`; 428/409 preserve intent and refresh |
+| Forbidden | Dashboard card grid; member model picker; browser profile CRUD; runtime URLs; secret rehydration; inventing credential UX for providers with `requiresCredentials: false` |
 
 ### Settings Domain accordion
 

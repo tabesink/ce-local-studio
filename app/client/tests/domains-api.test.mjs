@@ -30,11 +30,13 @@ describe("Domains API closed DTO alignment (P9-04 U2)", () => {
 
   it("deleteDomain requires version and sends If-Match", () => {
     const source = readDomainsApi();
+    const csrf = readFileSync(join(root, "src/lib/api/csrf.ts"), "utf8");
 
     assert.match(source, /deleteDomain\s*\(\s*domainId\s*:\s*string\s*,\s*version/);
-    assert.match(source, /If-Match/);
     assert.match(source, /ifMatchHeader/);
-    assert.match(source, /version == null|version === ""|version == null \|\| version === ""/);
+    assert.match(source, /Domain version is required for delete \(If-Match\)/);
+    assert.match(csrf, /If-Match/);
+    assert.match(csrf, /version == null|version === ""|version == null \|\| version === ""/);
   });
 
   it("MemberDomain / DomainSummaryDto uses queryEligible", () => {

@@ -1,18 +1,31 @@
 "use client";
 
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowUp, AtSign, ChevronDown, History, PanelRightClose, PanelRightOpen, Plus, RotateCcw, Square, X } from "lucide-react";
+import {
+  ArrowUp,
+  AtSign,
+  ChevronDown,
+  History,
+  PanelRightClose,
+  PanelRightOpen,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Square,
+  Trash2,
+  X,
+} from "lucide-react";
 import { cx } from "@/lib/cx";
 import { StatusPill } from "@/ui";
+import { UiModal, UiModalHeader, SettingsButton } from "@/_shared/ui";
 import { EvidencePanel } from "@/features/chat-shell/EvidencePanel";
 import { useChatShell } from "@/features/chat-shell/use-chat-shell";
 import type { AssistantBlock, ChatMessage } from "@/features/chat-shell/types";
 
 /* LS chat-shell layout over CE conversations: pane header, block timeline,
-   composer with domain selector, gated references stub (P11 owns discover),
-   safe status bar, and the turn-scoped Evidence/Refs/Source inspector.
-   No model picker, attachments, queue, or abort: no CE contracts. */
+   composer with domain selector and source/template composer refs (Evidence attach deferred),
+   safe status bar, and the turn-scoped Evidence/Refs/Source inspector. */
 export function ChatShell() {
   return (
     <Suspense
@@ -60,9 +73,7 @@ function ChatShellInner() {
       {/* Pane header */}
       <header className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-[var(--border)]/35 px-4">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-[length:var(--fs-base)] font-medium text-[var(--fg)]">
-            {chat.conversation?.title ?? "New conversation"}
-          </span>
+          <ConversationTitle chat={chat} />
           <span role="status" aria-live="polite">
             {chat.streamTransportState === "reconnecting" ? (
               <StatusPill tone="info">Reconnecting</StatusPill>
@@ -177,6 +188,27 @@ function ChatShellInner() {
         className="shrink-0 bg-[var(--agent-bg)] px-4 pb-2 pt-2.5 sm:px-6"
       >
         <div className="relative mx-auto w-full max-w-[var(--composer-w)] rounded-[var(--composer-radius)] border border-[var(--border)]/60 bg-[var(--composer)] shadow-[var(--composer-shadow)]">
+          {chat.composerRefs.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5 px-3 pt-3" data-testid="composer-ref-chips">
+              {chat.composerRefs.map((ref) => (
+                <span
+                  key={ref.token}
+                  className="inline-flex max-w-full items-center gap-1 rounded-md border border-[var(--border)]/50 bg-[var(--hover)]/40 px-2 py-0.5 text-[length:var(--fs-xs)] text-[var(--fg)]"
+                >
+                  <span className="truncate font-mono uppercase text-[var(--dim)]">{ref.kind}</span>
+                  <span className="truncate">{ref.label}</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${ref.label}`}
+                    onClick={() => chat.removeComposerRef(ref.token)}
+                    className="rounded p-0.5 text-[var(--dim)] hover:bg-[var(--hover)] hover:text-[var(--fg)]"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
           <textarea
             value={chat.input}
             onChange={(event) => chat.updateInput(event.target.value)}
@@ -191,17 +223,7 @@ function ChatShellInner() {
           />
           <div className="flex items-center justify-between px-2.5 pb-2.5">
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                data-testid="ref-picker"
-                aria-label="References unavailable"
-                title="References discovery is unavailable until governed composer refs ship"
-                aria-disabled="true"
-                disabled
-                className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--dim)] opacity-45"
-              >
-                <AtSign className="h-4 w-4" />
-              </button>
+              <RefPicker chat={chat} />
               <DomainPicker chat={chat} />
             </div>
             <button
@@ -256,6 +278,111 @@ function ChatShellInner() {
 
 type ChatState = ReturnType<typeof useChatShell>;
 
+function ConversationTitle({ chat }: { chat: ChatState }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(chat.conversation?.title ?? "");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  useEffect(() => {
+    if (!editing) setDraft(chat.conversation?.title ?? "");
+  }, [chat.conversation?.id, chat.conversation?.title, editing]);
+
+  if (!chat.conversation) {
+    return (
+      <span className="truncate text-[length:var(--fs-base)] font-medium text-[var(--fg)]">New conversation</span>
+    );
+  }
+
+  return (
+    <>
+      {editing ? (
+        <form
+          className="flex min-w-0 items-center gap-1"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void chat.renameActiveConversation(draft).then(() => setEditing(false));
+          }}
+        >
+          <input
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setEditing(false);
+                setDraft(chat.conversation?.title ?? "");
+              }
+            }}
+            aria-label="Conversation title"
+            data-testid="conversation-title-input"
+            className="h-7 min-w-0 max-w-[14rem] rounded-md border border-[var(--border)] bg-transparent px-2 text-[length:var(--fs-base)] text-[var(--fg)] outline-none"
+            autoFocus
+          />
+          <button type="submit" className="rounded-md px-2 text-[length:var(--fs-sm)] text-[var(--fg)] hover:bg-[var(--hover)]">
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(false);
+              setDraft(chat.conversation?.title ?? "");
+            }}
+            className="rounded-md px-2 text-[length:var(--fs-sm)] text-[var(--dim)] hover:bg-[var(--hover)]"
+          >
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <div className="flex min-w-0 items-center gap-1">
+          <span className="truncate text-[length:var(--fs-base)] font-medium text-[var(--fg)]">
+            {chat.conversation.title ?? "Untitled"}
+          </span>
+          <button
+            type="button"
+            title="Rename conversation"
+            aria-label="Rename conversation"
+            data-testid="conversation-rename"
+            onClick={() => setEditing(true)}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--dim)] hover:bg-[var(--hover)] hover:text-[var(--fg)]"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            title="Delete conversation"
+            aria-label="Delete conversation"
+            data-testid="conversation-delete"
+            onClick={() => setConfirmDelete(true)}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--dim)] hover:bg-[var(--hover)] hover:text-[var(--fg)]"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+      <UiModal isOpen={confirmDelete} onClose={() => setConfirmDelete(false)} maxWidth="max-w-md">
+        <UiModalHeader title="Delete conversation" onClose={() => setConfirmDelete(false)} />
+        <div className="space-y-4 px-6 py-4">
+          <p className="text-[length:var(--fs-base)] text-[var(--fg)]">
+            Delete &ldquo;{chat.conversation.title ?? "Untitled"}&rdquo;? This cannot be undone.
+          </p>
+          <div className="flex justify-end gap-2">
+            <SettingsButton onClick={() => setConfirmDelete(false)}>Cancel</SettingsButton>
+            <SettingsButton
+              tone="danger"
+              onClick={() => {
+                setConfirmDelete(false);
+                void chat.deleteActiveConversation();
+              }}
+            >
+              Delete
+            </SettingsButton>
+          </div>
+        </div>
+      </UiModal>
+    </>
+  );
+}
+
 function ConversationPicker({ chat }: { chat: ChatState }) {
   return (
     <div className="group relative">
@@ -290,6 +417,80 @@ function ConversationPicker({ chat }: { chat: ChatState }) {
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+function RefPicker({ chat }: { chat: ChatState }) {
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        data-testid="ref-picker"
+        aria-label="Attach source or template reference"
+        title="Attach source or template reference"
+        aria-expanded={chat.refPickerOpen}
+        disabled={chat.streaming}
+        onClick={() => {
+          if (chat.refPickerOpen) chat.closeRefPicker();
+          else void chat.openRefPicker();
+        }}
+        className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--dim)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--fg)] disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <AtSign className="h-4 w-4" />
+      </button>
+      {chat.refPickerOpen ? (
+        <div
+          className="absolute bottom-10 left-0 z-50 w-72 rounded-lg border border-[var(--border)] bg-[var(--color-popover)] p-2 shadow-[var(--composer-shadow)]"
+          role="dialog"
+          aria-label="Reference picker"
+        >
+          <input
+            value={chat.refPickerQuery}
+            onChange={(event) => chat.setRefPickerQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                chat.closeRefPicker();
+              }
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void chat.openRefPicker();
+              }
+            }}
+            placeholder="Search sources and templates"
+            aria-label="Search sources and templates"
+            className="mb-2 h-8 w-full rounded-md border border-[var(--border)] bg-transparent px-2 text-[length:var(--fs-sm)] text-[var(--fg)] outline-none"
+          />
+          {chat.refPickerState === "loading" ? (
+            <p className="px-1 py-1 text-[length:var(--fs-sm)] text-[var(--dim)]">Loading references…</p>
+          ) : null}
+          {chat.refPickerState === "empty" ? (
+            <p className="px-1 py-1 text-[length:var(--fs-sm)] text-[var(--dim)]">No matching references.</p>
+          ) : null}
+          {chat.refPickerState === "error" ? (
+            <p className="px-1 py-1 text-[length:var(--fs-sm)] text-[var(--err)]" role="alert">
+              {chat.refPickerError ?? "References unavailable."}
+            </p>
+          ) : null}
+          {chat.refPickerState === "ready" ? (
+            <ul className="max-h-48 space-y-1 overflow-y-auto">
+              {chat.refPickerResults.map((ref) => (
+                <li key={ref.token}>
+                  <button
+                    type="button"
+                    onClick={() => chat.attachComposerRef(ref)}
+                    className="flex w-full flex-col rounded-md px-2 py-1.5 text-left hover:bg-[var(--hover)]"
+                  >
+                    <span className="font-mono text-[length:var(--fs-xs)] uppercase text-[var(--dim)]">{ref.kind}</span>
+                    <span className="truncate text-[length:var(--fs-sm)] text-[var(--fg)]">{ref.label}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

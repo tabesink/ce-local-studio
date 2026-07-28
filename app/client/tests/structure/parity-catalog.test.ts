@@ -32,6 +32,7 @@ const REQUIRED_TARGETS = [
   "operation-status",
   "page-state",
   "pane-header",
+  "provider-settings",
   "resource-table",
   "right-inspector",
   "segmented-control",

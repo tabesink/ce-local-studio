@@ -1,6 +1,6 @@
 /* Knowledge Domain wrappers over generated OpenAPI closed DTOs (P9-04 U2). */
 
-import { ceFetch } from "@/lib/api/client";
+import { ceFetch, ifMatchHeader } from "@/lib/api/client";
 import type { components } from "@/lib/api/generated/openapi";
 
 type DomainCreateRequest = components["schemas"]["DomainCreateRequest"];
@@ -10,10 +10,7 @@ export type MemberDomain = components["schemas"]["DomainSummaryDto"];
 export type DomainOperation = components["schemas"]["OperationDto"];
 export type AllowedAction = components["schemas"]["AllowedAction"];
 
-export function ifMatchHeader(version: number | string | null | undefined): Record<string, string> | undefined {
-  if (version == null || version === "") return undefined;
-  return { "If-Match": `"${version}"` };
-}
+export { ifMatchHeader };
 
 export function isDomainActionEnabled(
   domain: { allowedActions: AllowedAction[] },
@@ -72,4 +69,18 @@ export async function deleteDomain(
     },
   );
   return body.operation;
+}
+
+export async function listDomainOperations(
+  domainId: string,
+  params: { cursor?: string | null; limit?: number } = {},
+): Promise<{ operations: DomainOperation[]; nextCursor: string | null }> {
+  const search = new URLSearchParams();
+  if (params.cursor) search.set("cursor", params.cursor);
+  if (typeof params.limit === "number") search.set("limit", String(params.limit));
+  const suffix = search.size > 0 ? `?${search.toString()}` : "";
+  const body = await ceFetch<components["schemas"]["AdminDomainOperationsResponse"]>(
+    `/admin/domains/${encodeURIComponent(domainId)}/operations${suffix}`,
+  );
+  return { operations: body.operations, nextCursor: body.nextCursor };
 }

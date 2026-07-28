@@ -58,8 +58,8 @@ describe("F-012 chat via LS chat-shell", () => {
     assert.match(hook, /viewConversationIdRef/);
     assert.match(hook, /retryLast/);
     assert.equal(hook.includes("applyTurnStreamEvent"), false, "hook must not embed a parallel applyTurnStreamEvent path");
-    assert.equal(hook.includes("discoverComposerRefs"), false, "KTD1: zero discoverComposerRefs in hook");
-    assert.equal(hook.includes("mentionQuery"), false, "hook must not own interactive @ mention discovery");
+    assert.match(hook, /discoverComposerRefs/, "P9-07: source/template discover is wired in the hook");
+    assert.equal(hook.includes("mentionQuery"), false, "hook must not own free-form @ mention parsing");
 
     const shell = read("src/features/chat-shell/ChatShell.tsx");
     assert.match(shell, /chat\.retryLast\(\)/);
@@ -115,7 +115,7 @@ describe("F-012 chat via LS chat-shell", () => {
     );
     assert.equal(hook.includes("handleReplayEvent"), false, "replay must not use an error-only event handler");
     assert.match(hook, /streamTransportState/);
-    assert.match(hook, /composerRefTokens: \[\]/);
+    assert.match(hook, /composerRefTokens:\s*composerRefs\.map/);
     assert.match(hook, /isCursorExpiredError/);
     assert.match(hook, /getTerminalSnapshotFromError/);
     assert.match(hook, /domain_required/);
@@ -125,7 +125,7 @@ describe("F-012 chat via LS chat-shell", () => {
     assert.match(component, /acceptedRefs/);
     assert.match(component, /Evidence/);
     assert.match(component, /data-testid="ref-picker"/);
-    assert.match(component, /aria-disabled/);
+    assert.match(component, /aria-expanded=\{chat\.refPickerOpen\}/);
   });
 
   it("does not port uncontracted Local Studio agent controls", () => {
@@ -183,17 +183,21 @@ describe("F-012 chat via LS chat-shell", () => {
     }
   });
 
-  it("gates interactive composer-ref discovery and submits empty opaque tokens", () => {
+  it("unlocks source/template composer-ref discovery and submits attached opaque tokens", () => {
     const hook = read("src/features/chat-shell/use-chat-shell.ts");
-    assert.equal(hook.includes("discoverComposerRefs"), false);
+    assert.match(hook, /discoverComposerRefs/);
+    assert.match(hook, /kinds:\s*\[\s*"source"\s*,\s*"template"\s*\]/);
+    assert.match(hook, /composerRefTokens:\s*composerRefs\.map/);
     assert.equal(hook.includes("mentionQuery"), false);
-    assert.match(hook, /composerRefTokens: \[\]/);
     assert.equal(hook.includes("template.body"), false);
     assert.equal(hook.includes("sourceText"), false);
+    assert.match(hook, /if \(ref\.kind === "evidence"\) return/, "Evidence attach chips stay deferred");
+    assert.doesNotMatch(hook, /kinds:\s*\[[^\]]*"evidence"/);
 
     const component = read("src/features/chat-shell/ChatShell.tsx");
     assert.match(component, /data-testid="ref-picker"/);
-    assert.match(component, /References discovery is unavailable|References unavailable/);
+    assert.match(component, /Attach source or template reference/);
+    assert.match(component, /data-testid="composer-ref-chips"/);
   });
 
   it("builds opaque Library deep links and keeps privacy sentinels out of hrefs", () => {
@@ -251,7 +255,8 @@ describe("F-012 chat via LS chat-shell", () => {
     const panel = read("src/features/chat-shell/EvidencePanel.tsx");
     assert.match(component, /from "@\/ui"/);
     assert.match(panel, /from "@\/ui"/);
-    assert.equal(component.includes("@/_shared/ui"), false);
+    // Confirm/delete modal reuses existing shared UiModal; StatusPill stays on @/ui.
+    assert.match(component, /UiModal/);
     assert.equal(panel.includes("@/_shared/ui"), false);
   });
 });

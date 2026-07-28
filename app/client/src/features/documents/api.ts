@@ -12,7 +12,7 @@
      GET …/sources/{sourceId}/outline
 */
 
-import { ceFetch, ceFetchBlob } from "@/lib/api/client";
+import { ceFetch, ceFetchBlob, ifMatchHeader } from "@/lib/api/client";
 import type { components } from "@/lib/api/generated/openapi";
 
 export type DocumentSummary = components["schemas"]["DocumentSummaryDto"];
@@ -33,11 +33,6 @@ export type FetchDocumentContentOptions = {
   range?: string | null;
   signal?: AbortSignal;
 };
-
-function ifMatchHeader(version: number | string | null | undefined): Record<string, string> | undefined {
-  if (version == null || version === "") return undefined;
-  return { "If-Match": `"${version}"` };
-}
 
 function actionEnabled(source: AdminSource, action: string): boolean {
   return source.allowedActions.some((entry) => entry.action === action && entry.enabled);
@@ -155,4 +150,19 @@ export async function getSourceOutline(domainId: string, sourceId: string): Prom
     `/admin/domains/${encodeURIComponent(domainId)}/sources/${encodeURIComponent(sourceId)}/outline`,
   );
   return body.items;
+}
+
+export async function listSourceOperations(
+  domainId: string,
+  sourceId: string,
+  params: { cursor?: string | null; limit?: number } = {},
+): Promise<{ operations: OperationDto[]; nextCursor: string | null }> {
+  const search = new URLSearchParams();
+  if (params.cursor) search.set("cursor", params.cursor);
+  if (typeof params.limit === "number") search.set("limit", String(params.limit));
+  const suffix = search.size > 0 ? `?${search.toString()}` : "";
+  const body = await ceFetch<components["schemas"]["AdminSourceOperationsResponse"]>(
+    `/admin/domains/${encodeURIComponent(domainId)}/sources/${encodeURIComponent(sourceId)}/operations${suffix}`,
+  );
+  return { operations: body.operations, nextCursor: body.nextCursor };
 }

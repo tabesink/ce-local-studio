@@ -23,6 +23,7 @@ import {
 import { isApiError } from "@/lib/api/errors";
 import { useAuthStore } from "@/features/auth/auth-store";
 import { DomainAccordionRow } from "@/features/settings-panel/DomainAccordionRow";
+import { OperationHistoryList } from "@/features/operations/OperationHistoryList";
 import { SettingsRow } from "@/features/settings-panel/SettingsRow";
 import { PreferencesPanel } from "@/features/user-preferences/PreferencesPanel";
 import {
@@ -37,6 +38,7 @@ import {
   createDomain,
   deleteDomain,
   listAdminDomains,
+  listDomainOperations,
   startDomain,
   stopDomain,
   type AdminDomain,
@@ -261,30 +263,58 @@ function ProviderSection({
   onChanged: (message: string) => void;
   onError: (message: string) => void;
 }) {
-  const [credentials, setCredentials] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState<string | null>(null);
+  const [credentialDraft, setCredentialDraft] = useState("");
+  const [credentialTarget, setCredentialTarget] = useState<{
+    kind: string;
+    displayName: string;
+    version: number;
+  } | null>(null);
+  const [saving, setSaving] = useState(false);
 
   if (!runtime) return <EmptySafeNotice>Runtime settings are unavailable.</EmptySafeNotice>;
 
-  const rotate = async (providerKind: string) => {
-    const credential = credentials[providerKind]?.trim();
+  const providersByKind = useMemo(() => {
+    return new Map(runtime.providers.map((provider) => [provider.kind, provider]));
+  }, [runtime.providers]);
+
+  const synthesisProfiles = useMemo(
+    () => runtime.modelProfiles.filter((profile) => profile.profileKind === "synthesis"),
+    [runtime.modelProfiles],
+  );
+  const embeddingProfiles = useMemo(
+    () => runtime.modelProfiles.filter((profile) => profile.profileKind === "embedding"),
+    [runtime.modelProfiles],
+  );
+
+  const closeCredentialModal = () => {
+    setCredentialTarget(null);
+    setCredentialDraft("");
+  };
+
+  const rotate = async () => {
+    if (!credentialTarget) return;
+    const credential = credentialDraft.trim();
     if (!credential) return;
-    setSaving(providerKind);
+    setSaving(true);
     try {
-      await rotateProviderCredential(providerKind, credential);
-      setCredentials((current) => ({ ...current, [providerKind]: "" }));
-      onChanged(`Credential updated for ${providerKind}.`);
+      await rotateProviderCredential(credentialTarget.kind, credential, credentialTarget.version);
+      closeCredentialModal();
+      onChanged(`Credential updated for ${credentialTarget.displayName}.`);
     } catch (err) {
       onError(errorMessage(err));
     } finally {
-      setSaving(null);
+      setSaving(false);
     }
   };
 
   const setSynthesisProfile = async (profileId: string) => {
+    if (!profileId || profileId === runtime.runtimeSettings.activeSynthesisProfileId) return;
     try {
-      await patchRuntimeSettings({ activeSynthesisProfileId: profileId });
-      onChanged("Active synthesis profile updated.");
+      await patchRuntimeSettings(
+        { activeSynthesisProfileId: profileId },
+        runtime.runtimeSettings.version,
+      );
+      onChanged("Active synthesis profile updated for new turns. In-flight work keeps its frozen configuration.");
     } catch (err) {
       onError(errorMessage(err));
     }
@@ -295,60 +325,85 @@ function ProviderSection({
       <SettingsGroup title="Providers" description="Credentials are write-only; values are never displayed.">
         {runtime.providers.map((provider) => (
           <SettingsRow
-            key={provider.providerKind}
-            label={provider.providerKind}
+            key={provider.kind}
+            label={provider.displayName || provider.kind}
             status={
-              <StatusPill tone={provider.isConfigured ? "good" : "warning"}>
-                {provider.isConfigured ? "Configured" : "Not configured"}
+              <StatusPill tone={provider.configured ? "good" : "warning"}>
+                {provider.configured ? "Configured" : "Not configured"}
               </StatusPill>
             }
             control={
-              <div className="flex w-full items-center justify-end gap-1.5">
-                <SettingsInput
-                  type="password"
-                  value={credentials[provider.providerKind] ?? ""}
-                  onChange={(value) =>
-                    setCredentials((current) => ({ ...current, [provider.providerKind]: value }))
-                  }
-                  placeholder="New credential"
-                  aria-label={`New credential for ${provider.providerKind}`}
-                  className="max-w-56"
-                />
+              provider.requiresCredentials ? (
                 <SettingsButton
-                  tone="primary"
-                  disabled={saving === provider.providerKind || !(credentials[provider.providerKind] ?? "").trim()}
-                  onClick={() => void rotate(provider.providerKind)}
+                  onClick={() =>
+                    setCredentialTarget({
+                      kind: provider.kind,
+                      displayName: provider.displayName || provider.kind,
+                      version: provider.version,
+                    })
+                  }
                 >
-                  Rotate
+                  {provider.configured ? "Replace credential" : "Add credential"}
                 </SettingsButton>
-              </div>
+              ) : (
+                <span className="text-[length:var(--fs-sm)] text-[var(--dim)]">Local / no browser credential</span>
+              )
             }
           />
         ))}
       </SettingsGroup>
 
-      <SettingsGroup title="Model profiles">
-        {runtime.modelProfiles.length === 0 ? (
-          <EmptySafeNotice>No model profiles configured.</EmptySafeNotice>
+      <SettingsGroup
+        title="Synthesis default"
+        description="Applies to new direct and grounded turns for all users. In-flight work keeps its frozen configuration."
+      >
+        <SettingsRow
+          label="Active model"
+          control={
+            <Select
+              aria-label="Active synthesis model"
+              className="max-w-xs"
+              value={runtime.runtimeSettings.activeSynthesisProfileId ?? ""}
+              onChange={(event) => void setSynthesisProfile(event.target.value)}
+            >
+              <option value="" disabled>
+                Select a synthesis profile
+              </option>
+              {synthesisProfiles.map((profile) => {
+                const provider = providersByKind.get(profile.providerKind);
+                const blocked = Boolean(provider?.requiresCredentials && !provider.configured);
+                return (
+                  <option key={profile.id} value={profile.id} disabled={blocked}>
+                    {profile.providerKind} · {profile.name}
+                    {blocked ? " — provider required" : ""}
+                  </option>
+                );
+              })}
+            </Select>
+          }
+        />
+      </SettingsGroup>
+
+      <SettingsGroup
+        title="Embedding profiles"
+        description="Selected when an administrator deploys a Knowledge Domain; locked afterward."
+      >
+        {embeddingProfiles.length === 0 ? (
+          <EmptySafeNotice>No embedding profiles are available.</EmptySafeNotice>
         ) : (
-          runtime.modelProfiles.map((profile) => {
-            const isActiveSynthesis = profile.id === runtime.runtimeSettings.activeSynthesisProfileId;
-            return (
-              <SettingsRow
-                key={profile.id}
-                label={profile.name}
-                description={`${profile.profileKind} - ${profile.providerKind} - ${profile.modelName}`}
-                status={
-                  isActiveSynthesis ? <StatusPill tone="info">Active synthesis</StatusPill> : undefined
-                }
-                actions={
-                  profile.profileKind === "synthesis" && !isActiveSynthesis ? (
-                    <SettingsButton onClick={() => void setSynthesisProfile(profile.id)}>Make active</SettingsButton>
-                  ) : undefined
-                }
-              />
-            );
-          })
+          embeddingProfiles.map((profile) => (
+            <SettingsRow
+              key={profile.id}
+              label={profile.name}
+              description={profile.modelName}
+              value={
+                <span className="text-[length:var(--fs-sm)] text-[var(--dim)]">
+                  {profile.providerKind}
+                  {profile.vectorDimensions != null ? ` · ${profile.vectorDimensions}d` : ""}
+                </span>
+              }
+            />
+          ))
         )}
       </SettingsGroup>
 
@@ -357,6 +412,37 @@ function ProviderSection({
           rows={[{ label: "Active parser", value: runtime.runtimeSettings.activeParserKind, mono: true }]}
         />
       </SettingsGroup>
+
+      <UiModal isOpen={credentialTarget !== null} onClose={closeCredentialModal} maxWidth="max-w-md">
+        <UiModalHeader
+          title={`Credential for ${credentialTarget?.displayName ?? "provider"}`}
+          onClose={closeCredentialModal}
+        />
+        <div className="space-y-4 px-6 py-4">
+          <p className="text-[length:var(--fs-sm)] text-[var(--dim)]">
+            Enter a replacement credential. Stored values are never displayed.
+          </p>
+          <SettingsInput
+            type="password"
+            value={credentialDraft}
+            onChange={setCredentialDraft}
+            placeholder="New credential"
+            aria-label={`New credential for ${credentialTarget?.displayName ?? "provider"}`}
+          />
+          <div className="flex justify-end gap-2">
+            <SettingsButton onClick={closeCredentialModal} disabled={saving}>
+              Cancel
+            </SettingsButton>
+            <SettingsButton
+              tone="primary"
+              disabled={saving || !credentialDraft.trim()}
+              onClick={() => void rotate()}
+            >
+              {saving ? "Saving…" : "Save"}
+            </SettingsButton>
+          </div>
+        </div>
+      </UiModal>
     </>
   );
 }
@@ -556,6 +642,7 @@ function DomainsSection({
                           },
                         ]}
                       />
+                      <DomainOperationHistory domainId={domain.id} />
                     </div>
                     <div className="w-9 shrink-0" aria-hidden />
                   </div>
@@ -639,6 +726,14 @@ function DomainsSection({
       </UiModal>
     </>
   );
+}
+
+function DomainOperationHistory({ domainId }: { domainId: string }) {
+  const load = useCallback(
+    () => listDomainOperations(domainId).then((result) => ({ operations: result.operations })),
+    [domainId],
+  );
+  return <OperationHistoryList testId="domain-operation-history" load={load} />;
 }
 
 function UsersSection({ users }: { users: CurrentUser[] }) {

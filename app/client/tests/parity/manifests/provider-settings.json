@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "targetId": "provider-settings",
+  "owner": "src/features/settings-panel",
+  "layer": "feature",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical composition: SettingsPanel ProviderSection at /settings?section=provider.",
+      "Composes settings-nav, settings-group, settings-row, button, select, status-pill, input, ui-modal — no duplicate primitives.",
+      "Guidance input: docs/_scratch/provider-settings-imagined.html (non-normative).",
+      "Generated DTO fields only: kind, configured, requiresCredentials, displayName, inUse, version.",
+      "Synthetic labels only; no credentials, private IDs, runtime URLs, or readiness claims beyond configured.",
+      "Production-boundary Playwright remains P12-07."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "section": "Model Provider",
+      "providers": "Providers",
+      "openai": "OpenAI",
+      "bedrock": "AWS Bedrock",
+      "ollama": "Ollama",
+      "configured": "Configured",
+      "notConfigured": "Not configured",
+      "synthesis": "Synthesis default",
+      "embeddings": "Embedding profiles"
+    },
+    "variants": ["ready-configured", "unconfigured-provider", "ollama-no-credential"],
+    "states": ["ready", "loading", "conflict", "unconfigured"],
+    "themes": ["zai-dark", "zai-light"],
+    "viewports": ["390x844", "1280x800"],
+    "semanticTokens": ["--ui-fg", "--ui-muted", "--ui-border", "--ui-bg", "--ui-success", "--ui-warning", "--fs-base", "--fs-sm"],
+    "geometry": {
+      "layout": "settings section detail with grouped rows; credential action on-demand; synthesis select; read-only embedding facts",
+      "density": "compact SettingsRow padding; no dashboard card grid"
+    }
+  },
+  "htmlStatic": {
+    "snapshotRegions": ["theme-dark-ready", "theme-light-ready"],
+    "expectedTokenGeometry": [
+      "Provider rows use --ui-fg labels with semantic status (not color-only meaning)",
+      "No card grid; grouped bordered rows only",
+      "Embedding profiles are informational facts without replacement controls"
+    ],
+    "forbiddenClaims": ["focus", "ARIA", "keyboard", "touch", "state-transition"]
+  },
+  "react": {
+    "r10": {
+      "keyboardTouch": "credential/replace and synthesis controls are keyboard activatable",
+      "themes": "zai-dark and zai-light render without geometry drift in Vitest",
+      "scope": "no member model picker, runtime URL, secret value, or browser profile CRUD"
+    }
+  }
+}
