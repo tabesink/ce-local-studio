@@ -33,13 +33,12 @@ from context_engine.models import (
 )
 from context_engine.services.audit import ALLOWED_AUDIT_METADATA_KEYS, AuditContext
 from context_engine.services.auth import create_user
-from context_engine.services.chat_turns import redact_turns_for_domain
 from context_engine.services.conversations import create_conversation, update_conversation_title
 from context_engine.services.metrics import METRIC_LABEL_KEYS, reset_metrics, safe_increment, snapshot_metrics
 from context_engine.services import readiness as readiness_module
 from context_engine.services.readiness import SUPPORTED_ALEMBIC_HEAD
 from context_engine.services.runtime_config import SecretCrypto, rotate_provider_credential, seed_runtime_config
-from context_engine.services.sources import upload_source_bytes
+from context_engine.services.sources import enqueue_delete_source, upload_source_bytes
 from context_engine.services.structured_logging import SAFE_LOG_FIELDS, JsonLogFormatter, safe_log
 
 FORBIDDEN_SUBSTRINGS = (
@@ -268,7 +267,16 @@ def test_cross_sink_privacy_scan_after_planted_mutations(tmp_path: Path) -> None
                 )
             )
             db.commit()
-            redact_turns_for_domain(db, domain.id, audit_context=admin_audit)
+            db.refresh(source)
+            # P12-03 G6 — plant via full source-delete enqueue (not helper-only redact).
+            enqueue_delete_source(
+                db,
+                domain_id=domain.id,
+                source_id=source.id,
+                expected_version=source.version,
+                requested_by_user=admin,
+                audit_context=admin_audit,
+            )
 
             safe_log(
                 logging.getLogger("context_engine.services.sources"),
