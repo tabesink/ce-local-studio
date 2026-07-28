@@ -22,6 +22,7 @@ from context_engine.models import (
     AUDIT_EVENT_SOURCE_INDEX_CANCELLED,
     AUDIT_EVENT_SOURCE_INDEX_RETRY_QUEUED,
     DOMAIN_STATE_DELETING,
+    DOMAIN_STATE_RUNNING,
     SOURCE_INDEX_REMOTE_STATES,
     SOURCE_INDEX_STATE_ACCEPTED,
     SOURCE_INDEX_STATE_CANCELLED,
@@ -1074,9 +1075,20 @@ def mark_index_uncertain_if_current(
 
 
 class SourceIndexWorker:
-    def __init__(self, settings: Settings, client: LightRAGClientProtocol | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        client: LightRAGClientProtocol | None = None,
+        controller: DomainRuntimeController | None = None,
+    ) -> None:
         self._settings = settings
-        self._client = client or index_client_from_settings(settings)
+        self._controller = controller or controller_from_settings(settings)
+        self._client = client or index_client_from_settings(settings, self._controller)
+
+    def _domain_allows_new_submit(self, db: Session, domain: Domain) -> bool:
+        if domain.state != DOMAIN_STATE_RUNNING:
+            return False
+        return domain_available(db, domain, self._controller)
 
     def run_once(self, db: Session) -> bool:
         source = self._claim_next_source(db)
@@ -1176,6 +1188,30 @@ class SourceIndexWorker:
                 request_id=request_id,
                 code=readiness.error_code or "source_index_failed",
                 message=readiness.error_message or "Source index failed.",
+            )
+            return True
+
+        # New submits require a running, healthy domain (A-04 stop fence). In-flight
+        # readiness probes above may still complete under generation fences.
+        if not self._domain_allows_new_submit(db, domain):
+            now = utc_now()
+            source.index_lease_owner = None
+            source.index_lease_expires_at = now + timedelta(seconds=backoff_seconds)
+            source.index_updated_at = now
+            source.updated_at = now
+            db.commit()
+            return True
+
+        try:
+            seal_domain_embedding_runtime_env(db, self._settings, domain)
+        except Exception:  # noqa: BLE001 -- fail closed with safe index error
+            mark_index_failed_if_current(
+                db,
+                source_id=source.id,
+                generation=generation,
+                request_id=request_id,
+                code="source_index_unavailable",
+                message="Source index runtime unavailable.",
             )
             return True
 

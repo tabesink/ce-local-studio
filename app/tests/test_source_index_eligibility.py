@@ -184,7 +184,9 @@ def test_timeout_leaves_submitting_uncertain_and_probe_avoids_resubmit(tmp_path,
     client.queue_readiness(
         IndexReadiness(ready=False, failed=True, error_code="source_index_missing", error_message="missing")
     )
-    worker = SourceIndexWorker(settings, client=client)
+    worker = SourceIndexWorker(settings, client=client, controller=_Controller(healthy=True))
+    monkeypatch.setattr("context_engine.services.indexing.seal_domain_embedding_runtime_env", lambda *_a, **_k: None)
+    monkeypatch.setattr(worker, "_domain_allows_new_submit", lambda _db, _domain: True)
 
     def _timeout_submit(*_args, **_kwargs):
         client.submit_calls += 1
@@ -310,6 +312,64 @@ def test_mark_index_uncertain_rejects_stale_generation() -> None:
         is False
     )
     assert source.index_error_code is None
+
+
+def test_new_submit_skipped_when_domain_stopped(tmp_path) -> None:
+    settings = Settings(
+        testing=True,
+        public_origin="http://ce.example.test",
+        internal_hosts="testserver",
+        trusted_bff_peers="testclient",
+        csrf_signing_key="MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+        session_cookie_secure=False,
+        domain_runtime_controller_kind="local",
+        domain_runtime_root=str(tmp_path / "runtimes"),
+        source_storage_root=str(tmp_path / "storage"),
+        source_index_worker_id="index-worker",
+        source_index_lease_seconds=30,
+        source_index_timeout_seconds=10,
+        source_index_poll_backoff_seconds=5,
+        lightrag_client_kind="local",
+    )
+    client = _ScriptedClient()
+    client.queue_readiness(
+        IndexReadiness(ready=False, failed=True, error_code="source_index_missing", error_message="missing")
+    )
+    worker = SourceIndexWorker(settings, client=client, controller=_Controller(healthy=True))
+    source = SourceDocument(
+        id="src-stopped",
+        public_ref="doc_stopped",
+        domain_id="domain-x",
+        original_filename="a.pdf",
+        content_type="application/pdf",
+        original_sha256="a" * 64,
+        original_size_bytes=10,
+        original_object_key="obj/stopped",
+        state=SOURCE_STATE_PREPARED,
+        parser_kind="docling",
+        preparation_generation=1,
+        index_state=SOURCE_INDEX_STATE_SUBMITTING,
+        index_generation=1,
+        index_content_hash="d" * 64,
+        index_request_id=compute_index_request_id("src-stopped", 1, "d" * 64),
+        index_lease_owner="index-worker",
+        index_lease_expires_at=utc_now() + timedelta(seconds=30),
+        index_updated_at=utc_now(),
+        version=1,
+    )
+    domain = _domain(state=DOMAIN_STATE_STOPPED)
+    domain.id = "domain-x"
+    db = MagicMock()
+    db.get.side_effect = lambda model, key: source if model is SourceDocument else domain
+    db.refresh = MagicMock()
+    db.commit = MagicMock()
+    db.scalar = MagicMock(return_value=source)
+
+    assert worker.run_once(db) is True
+    assert client.submit_calls == 0
+    assert source.index_state == SOURCE_INDEX_STATE_SUBMITTING
+    assert source.index_lease_owner is None
+    assert source.index_lease_expires_at is not None
 
 
 def test_poll_backoff_settings_validated() -> None:
