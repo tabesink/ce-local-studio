@@ -422,6 +422,7 @@ def consume_composer_ref_tokens(
                 ComposerRefToken.token_hash.in_(hashes),
                 ComposerRefToken.owner_user_id == owner.id,
             )
+            .order_by(ComposerRefToken.token_hash)
             .with_for_update()
         )
     )
