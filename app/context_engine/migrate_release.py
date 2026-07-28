@@ -6,6 +6,8 @@ Compose and scripts/dev.sh must invoke this module instead of bare
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+import os
 from pathlib import Path
 import sys
 
@@ -56,6 +58,21 @@ def ordered_revisions(config: Config | None = None) -> tuple[str, ...]:
     return tuple(revisions)
 
 
+@contextmanager
+def _bound_database_url_env(database_url: str):
+    """migrations/env.py prefers CONTEXT_ENGINE_DATABASE_URL over alembic.ini."""
+    key = "CONTEXT_ENGINE_DATABASE_URL"
+    previous = os.environ.get(key)
+    os.environ[key] = database_url
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = previous
+
+
 def run_migrate_release(
     *,
     database_url: str | None = None,
@@ -63,7 +80,8 @@ def run_migrate_release(
 ) -> str:
     """Run preflight, upgrade when needed, and post-verify. Returns accept reason."""
     settings = Settings(database_url=database_url) if database_url else Settings()
-    config = _alembic_config(settings.database_url)
+    target_url = settings.database_url
+    config = _alembic_config(target_url)
 
     snapshot_path = snapshot_path_for_head(SUPPORTED_ALEMBIC_HEAD)
     if not snapshot_path.is_file():
@@ -74,40 +92,45 @@ def run_migrate_release(
         raise MigrateReleaseError(REASON_SNAPSHOT_HEAD_MISMATCH) from exc
 
     ordered = ordered_revisions(config)
-    engine = create_engine(settings.database_url, pool_pre_ping=True)
-    try:
-        before = collect_inventory_from_engine(engine)
-        before_fp = before.fingerprint()
-        before_rev = before.alembic_revision
-        verdict = classify_with_ordered_revisions(
-            before,
-            policy="migrate",
-            ordered_revisions=ordered,
-            expected=expected,
-            supported_head=SUPPORTED_ALEMBIC_HEAD,
-        )
-        if not verdict.accepted:
-            after = collect_inventory_from_engine(engine)
-            if after.fingerprint() != before_fp or after.alembic_revision != before_rev:
-                raise MigrateReleaseError("catalog_mutated_during_refuse")
-            raise MigrateReleaseError(verdict.reason)
-
-        upgrade(config, "head")
-        after = collect_inventory_from_engine(engine)
-        post = classify_with_ordered_revisions(
-            after,
-            policy="startup",
-            ordered_revisions=ordered,
-            expected=expected,
-            supported_head=SUPPORTED_ALEMBIC_HEAD,
-        )
-        if not post.accepted or post.reason != REASON_CURRENT_TARGET_OK:
-            raise MigrateReleaseError(
-                post.reason if not post.accepted else "post_upgrade_mismatch"
+    with _bound_database_url_env(target_url):
+        engine = create_engine(target_url, pool_pre_ping=True)
+        try:
+            before = collect_inventory_from_engine(engine)
+            before_fp = before.fingerprint()
+            before_rev = before.alembic_revision
+            verdict = classify_with_ordered_revisions(
+                before,
+                policy="migrate",
+                ordered_revisions=ordered,
+                expected=expected,
+                supported_head=SUPPORTED_ALEMBIC_HEAD,
             )
-        return verdict.reason if verdict.reason in {REASON_EMPTY_OK, REASON_CURRENT_TARGET_OK} else post.reason
-    finally:
-        engine.dispose()
+            if not verdict.accepted:
+                after = collect_inventory_from_engine(engine)
+                if after.fingerprint() != before_fp or after.alembic_revision != before_rev:
+                    raise MigrateReleaseError("catalog_mutated_during_refuse")
+                raise MigrateReleaseError(verdict.reason)
+
+            upgrade(config, "head")
+            after = collect_inventory_from_engine(engine)
+            post = classify_with_ordered_revisions(
+                after,
+                policy="startup",
+                ordered_revisions=ordered,
+                expected=expected,
+                supported_head=SUPPORTED_ALEMBIC_HEAD,
+            )
+            if not post.accepted or post.reason != REASON_CURRENT_TARGET_OK:
+                raise MigrateReleaseError(
+                    post.reason if not post.accepted else "post_upgrade_mismatch"
+                )
+            return (
+                verdict.reason
+                if verdict.reason in {REASON_EMPTY_OK, REASON_CURRENT_TARGET_OK}
+                else post.reason
+            )
+        finally:
+            engine.dispose()
 
 
 def main() -> None:

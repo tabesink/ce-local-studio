@@ -7,11 +7,25 @@ Production incident/HA recovery: P12-04 / P12-08.
 ## Boot order
 
 1. `postgres` healthy  
-2. `migrate` (`alembic upgrade head`) completed  
+2. `migrate` (`python -m context_engine.migrate_release`) completed — Path 1 preflight accepts only empty DB or exact current catalog/head, then upgrades and re-verifies  
 3. `bootstrap` (insert-only admin; `CE_ADMIN_*` only here) completed  
 4. `api` `/health/ready` → `{status:ready}`  
-5. `worker` internal readiness (DB + exact Alembic head + filesystem object-store) then claim loop; Compose `healthy` = heartbeat after ready  
+5. `worker` internal readiness (DB + exact Alembic head + catalog match + filesystem object-store) then claim loop; Compose `healthy` = heartbeat after ready  
 6. `frontend` `/login` healthy (not BFF trust proof)
+
+### Migrate refuse codes (Path 1)
+
+Closed stderr reason → action. Do **not** run bare `alembic upgrade head` on an unknown volume.
+
+| Reason | Action |
+| --- | --- |
+| `empty_ok` / `current_target_ok` (success line) | Continue bootstrap |
+| `legacy_database_refused` | Decommission / export outside product; provision fresh DB |
+| `partial_schema` / `renamed_object` / `unknown_object` / `catalog_mismatch` | Restore current-head backup or recreate empty volume |
+| `revision_behind` / `revision_ahead` / `unknown_history` | Restore current-head backup; do not force upgrade |
+| `extension_refused` / `snapshot_head_mismatch` | Fix cluster extensions / ship matching snapshot+head; recreate if unsure |
+
+Path 2 supported legacy upgrade is **not** available. Backup/restore drills: P12-04.
 
 ```bash
 cd app
@@ -25,7 +39,7 @@ Recreate `.env.stack.local` from `.env.stack.example` for the ingress-wired HTTP
 | Probe | Meaning |
 | --- | --- |
 | `GET /health/live` | Process up only |
-| `GET /health/ready` | DB + schema head + enabled admin + filesystem store |
+| `GET /health/ready` | DB + schema head + catalog match + enabled admin + filesystem store |
 | Worker Compose `healthy` | Heartbeat file fresh **after** internal worker readiness |
 | Worker claim-ready | In-process gate before first claim (not the heartbeat alone) |
 

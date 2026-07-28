@@ -20,6 +20,7 @@ from alembic.config import Config
 from sqlalchemy import create_engine, text
 
 from context_engine.config import Settings
+from context_engine.migrate_release import _bound_database_url_env
 from context_engine.services.readiness import SUPPORTED_ALEMBIC_HEAD
 from context_engine.services.schema_compatibility import (
     collect_inventory_from_engine,
@@ -40,27 +41,29 @@ def _alembic_config(database_url: str) -> Config:
 
 def generate(database_url: str | None = None) -> Path:
     settings = Settings(database_url=database_url) if database_url else Settings()
-    engine = create_engine(settings.database_url, pool_pre_ping=True)
-    try:
-        inventory = collect_inventory_from_engine(engine)
-        if not is_empty_inventory(inventory):
-            raise SystemExit(
-                "refused: database is not empty; "
-                "provision a pristine database before generating the snapshot"
-            )
+    target_url = settings.database_url
+    with _bound_database_url_env(target_url):
+        engine = create_engine(target_url, pool_pre_ping=True)
+        try:
+            inventory = collect_inventory_from_engine(engine)
+            if not is_empty_inventory(inventory):
+                raise SystemExit(
+                    "refused: database is not empty; "
+                    "provision a pristine database before generating the snapshot"
+                )
 
-        command.upgrade(_alembic_config(settings.database_url), "head")
-        with engine.connect() as connection:
-            head = connection.scalar(text("SELECT version_num FROM alembic_version"))
-        if head != SUPPORTED_ALEMBIC_HEAD:
-            raise SystemExit(
-                f"refused: upgraded head {head!r} != SUPPORTED_ALEMBIC_HEAD "
-                f"{SUPPORTED_ALEMBIC_HEAD!r}"
-            )
-        after = collect_inventory_from_engine(engine)
-        return write_snapshot(after, head=SUPPORTED_ALEMBIC_HEAD)
-    finally:
-        engine.dispose()
+            command.upgrade(_alembic_config(target_url), "head")
+            with engine.connect() as connection:
+                head = connection.scalar(text("SELECT version_num FROM alembic_version"))
+            if head != SUPPORTED_ALEMBIC_HEAD:
+                raise SystemExit(
+                    f"refused: upgraded head {head!r} != SUPPORTED_ALEMBIC_HEAD "
+                    f"{SUPPORTED_ALEMBIC_HEAD!r}"
+                )
+            after = collect_inventory_from_engine(engine)
+            return write_snapshot(after, head=SUPPORTED_ALEMBIC_HEAD)
+        finally:
+            engine.dispose()
 
 
 def main() -> None:

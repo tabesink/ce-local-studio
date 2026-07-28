@@ -1,6 +1,6 @@
 # Legacy Persistence Retirement Boundary
 
-Status: static repository-evidence hypothesis for a future compatibility decision. This document is not a live database census, migration authorization, or permission to drop data.
+Status: Path 1 (unsupported populated legacy upgrade) was chosen and proven for Phase 1 on 2026-07-28 — see `docs/_scratch/p12-01-populated-compatibility-evidence.md`. This document remains the static closure hypothesis and stop condition for Path 2; it is not a live database census, migration authorization, or permission to drop/contract populated legacy data.
 
 ## Historical closure in the lifted tree
 
