@@ -45,6 +45,7 @@ from context_engine.services.chat_turns import (
     redact_turns_for_domain,
     safe_turn_dto,
 )
+from context_engine.services.composer_refs import ComposerRefError, _token_hash, validate_composer_ref_tokens
 from context_engine.services.domains import enqueue_delete_domain
 from context_engine.services.sources import enqueue_delete_source
 
@@ -483,6 +484,107 @@ def test_source_delete_enqueue_omits_public_projection_and_terminal_snapshot(tmp
         assert events[-1].event_type == TURN_EVENT_REDACTED
         assert "SENTINEL_ANSWER_MUST_OMIT" not in serialized
         assert "SENTINEL_EXCERPT_MUST_OMIT" not in serialized
+    finally:
+        db.close()
+
+
+def test_m11_source_delete_clears_accepted_refs_and_expires_composer_tokens(tmp_path: Path) -> None:
+    """P11-03 U4 / AE5 — real accepted-ref rows omit publicly; source tokens expire."""
+    db = _session(tmp_path)
+    try:
+        admin, domain, source = _seed_domain(db, domain_id="domain-composer-src")
+        owner, conversation = _owner_conversation(db)
+        turn = _turn(
+            db,
+            conversation,
+            client_request_id="source-delete-accepted-refs",
+            route=TURN_ROUTE_DOMAIN_RAG,
+            domain_id=domain.id,
+            status=TURN_STATUS_RUNNING,
+            assistant_answer=None,
+        )
+        db.flush()
+        db.add(
+            ConversationTurnComposerRef(
+                turn_id=turn.id,
+                ref_order=1,
+                ref_kind=COMPOSER_REF_KIND_SOURCE,
+                safe_label="SENTINEL_ACCEPTED_LABEL",
+                safe_description="SENTINEL_ACCEPTED_DESC",
+                domain_id=domain.id,
+                source_document_id=source.id,
+            )
+        )
+        raw = "ce-p11-03-delete-token-raw"
+        now = utc_now()
+        db.add(
+            ComposerRefToken(
+                token_hash=_token_hash(raw),
+                owner_user_id=owner.id,
+                ref_kind=COMPOSER_REF_KIND_SOURCE,
+                target_id=source.id,
+                domain_id=domain.id,
+                safe_label="Live source token",
+                safe_description=None,
+                expires_at=now + timedelta(hours=1),
+                created_at=now,
+            )
+        )
+        turn = _complete_turn(
+            db,
+            turn=turn,
+            stop_reason=TURN_STOP_REASON_DIRECT_LLM,
+            assistant_answer="SENTINEL_ANSWER_MUST_OMIT",
+        )
+        db.commit()
+
+        settings = Settings(database_url="sqlite+pysqlite:///:memory:", testing=True)
+        before = safe_turn_dto(db, settings, turn)
+        assert before["acceptedRefs"]
+        assert before["acceptedRefs"][0]["label"] == "SENTINEL_ACCEPTED_LABEL"
+
+        enqueue_delete_source(
+            db,
+            domain_id=domain.id,
+            source_id=source.id,
+            expected_version=source.version,
+            requested_by_user=admin,
+            audit_context=None,
+        )
+        db.refresh(turn)
+        dto = safe_turn_dto(db, settings, turn)
+        accepted_row = db.scalar(
+            select(ConversationTurnComposerRef).where(ConversationTurnComposerRef.turn_id == turn.id)
+        )
+        token_row = db.scalar(
+            select(ComposerRefToken).where(ComposerRefToken.token_hash == _token_hash(raw))
+        )
+
+        assert turn.status == TURN_STATUS_REDACTED
+        assert turn.user_message == "Retained question."
+        assert turn.assistant_answer is None
+        assert dto["acceptedRefs"] == []
+        assert dto["assistantAnswer"] is None
+        assert dto["evidence"] == []
+        assert accepted_row is not None
+        assert accepted_row.redacted_at is not None
+        assert accepted_row.safe_label is None
+        assert accepted_row.safe_description is None
+        assert token_row is not None
+        assert token_row.expires_at <= utc_now() + timedelta(seconds=1)
+
+        with pytest.raises(ComposerRefError) as error:
+            validate_composer_ref_tokens(
+                db,
+                settings=settings,
+                owner=owner,
+                conversation_id=conversation.id,
+                domain_id=domain.id,
+                tokens=[raw],
+            )
+        assert error.value.code == "composer_ref_unavailable"
+        assert source.id not in error.value.message
+        assert raw not in error.value.message
     finally:
         db.close()
 
