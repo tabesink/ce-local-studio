@@ -62,8 +62,15 @@ from context_engine.config import Settings
 from context_engine.models import (
     HTTP_IDEMPOTENCY_ROUTE_CONVERSATION_CREATE,
     HTTP_IDEMPOTENCY_ROUTE_DOMAIN_CREATE,
+    HTTP_IDEMPOTENCY_ROUTE_DOMAIN_DELETE,
+    HTTP_IDEMPOTENCY_ROUTE_DOMAIN_START,
+    HTTP_IDEMPOTENCY_ROUTE_DOMAIN_STOP,
     HTTP_IDEMPOTENCY_ROUTE_MODEL_PROFILE_CREATE,
+    HTTP_IDEMPOTENCY_ROUTE_SOURCE_DELETE,
+    HTTP_IDEMPOTENCY_ROUTE_SOURCE_INDEX_RETRY,
+    HTTP_IDEMPOTENCY_ROUTE_SOURCE_RETRY,
     HTTP_IDEMPOTENCY_ROUTE_SOURCE_UPLOAD,
+    DomainOperation,
     HttpIdempotencyRecord,
     ModelProfile,
     SourceDocument,
@@ -189,6 +196,7 @@ from context_engine.services.sources import (
     source_outline,
     upload_source_bytes,
 )
+from context_engine.services.users import UserDirectoryError, list_admin_users
 
 
 class LoginRequest(BaseModel):
@@ -558,13 +566,24 @@ def logout(
     return response
 
 
+def _user_directory_api_error(exc: UserDirectoryError) -> ApiError:
+    return ApiError(exc.status_code, exc.code, exc.message)
+
+
 @api_router.get("/admin/users")
 def admin_users(
+    request: Request,
+    cursor: str | None = Query(default=None, min_length=1, max_length=512),
+    limit: int = Query(default=50, ge=1, le=100),
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
-) -> dict[str, object]:
-    users = list(db.scalars(select(User).order_by(User.username)))
-    return {"users": [safe_user(user) for user in users]}
+) -> JSONResponse:
+    _reject_unknown_query(request, {"cursor", "limit"})
+    try:
+        result = list_admin_users(db, cursor=cursor, limit=limit)
+    except UserDirectoryError as exc:
+        raise _user_directory_api_error(exc) from exc
+    return _private_json_response(result)
 
 
 def _runtime_config_api_error(exc: RuntimeConfigError) -> ApiError:
@@ -1431,11 +1450,19 @@ def admin_create_domain(
 
 @api_router.get("/admin/domains", response_model=AdminDomainListResponse)
 def admin_list_domains(
+    request: Request,
+    cursor: str | None = Query(default=None, min_length=1, max_length=512),
+    limit: int = Query(default=50, ge=1, le=100),
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
-    return _private_json_response({"domains": admin_domain_list(db, settings), "nextCursor": None})
+    _reject_unknown_query(request, {"cursor", "limit"})
+    try:
+        result = admin_domain_list(db, settings, cursor=cursor, limit=limit)
+    except DomainError as exc:
+        raise _domain_api_error(exc) from exc
+    return _private_json_response(result)
 
 
 @api_router.get("/admin/domains/{domainId}", response_model=AdminDomainMutationResponse)
@@ -1475,8 +1502,31 @@ def admin_start_domain(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> JSONResponse:
+    claim: HttpIdempotencyRecord | None = None
     try:
+        if idempotency_key is not None:
+            fingerprint = fingerprint_payload({"domainId": domain_id})
+            outcome = begin_idempotent(
+                db,
+                principal_user_id=admin.id,
+                route_class=HTTP_IDEMPOTENCY_ROUTE_DOMAIN_START,
+                raw_key=idempotency_key,
+                fingerprint=fingerprint,
+            )
+            if outcome.replay:
+                refs = outcome.response_refs or {}
+                operation = db.get(DomainOperation, refs["operationId"])
+                if operation is None:
+                    raise DomainError(404, "not_found", "Domain not found.")
+                return _private_json_response(
+                    {"operation": safe_domain_operation(operation)},
+                    status_code=outcome.http_status or 202,
+                    etag=strong_etag(operation.version),
+                )
+            claim = outcome.record
+
         operation = start_domain(
             db,
             settings=settings,
@@ -1484,7 +1534,19 @@ def admin_start_domain(
             requested_by_user=admin,
             audit_context=_audit_context(request, admin),
         )
+        if claim is not None:
+            _complete_idempotent_claim(
+                db,
+                claim,
+                http_status=202,
+                response_kind="domain_operation",
+                response_refs={"operationId": operation.id},
+            )
+    except IdempotencyError as exc:
+        raise _idempotency_api_error(exc) from exc
     except DomainError as exc:
+        if claim is not None:
+            _abandon_idempotent_claim(db, claim)
         raise _domain_api_error(exc) from exc
     return _private_json_response(
         {"operation": safe_domain_operation(operation)},
@@ -1500,8 +1562,31 @@ def admin_stop_domain(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> JSONResponse:
+    claim: HttpIdempotencyRecord | None = None
     try:
+        if idempotency_key is not None:
+            fingerprint = fingerprint_payload({"domainId": domain_id})
+            outcome = begin_idempotent(
+                db,
+                principal_user_id=admin.id,
+                route_class=HTTP_IDEMPOTENCY_ROUTE_DOMAIN_STOP,
+                raw_key=idempotency_key,
+                fingerprint=fingerprint,
+            )
+            if outcome.replay:
+                refs = outcome.response_refs or {}
+                operation = db.get(DomainOperation, refs["operationId"])
+                if operation is None:
+                    raise DomainError(404, "not_found", "Domain not found.")
+                return _private_json_response(
+                    {"operation": safe_domain_operation(operation)},
+                    status_code=outcome.http_status or 202,
+                    etag=strong_etag(operation.version),
+                )
+            claim = outcome.record
+
         operation = stop_domain(
             db,
             settings=settings,
@@ -1509,7 +1594,19 @@ def admin_stop_domain(
             requested_by_user=admin,
             audit_context=_audit_context(request, admin),
         )
+        if claim is not None:
+            _complete_idempotent_claim(
+                db,
+                claim,
+                http_status=202,
+                response_kind="domain_operation",
+                response_refs={"operationId": operation.id},
+            )
+    except IdempotencyError as exc:
+        raise _idempotency_api_error(exc) from exc
     except DomainError as exc:
+        if claim is not None:
+            _abandon_idempotent_claim(db, claim)
         raise _domain_api_error(exc) from exc
     return _private_json_response(
         {"operation": safe_domain_operation(operation)},
@@ -1525,9 +1622,34 @@ def admin_delete_domain(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
     if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> JSONResponse:
+    claim: HttpIdempotencyRecord | None = None
     try:
         expected_version = parse_if_match_version(if_match)
+        if idempotency_key is not None:
+            fingerprint = fingerprint_payload(
+                {"domainId": domain_id, "ifMatchVersion": expected_version}
+            )
+            outcome = begin_idempotent(
+                db,
+                principal_user_id=admin.id,
+                route_class=HTTP_IDEMPOTENCY_ROUTE_DOMAIN_DELETE,
+                raw_key=idempotency_key,
+                fingerprint=fingerprint,
+            )
+            if outcome.replay:
+                refs = outcome.response_refs or {}
+                operation = db.get(DomainOperation, refs["operationId"])
+                if operation is None:
+                    raise DomainError(404, "not_found", "Domain not found.")
+                return _private_json_response(
+                    {"operation": safe_domain_operation(operation)},
+                    status_code=outcome.http_status or 202,
+                    etag=strong_etag(operation.version),
+                )
+            claim = outcome.record
+
         operation = enqueue_delete_domain(
             db,
             domain_id=domain_id,
@@ -1535,9 +1657,23 @@ def admin_delete_domain(
             expected_version=expected_version,
             audit_context=_audit_context(request, admin),
         )
+        if claim is not None:
+            _complete_idempotent_claim(
+                db,
+                claim,
+                http_status=202,
+                response_kind="domain_operation",
+                response_refs={"operationId": operation.id},
+            )
+    except IdempotencyError as exc:
+        raise _idempotency_api_error(exc) from exc
     except RuntimeConfigError as exc:
+        if claim is not None:
+            _abandon_idempotent_claim(db, claim)
         raise _runtime_config_api_error(exc) from exc
     except DomainError as exc:
+        if claim is not None:
+            _abandon_idempotent_claim(db, claim)
         raise _domain_api_error(exc) from exc
     return _private_json_response(
         {"operation": safe_domain_operation(operation)},
@@ -1548,12 +1684,16 @@ def admin_delete_domain(
 
 @api_router.get("/admin/domains/{domainId}/operations", response_model=AdminDomainOperationsResponse)
 def admin_domain_operations(
+    request: Request,
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
+    cursor: str | None = Query(default=None, min_length=1, max_length=512),
+    limit: int = Query(default=50, ge=1, le=100),
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> JSONResponse:
+    _reject_unknown_query(request, {"cursor", "limit"})
     try:
-        return _private_json_response({"operations": domain_operations(db, domain_id), "nextCursor": None})
+        return _private_json_response(domain_operations(db, domain_id, cursor=cursor, limit=limit))
     except DomainError as exc:
         raise _domain_api_error(exc) from exc
 
@@ -1668,12 +1808,16 @@ async def admin_upload_source(
 
 @api_router.get("/admin/domains/{domainId}/sources", response_model=AdminSourceListResponse)
 def admin_list_sources(
+    request: Request,
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
+    cursor: str | None = Query(default=None, min_length=1, max_length=512),
+    limit: int = Query(default=50, ge=1, le=100),
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> JSONResponse:
+    _reject_unknown_query(request, {"cursor", "limit"})
     try:
-        return _private_json_response({"sources": list_sources(db, domain_id), "nextCursor": None})
+        return _private_json_response(list_sources(db, domain_id, cursor=cursor, limit=limit))
     except SourceError as exc:
         raise _source_api_error(exc) from exc
 
@@ -1710,14 +1854,18 @@ def admin_get_source_outline(
     response_model=AdminSourceOperationsResponse,
 )
 def admin_source_operations(
+    request: Request,
     domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
     source_id: Annotated[str, Path(alias="sourceId", min_length=1, max_length=36)],
+    cursor: str | None = Query(default=None, min_length=1, max_length=512),
+    limit: int = Query(default=50, ge=1, le=100),
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> JSONResponse:
+    _reject_unknown_query(request, {"cursor", "limit"})
     try:
         return _private_json_response(
-            {"operations": source_operations(db, domain_id, source_id), "nextCursor": None}
+            source_operations(db, domain_id, source_id, cursor=cursor, limit=limit)
         )
     except SourceError as exc:
         raise _source_api_error(exc) from exc
@@ -1735,8 +1883,32 @@ def admin_retry_source_index(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> JSONResponse:
+    claim: HttpIdempotencyRecord | None = None
     try:
+        if idempotency_key is not None:
+            fingerprint = fingerprint_payload({"domainId": domain_id, "sourceId": source_id})
+            outcome = begin_idempotent(
+                db,
+                principal_user_id=admin.id,
+                route_class=HTTP_IDEMPOTENCY_ROUTE_SOURCE_INDEX_RETRY,
+                raw_key=idempotency_key,
+                fingerprint=fingerprint,
+            )
+            if outcome.replay:
+                refs = outcome.response_refs or {}
+                source = db.get(SourceDocument, refs["sourceId"])
+                if source is None:
+                    raise SourceIndexError(404, "source_not_found", "Source not found.")
+                projection = safe_source(db, source)
+                return _private_json_response(
+                    {"source": projection},
+                    status_code=outcome.http_status or 202,
+                    etag=strong_etag(int(projection["version"])),
+                )
+            claim = outcome.record
+
         source = retry_source_index(
             db,
             settings=settings,
@@ -1744,7 +1916,19 @@ def admin_retry_source_index(
             source_id=source_id,
             audit_context=_audit_context(request, admin),
         )
+        if claim is not None:
+            _complete_idempotent_claim(
+                db,
+                claim,
+                http_status=202,
+                response_kind="source_index",
+                response_refs={"sourceId": source.id},
+            )
+    except IdempotencyError as exc:
+        raise _idempotency_api_error(exc) from exc
     except SourceIndexError as exc:
+        if claim is not None:
+            _abandon_idempotent_claim(db, claim)
         raise _source_index_api_error(exc) from exc
     projection = safe_source(db, source)
     return _private_json_response({"source": projection}, status_code=202, etag=strong_etag(int(projection["version"])))
@@ -1787,8 +1971,31 @@ def admin_retry_source(
     source_id: Annotated[str, Path(alias="sourceId", min_length=1, max_length=36)],
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> JSONResponse:
+    claim: HttpIdempotencyRecord | None = None
     try:
+        if idempotency_key is not None:
+            fingerprint = fingerprint_payload({"domainId": domain_id, "sourceId": source_id})
+            outcome = begin_idempotent(
+                db,
+                principal_user_id=admin.id,
+                route_class=HTTP_IDEMPOTENCY_ROUTE_SOURCE_RETRY,
+                raw_key=idempotency_key,
+                fingerprint=fingerprint,
+            )
+            if outcome.replay:
+                refs = outcome.response_refs or {}
+                operation = db.get(SourcePreparationOperation, refs["operationId"])
+                if operation is None:
+                    raise SourceError(404, "not_found", "Source not found.")
+                return _private_json_response(
+                    {"operation": safe_source_operation(operation)},
+                    status_code=outcome.http_status or 202,
+                    etag=strong_etag(operation.version),
+                )
+            claim = outcome.record
+
         operation = retry_source(
             db,
             domain_id=domain_id,
@@ -1796,7 +2003,19 @@ def admin_retry_source(
             requested_by_user=admin,
             audit_context=_audit_context(request, admin),
         )
+        if claim is not None:
+            _complete_idempotent_claim(
+                db,
+                claim,
+                http_status=202,
+                response_kind="source_operation",
+                response_refs={"operationId": operation.id},
+            )
+    except IdempotencyError as exc:
+        raise _idempotency_api_error(exc) from exc
     except SourceError as exc:
+        if claim is not None:
+            _abandon_idempotent_claim(db, claim)
         raise _source_api_error(exc) from exc
     return _private_json_response(
         {"operation": safe_source_operation(operation)},
@@ -1848,9 +2067,34 @@ def admin_delete_source(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
     if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> JSONResponse:
+    claim: HttpIdempotencyRecord | None = None
     try:
         expected_version = parse_if_match_version(if_match)
+        if idempotency_key is not None:
+            fingerprint = fingerprint_payload(
+                {"domainId": domain_id, "sourceId": source_id, "ifMatchVersion": expected_version}
+            )
+            outcome = begin_idempotent(
+                db,
+                principal_user_id=admin.id,
+                route_class=HTTP_IDEMPOTENCY_ROUTE_SOURCE_DELETE,
+                raw_key=idempotency_key,
+                fingerprint=fingerprint,
+            )
+            if outcome.replay:
+                refs = outcome.response_refs or {}
+                operation = db.get(SourcePreparationOperation, refs["operationId"])
+                if operation is None:
+                    raise SourceError(404, "not_found", "Source not found.")
+                return _private_json_response(
+                    {"operation": safe_source_operation(operation)},
+                    status_code=outcome.http_status or 202,
+                    etag=strong_etag(operation.version),
+                )
+            claim = outcome.record
+
         operation = enqueue_delete_source(
             db,
             domain_id=domain_id,
@@ -1859,9 +2103,23 @@ def admin_delete_source(
             requested_by_user=admin,
             audit_context=_audit_context(request, admin),
         )
+        if claim is not None:
+            _complete_idempotent_claim(
+                db,
+                claim,
+                http_status=202,
+                response_kind="source_operation",
+                response_refs={"operationId": operation.id},
+            )
+    except IdempotencyError as exc:
+        raise _idempotency_api_error(exc) from exc
     except RuntimeConfigError as exc:
+        if claim is not None:
+            _abandon_idempotent_claim(db, claim)
         raise _runtime_config_api_error(exc) from exc
     except SourceError as exc:
+        if claim is not None:
+            _abandon_idempotent_claim(db, claim)
         raise _source_api_error(exc) from exc
     return _private_json_response(
         {"operation": safe_source_operation(operation)},

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 import logging
 import re
 import uuid
@@ -7,7 +9,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -62,6 +64,9 @@ logger = logging.getLogger(__name__)
 
 DOMAIN_ID_PATTERN = r"^[a-z0-9][a-z0-9_-]{1,62}$"
 _DOMAIN_ID_RE = re.compile(DOMAIN_ID_PATTERN)
+
+DEFAULT_ADMIN_LIST_PAGE_SIZE = 50
+MAX_ADMIN_LIST_PAGE_SIZE = 100
 
 # Re-export adapter surface for existing service/test imports.
 __all__ = [
@@ -850,10 +855,60 @@ def safe_domain_operation(operation: DomainOperation) -> dict[str, Any]:
     }
 
 
-def admin_domain_list(db: Session, settings: Settings) -> list[dict[str, Any]]:
+def _encode_domain_cursor(domain: Domain) -> str:
+    payload = json.dumps(
+        {"version": 1, "domainId": domain.id},
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return base64.urlsafe_b64encode(payload).rstrip(b"=").decode("ascii")
+
+
+def _decode_domain_cursor(cursor: str) -> str:
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+        domain_id = str(payload["domainId"])
+        if set(payload) != {"version", "domainId"} or payload["version"] != 1 or not domain_id:
+            raise ValueError
+        return domain_id
+    except (KeyError, TypeError, ValueError):
+        raise DomainError(410, "cursor_expired", "The cursor has expired.") from None
+
+
+def admin_domain_list(
+    db: Session,
+    settings: Settings,
+    *,
+    cursor: str | None = None,
+    limit: int = DEFAULT_ADMIN_LIST_PAGE_SIZE,
+) -> dict[str, Any]:
+    if not 1 <= limit <= MAX_ADMIN_LIST_PAGE_SIZE:
+        raise DomainError(422, "validation_error", "Request validation failed.")
+
     controller = controller_from_settings(settings)
-    domains = list(db.scalars(select(Domain).order_by(Domain.id)))
-    return [safe_domain_admin(db, settings, domain, controller) for domain in domains]
+    statement = select(Domain)
+    if cursor:
+        domain_id = _decode_domain_cursor(cursor)
+        anchor = db.get(Domain, domain_id)
+        if anchor is None:
+            raise DomainError(410, "cursor_expired", "The cursor has expired.")
+        statement = statement.where(
+            or_(
+                Domain.created_at < anchor.created_at,
+                and_(Domain.created_at == anchor.created_at, Domain.id < anchor.id),
+            )
+        )
+
+    rows = list(
+        db.scalars(statement.order_by(Domain.created_at.desc(), Domain.id.desc()).limit(limit + 1))
+    )
+    has_more = len(rows) > limit
+    page_rows = rows[:limit]
+    return {
+        "domains": [safe_domain_admin(db, settings, domain, controller) for domain in page_rows],
+        "nextCursor": _encode_domain_cursor(page_rows[-1]) if has_more and page_rows else None,
+    }
 
 
 def member_domain_list(db: Session, settings: Settings) -> list[dict[str, Any]]:
@@ -877,16 +932,62 @@ def domain_status(db: Session, settings: Settings, domain_id: str) -> dict[str, 
     }
 
 
-def domain_operations(db: Session, domain_id: str) -> list[dict[str, Any]]:
+def _encode_domain_operation_cursor(operation: DomainOperation) -> str:
+    payload = json.dumps(
+        {"version": 1, "operationId": operation.id},
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return base64.urlsafe_b64encode(payload).rstrip(b"=").decode("ascii")
+
+
+def _decode_domain_operation_cursor(cursor: str) -> str:
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+        operation_id = str(payload["operationId"])
+        if set(payload) != {"version", "operationId"} or payload["version"] != 1 or not operation_id:
+            raise ValueError
+        return operation_id
+    except (KeyError, TypeError, ValueError):
+        raise DomainError(410, "cursor_expired", "The cursor has expired.") from None
+
+
+def domain_operations(
+    db: Session,
+    domain_id: str,
+    *,
+    cursor: str | None = None,
+    limit: int = DEFAULT_ADMIN_LIST_PAGE_SIZE,
+) -> dict[str, Any]:
     _domain_or_404(db, domain_id)
-    operations = list(
+    if not 1 <= limit <= MAX_ADMIN_LIST_PAGE_SIZE:
+        raise DomainError(422, "validation_error", "Request validation failed.")
+
+    statement = select(DomainOperation).where(DomainOperation.domain_id == domain_id)
+    if cursor:
+        operation_id = _decode_domain_operation_cursor(cursor)
+        anchor = db.get(DomainOperation, operation_id)
+        if anchor is None or anchor.domain_id != domain_id:
+            raise DomainError(410, "cursor_expired", "The cursor has expired.")
+        statement = statement.where(
+            or_(
+                DomainOperation.created_at < anchor.created_at,
+                and_(DomainOperation.created_at == anchor.created_at, DomainOperation.id < anchor.id),
+            )
+        )
+
+    rows = list(
         db.scalars(
-            select(DomainOperation)
-            .where(DomainOperation.domain_id == domain_id)
-            .order_by(DomainOperation.created_at.desc(), DomainOperation.id)
+            statement.order_by(DomainOperation.created_at.desc(), DomainOperation.id.desc()).limit(limit + 1)
         )
     )
-    return [safe_domain_operation(operation) for operation in operations]
+    has_more = len(rows) > limit
+    page_rows = rows[:limit]
+    return {
+        "operations": [safe_domain_operation(operation) for operation in page_rows],
+        "nextCursor": _encode_domain_operation_cursor(page_rows[-1]) if has_more and page_rows else None,
+    }
 
 
 def reconcile_uncertain_lifecycle_operations(db: Session, settings: Settings) -> int:

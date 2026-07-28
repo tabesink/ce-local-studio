@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import re
@@ -11,7 +12,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -90,6 +91,9 @@ from context_engine.services.metrics import safe_increment
 logger = logging.getLogger(__name__)
 
 _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._ -]+")
+
+DEFAULT_ADMIN_LIST_PAGE_SIZE = 50
+MAX_ADMIN_LIST_PAGE_SIZE = 100
 
 
 class SourceError(Exception):
@@ -467,16 +471,62 @@ def safe_source_operation(operation: SourcePreparationOperation) -> dict[str, An
     }
 
 
-def list_sources(db: Session, domain_id: str) -> list[dict[str, Any]]:
+def _encode_source_list_cursor(source: SourceDocument) -> str:
+    payload = json.dumps(
+        {"version": 1, "sourceId": source.id},
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return base64.urlsafe_b64encode(payload).rstrip(b"=").decode("ascii")
+
+
+def _decode_source_list_cursor(cursor: str) -> str:
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+        source_id = str(payload["sourceId"])
+        if set(payload) != {"version", "sourceId"} or payload["version"] != 1 or not source_id:
+            raise ValueError
+        return source_id
+    except (KeyError, TypeError, ValueError):
+        raise SourceError(410, "cursor_expired", "The cursor has expired.") from None
+
+
+def list_sources(
+    db: Session,
+    domain_id: str,
+    *,
+    cursor: str | None = None,
+    limit: int = DEFAULT_ADMIN_LIST_PAGE_SIZE,
+) -> dict[str, Any]:
     _domain_or_404(db, domain_id)
-    sources = list(
+    if not 1 <= limit <= MAX_ADMIN_LIST_PAGE_SIZE:
+        raise SourceError(422, "validation_error", "Request validation failed.")
+
+    statement = select(SourceDocument).where(SourceDocument.domain_id == domain_id)
+    if cursor:
+        source_id = _decode_source_list_cursor(cursor)
+        anchor = db.get(SourceDocument, source_id)
+        if anchor is None or anchor.domain_id != domain_id:
+            raise SourceError(410, "cursor_expired", "The cursor has expired.")
+        statement = statement.where(
+            or_(
+                SourceDocument.created_at < anchor.created_at,
+                and_(SourceDocument.created_at == anchor.created_at, SourceDocument.id < anchor.id),
+            )
+        )
+
+    rows = list(
         db.scalars(
-            select(SourceDocument)
-            .where(SourceDocument.domain_id == domain_id)
-            .order_by(SourceDocument.created_at.desc(), SourceDocument.id)
+            statement.order_by(SourceDocument.created_at.desc(), SourceDocument.id.desc()).limit(limit + 1)
         )
     )
-    return [safe_source(db, source) for source in sources]
+    has_more = len(rows) > limit
+    page_rows = rows[:limit]
+    return {
+        "sources": [safe_source(db, source) for source in page_rows],
+        "nextCursor": _encode_source_list_cursor(page_rows[-1]) if has_more and page_rows else None,
+    }
 
 
 def source_detail(db: Session, domain_id: str, source_id: str) -> dict[str, Any]:
@@ -484,17 +534,71 @@ def source_detail(db: Session, domain_id: str, source_id: str) -> dict[str, Any]
     return safe_source(db, _source_or_404(db, domain_id, source_id))
 
 
-def source_operations(db: Session, domain_id: str, source_id: str) -> list[dict[str, Any]]:
+def _encode_source_operation_cursor(operation: SourcePreparationOperation) -> str:
+    payload = json.dumps(
+        {"version": 1, "operationId": operation.id},
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return base64.urlsafe_b64encode(payload).rstrip(b"=").decode("ascii")
+
+
+def _decode_source_operation_cursor(cursor: str) -> str:
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+        operation_id = str(payload["operationId"])
+        if set(payload) != {"version", "operationId"} or payload["version"] != 1 or not operation_id:
+            raise ValueError
+        return operation_id
+    except (KeyError, TypeError, ValueError):
+        raise SourceError(410, "cursor_expired", "The cursor has expired.") from None
+
+
+def source_operations(
+    db: Session,
+    domain_id: str,
+    source_id: str,
+    *,
+    cursor: str | None = None,
+    limit: int = DEFAULT_ADMIN_LIST_PAGE_SIZE,
+) -> dict[str, Any]:
     _domain_or_404(db, domain_id)
     _source_or_404(db, domain_id, source_id)
-    operations = list(
+    if not 1 <= limit <= MAX_ADMIN_LIST_PAGE_SIZE:
+        raise SourceError(422, "validation_error", "Request validation failed.")
+
+    statement = select(SourcePreparationOperation).where(
+        SourcePreparationOperation.source_document_id == source_id
+    )
+    if cursor:
+        operation_id = _decode_source_operation_cursor(cursor)
+        anchor = db.get(SourcePreparationOperation, operation_id)
+        if anchor is None or anchor.source_document_id != source_id:
+            raise SourceError(410, "cursor_expired", "The cursor has expired.")
+        statement = statement.where(
+            or_(
+                SourcePreparationOperation.created_at < anchor.created_at,
+                and_(
+                    SourcePreparationOperation.created_at == anchor.created_at,
+                    SourcePreparationOperation.id < anchor.id,
+                ),
+            )
+        )
+
+    rows = list(
         db.scalars(
-            select(SourcePreparationOperation)
-            .where(SourcePreparationOperation.source_document_id == source_id)
-            .order_by(SourcePreparationOperation.created_at.desc(), SourcePreparationOperation.id)
+            statement.order_by(
+                SourcePreparationOperation.created_at.desc(), SourcePreparationOperation.id.desc()
+            ).limit(limit + 1)
         )
     )
-    return [safe_source_operation(operation) for operation in operations]
+    has_more = len(rows) > limit
+    page_rows = rows[:limit]
+    return {
+        "operations": [safe_source_operation(operation) for operation in page_rows],
+        "nextCursor": _encode_source_operation_cursor(page_rows[-1]) if has_more and page_rows else None,
+    }
 
 
 def _outline_label(block: SourceBlock, *, fallback: str) -> str:
