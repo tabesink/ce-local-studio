@@ -12,8 +12,10 @@ from context_engine.app import create_app
 from context_engine.config import Settings
 from context_engine.db import Base, utc_now
 from context_engine.models import (
+    AUDIT_EVENT_CONVERSATION_CREATED,
     TURN_ROUTE_DIRECT_LLM,
     TURN_STATUS_REDACTED,
+    AuditEvent,
     Conversation,
     ConversationTurn,
     ConversationTurnComposerRef,
@@ -260,3 +262,100 @@ def test_m08_redacted_turn_detail_never_projects_stored_private_fields(
     assert projected["acceptedRefs"] == []
     assert projected["error"] is None
     assert "PRIVATE" not in response.text
+
+
+def test_conversation_create_idempotency_key_replay_is_durable(
+    conversation_http_context,
+) -> None:
+    app, settings, owner_token, _ = conversation_http_context
+    headers, cookies = _security(settings, owner_token, "idempotency-replay-bucket")
+    headers = {**headers, "Idempotency-Key": "conv-create-key-1"}
+
+    with TestClient(app) as client:
+        first = client.post(
+            f"{CANONICAL_API_PREFIX}/conversations",
+            json={"title": "  Notes  "},
+            headers=headers,
+            cookies=cookies,
+        )
+        second = client.post(
+            f"{CANONICAL_API_PREFIX}/conversations",
+            json={"title": "  Notes  "},
+            headers=headers,
+            cookies=cookies,
+        )
+
+    assert first.status_code == second.status_code == 201
+    first_body = first.json()["conversation"]
+    second_body = second.json()["conversation"]
+    assert second_body == first_body
+
+    db = app.state.session_factory()
+    try:
+        rows = list(db.scalars(select(Conversation)))
+        audit_rows = list(
+            db.scalars(
+                select(AuditEvent).where(AuditEvent.event_name == AUDIT_EVENT_CONVERSATION_CREATED)
+            )
+        )
+    finally:
+        db.close()
+
+    assert len(rows) == 1
+    assert len(audit_rows) == 1
+
+
+def test_conversation_create_idempotency_key_fingerprint_conflict(
+    conversation_http_context,
+) -> None:
+    app, settings, owner_token, _ = conversation_http_context
+    headers, cookies = _security(settings, owner_token, "idempotency-conflict-bucket")
+    headers = {**headers, "Idempotency-Key": "conv-create-key-2"}
+
+    with TestClient(app) as client:
+        created = client.post(
+            f"{CANONICAL_API_PREFIX}/conversations",
+            json={"title": "First title"},
+            headers=headers,
+            cookies=cookies,
+        )
+        conflict = client.post(
+            f"{CANONICAL_API_PREFIX}/conversations",
+            json={"title": "Second title"},
+            headers=headers,
+            cookies=cookies,
+        )
+
+    assert created.status_code == 201
+    assert conflict.status_code == 409
+    assert conflict.json()["error"]["code"] == "idempotency_conflict"
+
+
+def test_conversation_create_without_idempotency_key_still_creates_distinct_rows(
+    conversation_http_context,
+) -> None:
+    app, settings, owner_token, _ = conversation_http_context
+    headers, cookies = _security(settings, owner_token, "idempotency-absent-bucket")
+
+    with TestClient(app) as client:
+        first = client.post(
+            f"{CANONICAL_API_PREFIX}/conversations",
+            json={"title": "One"},
+            headers=headers,
+            cookies=cookies,
+        )
+        second = client.post(
+            f"{CANONICAL_API_PREFIX}/conversations",
+            json={"title": "Two"},
+            headers=headers,
+            cookies=cookies,
+        )
+
+    assert first.status_code == second.status_code == 201
+    assert first.json()["conversation"]["id"] != second.json()["conversation"]["id"]
+
+    db = app.state.session_factory()
+    try:
+        assert len(list(db.scalars(select(Conversation)))) == 2
+    finally:
+        db.close()

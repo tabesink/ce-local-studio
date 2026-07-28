@@ -60,6 +60,14 @@ from context_engine.api.public_schemas import (
 from context_engine.api.sse_schemas import TurnStreamEvent
 from context_engine.config import Settings
 from context_engine.models import (
+    HTTP_IDEMPOTENCY_ROUTE_CONVERSATION_CREATE,
+    HTTP_IDEMPOTENCY_ROUTE_DOMAIN_CREATE,
+    HTTP_IDEMPOTENCY_ROUTE_MODEL_PROFILE_CREATE,
+    HTTP_IDEMPOTENCY_ROUTE_SOURCE_UPLOAD,
+    HttpIdempotencyRecord,
+    ModelProfile,
+    SourceDocument,
+    SourcePreparationOperation,
     User,
 )
 from context_engine.security import hash_session_token
@@ -89,10 +97,19 @@ from context_engine.services.conversations import (
     ConversationError,
     create_conversation,
     delete_conversation,
+    get_owned_conversation,
     get_owned_conversation_detail,
     list_conversations,
+    normalize_conversation_title,
     safe_conversation_summary,
     update_conversation_title,
+)
+from context_engine.services.idempotency import (
+    IdempotencyError,
+    abandon_idempotent,
+    begin_idempotent,
+    complete_idempotent,
+    fingerprint_payload,
 )
 from context_engine.services.csrf import CSRF_PREAUTH_BINDING, issue_csrf_token
 from context_engine.services.documents import (
@@ -141,6 +158,7 @@ from context_engine.services.runtime_config import (
     SecretCrypto,
     create_model_profile,
     delete_model_profile,
+    ensure_runtime_settings,
     parse_if_match_version,
     rotate_provider_credential,
     runtime_settings_snapshot,
@@ -165,6 +183,7 @@ from context_engine.services.sources import (
     retry_source,
     safe_source,
     safe_source_operation,
+    sanitize_original_filename,
     source_detail,
     source_operations,
     source_outline,
@@ -655,6 +674,36 @@ def _conversation_api_error(exc: ConversationError) -> ApiError:
     return ApiError(exc.status_code, exc.code, exc.message)
 
 
+def _idempotency_api_error(exc: IdempotencyError) -> ApiError:
+    return ApiError(exc.status_code, exc.code, exc.message)
+
+
+def _complete_idempotent_claim(
+    db: Session,
+    record: HttpIdempotencyRecord,
+    *,
+    http_status: int,
+    response_kind: str,
+    response_refs: dict[str, object],
+) -> None:
+    complete_idempotent(
+        db,
+        record,
+        http_status=http_status,
+        response_kind=response_kind,
+        response_refs=response_refs,
+    )
+    db.commit()
+
+
+def _abandon_idempotent_claim(db: Session, record: HttpIdempotencyRecord) -> None:
+    try:
+        abandon_idempotent(db, record)
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
 def _reject_unknown_query(request: Request, allowed: set[str] | None = None) -> None:
     if set(request.query_params) - (allowed or set()):
         raise ApiError(422, "validation_error", "Request validation failed.")
@@ -827,9 +876,39 @@ def post_conversation(
     current: CurrentSession = Depends(require_current_session),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> JSONResponse:
     _reject_unknown_query(request)
+    claim: HttpIdempotencyRecord | None = None
     try:
+        if idempotency_key is not None:
+            fingerprint = fingerprint_payload(
+                {"title": normalize_conversation_title(payload.title if payload else None)}
+            )
+            outcome = begin_idempotent(
+                db,
+                principal_user_id=current.user.id,
+                route_class=HTTP_IDEMPOTENCY_ROUTE_CONVERSATION_CREATE,
+                raw_key=idempotency_key,
+                fingerprint=fingerprint,
+            )
+            if outcome.replay:
+                refs = outcome.response_refs or {}
+                conversation = get_owned_conversation(
+                    db,
+                    owner=current.user,
+                    conversation_id=str(refs["conversationId"]),
+                )
+                response = ConversationMutationResponse.model_validate(
+                    {"conversation": safe_conversation_summary(conversation)}
+                )
+                return _private_json_response(
+                    response.model_dump(by_alias=True, mode="json"),
+                    status_code=outcome.http_status or 201,
+                    etag=strong_etag(conversation.version),
+                )
+            claim = outcome.record
+
         conversation = create_conversation(
             db,
             settings=settings,
@@ -841,7 +920,19 @@ def post_conversation(
         response = ConversationMutationResponse.model_validate(
             {"conversation": safe_conversation_summary(conversation)}
         )
+        if claim is not None:
+            _complete_idempotent_claim(
+                db,
+                claim,
+                http_status=201,
+                response_kind="conversation",
+                response_refs={"conversationId": conversation.public_ref},
+            )
+    except IdempotencyError as exc:
+        raise _idempotency_api_error(exc) from exc
     except ConversationError as exc:
+        if claim is not None:
+            _abandon_idempotent_claim(db, claim)
         raise _conversation_api_error(exc) from exc
     return _private_json_response(
         response.model_dump(by_alias=True, mode="json"),
@@ -1135,8 +1226,41 @@ def admin_create_model_profile(
     payload: ModelProfileCreateRequest,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> JSONResponse:
+    claim: HttpIdempotencyRecord | None = None
     try:
+        if idempotency_key is not None:
+            fingerprint = fingerprint_payload(
+                {
+                    "name": payload.name,
+                    "profileKind": payload.profile_kind,
+                    "providerKind": payload.provider_kind,
+                    "modelName": payload.model_name,
+                    "vectorDimensions": payload.vector_dimensions,
+                }
+            )
+            outcome = begin_idempotent(
+                db,
+                principal_user_id=admin.id,
+                route_class=HTTP_IDEMPOTENCY_ROUTE_MODEL_PROFILE_CREATE,
+                raw_key=idempotency_key,
+                fingerprint=fingerprint,
+            )
+            if outcome.replay:
+                refs = outcome.response_refs or {}
+                profile = db.scalar(
+                    select(ModelProfile).where(ModelProfile.id == refs["modelProfileId"])
+                )
+                if profile is None:
+                    raise RuntimeConfigError(404, "model_profile_not_found", "Model profile not found.")
+                return _private_json_response(
+                    {"modelProfile": safe_model_profile(db, profile)},
+                    status_code=outcome.http_status or 201,
+                    etag=strong_etag(profile.version),
+                )
+            claim = outcome.record
+
         profile = create_model_profile(
             db,
             name=payload.name,
@@ -1146,7 +1270,19 @@ def admin_create_model_profile(
             vector_dimensions=payload.vector_dimensions,
             audit_context=_audit_context(request, admin),
         )
+        if claim is not None:
+            _complete_idempotent_claim(
+                db,
+                claim,
+                http_status=201,
+                response_kind="model_profile",
+                response_refs={"modelProfileId": profile.id},
+            )
+    except IdempotencyError as exc:
+        raise _idempotency_api_error(exc) from exc
     except RuntimeConfigError as exc:
+        if claim is not None:
+            _abandon_idempotent_claim(db, claim)
         raise _runtime_config_api_error(exc) from exc
     return _private_json_response(
         {"modelProfile": safe_model_profile(db, profile)},
@@ -1229,8 +1365,35 @@ def admin_create_domain(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> JSONResponse:
+    claim: HttpIdempotencyRecord | None = None
     try:
+        if idempotency_key is not None:
+            fingerprint = fingerprint_payload(
+                {
+                    "id": payload.id,
+                    "displayName": payload.display_name,
+                    "embeddingProfileId": payload.embedding_profile_id,
+                }
+            )
+            outcome = begin_idempotent(
+                db,
+                principal_user_id=admin.id,
+                route_class=HTTP_IDEMPOTENCY_ROUTE_DOMAIN_CREATE,
+                raw_key=idempotency_key,
+                fingerprint=fingerprint,
+            )
+            if outcome.replay:
+                refs = outcome.response_refs or {}
+                projected = domain_detail(db, settings, str(refs["domainId"]))
+                return _private_json_response(
+                    {"domain": projected},
+                    status_code=outcome.http_status or 201,
+                    etag=strong_etag(int(projected["version"])),
+                )
+            claim = outcome.record
+
         domain = create_domain(
             db,
             settings=settings,
@@ -1240,9 +1403,23 @@ def admin_create_domain(
             requested_by_user=admin,
             audit_context=_audit_context(request, admin),
         )
+        if claim is not None:
+            _complete_idempotent_claim(
+                db,
+                claim,
+                http_status=201,
+                response_kind="domain",
+                response_refs={"domainId": domain.id},
+            )
+    except IdempotencyError as exc:
+        raise _idempotency_api_error(exc) from exc
     except RuntimeConfigError as exc:
+        if claim is not None:
+            _abandon_idempotent_claim(db, claim)
         raise _runtime_config_api_error(exc) from exc
     except DomainError as exc:
+        if claim is not None:
+            _abandon_idempotent_claim(db, claim)
         raise _domain_api_error(exc) from exc
     projected = safe_domain_admin(db, settings, domain, controller_from_settings(settings))
     return _private_json_response(
@@ -1405,6 +1582,7 @@ async def admin_upload_source(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> dict[str, object]:
     if _content_length_too_large(request):
         raise _source_api_error(SourceError(413, "content_rejected", "Uploaded content was rejected."))
@@ -1415,8 +1593,38 @@ async def admin_upload_source(
     upload = form.get("file")
     if not isinstance(upload, UploadFile):
         raise ApiError(422, "validation_error", "Request validation failed.")
+    claim: HttpIdempotencyRecord | None = None
     try:
         validated = await read_upload_stream(iter_upload_file(upload), filename=upload.filename)
+        if idempotency_key is not None:
+            fingerprint = fingerprint_payload(
+                {
+                    "domainId": domain_id,
+                    "contentSha256": validated.sha256,
+                    "displayFilename": sanitize_original_filename(upload.filename),
+                    "parserKind": ensure_runtime_settings(db).active_parser_kind,
+                }
+            )
+            outcome = begin_idempotent(
+                db,
+                principal_user_id=admin.id,
+                route_class=HTTP_IDEMPOTENCY_ROUTE_SOURCE_UPLOAD,
+                raw_key=idempotency_key,
+                fingerprint=fingerprint,
+            )
+            if outcome.replay:
+                refs = outcome.response_refs or {}
+                source = db.get(SourceDocument, refs["sourceId"])
+                operation = db.get(SourcePreparationOperation, refs["operationId"])
+                if source is None or operation is None:
+                    raise SourceError(404, "not_found", "Source not found.")
+                return _private_json_response(
+                    {"source": safe_source(db, source), "operation": safe_source_operation(operation)},
+                    status_code=outcome.http_status or 201,
+                    etag=strong_etag(operation.version),
+                )
+            claim = outcome.record
+
         source, operation = upload_source_bytes(
             db,
             settings=settings,
@@ -1427,9 +1635,27 @@ async def admin_upload_source(
             requested_by_user=admin,
             audit_context=_audit_context(request, admin),
         )
+        if claim is not None:
+            _complete_idempotent_claim(
+                db,
+                claim,
+                http_status=201,
+                response_kind="source_upload",
+                response_refs={
+                    "sourceId": source.id,
+                    "documentRef": source.public_ref,
+                    "operationId": operation.id,
+                },
+            )
+    except IdempotencyError as exc:
+        raise _idempotency_api_error(exc) from exc
     except UploadValidationError as exc:
+        if claim is not None:
+            _abandon_idempotent_claim(db, claim)
         raise _source_api_error(SourceError(exc.status_code, exc.code, exc.message)) from exc
     except SourceError as exc:
+        if claim is not None:
+            _abandon_idempotent_claim(db, claim)
         raise _source_api_error(exc) from exc
     finally:
         await upload.close()
