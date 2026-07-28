@@ -3,6 +3,7 @@
 **Altitude:** local Compose / development matrix only.  
 **Not** TLS, `testing=false` HTTPS, production HA, or P12-05 stream-drain evidence.  
 Local-production MinIO object store: opt-in `compose.stack.minio.yml` (P10-04).  
+Parser/provider packaging and support matrix: `docs/operations/provider-deployment-profiles.md` (P10-05).  
 Production incident/HA recovery: P12-04 / P12-08.
 
 ## Boot order

@@ -32,6 +32,7 @@ The reviewed lock resolves FastAPI 0.139.0, Uvicorn 0.50.2, SQLAlchemy 2.0.51, A
 - Supported model providers: OpenAI, AWS Bedrock, and Ollama.
 - Supported document parsers: local Docling and external Reducto.
 - Browser code never invokes these systems directly; backend adapters inject typed secrets/config and map outputs to product-owned records.
+- Operator packaging / evidence altitude for each kind: `docs/operations/provider-deployment-profiles.md` (P10-05). Production-supported requires staging smoke; catalog presence alone is not support.
 
 ## Application structure
 
