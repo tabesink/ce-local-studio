@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import re
+import threading
 import time
 import uuid
 from collections.abc import Iterable, Iterator
@@ -19,7 +20,7 @@ from context_engine.adapters.synthesis import (
     SynthesisAdapterError,
 )
 from context_engine.config import Settings
-from context_engine.db import utc_now
+from context_engine.db import create_db_engine, create_session_factory, utc_now
 from context_engine.models import (
     AUDIT_EVENT_CHAT_TURN_REDACTED,
     SOURCE_BLOCK_KIND_FIGURE,
@@ -1358,6 +1359,58 @@ def _clear_turn_lease_values() -> dict[str, Any]:
     }
 
 
+def _lease_heartbeat_seconds(lease_seconds: int) -> int:
+    return max(1, lease_seconds // 3)
+
+
+_TURN_HEARTBEAT_LIVENESS_MISSES = 2
+
+
+def _turn_lease_current(
+    turn: ConversationTurn,
+    *,
+    owner: str,
+    execution_generation: int,
+    now=None,
+) -> bool:
+    current = now or utc_now()
+    if turn.status != TURN_STATUS_RUNNING:
+        return False
+    if turn.lease_owner != owner:
+        return False
+    if turn.execution_generation != execution_generation:
+        return False
+    return turn.lease_expires_at is not None and turn.lease_expires_at >= current
+
+
+def _heartbeat_turn_lease(
+    db: Session,
+    turn_id: str,
+    *,
+    owner: str,
+    lease_seconds: int,
+    execution_generation: int,
+    now=None,
+) -> bool:
+    current = now or utc_now()
+    turn = db.get(ConversationTurn, turn_id)
+    if turn is None:
+        return False
+    db.refresh(turn)
+    if not _turn_lease_current(
+        turn,
+        owner=owner,
+        execution_generation=execution_generation,
+        now=current,
+    ):
+        return False
+    turn.lease_expires_at = current + timedelta(seconds=lease_seconds)
+    turn.updated_at = current
+    db.commit()
+    db.refresh(turn)
+    return True
+
+
 def _persist_evidence_refs(
     db: Session,
     *,
@@ -1986,6 +2039,7 @@ class ConversationTurnWorker:
         if turn is None:
             return False
         generation = turn.execution_generation
+        turn_id = turn.id
         if _has_answer_delta(db, turn):
             _fail_turn(
                 db,
@@ -1996,37 +2050,94 @@ class ConversationTurnWorker:
                 execution_generation=generation,
             )
             return True
+
+        lease_seconds = self._settings.turn_lease_seconds
+        owner = self._settings.turn_worker_id
+        heartbeat_seconds = _lease_heartbeat_seconds(lease_seconds)
+        stop = threading.Event()
+        lost = threading.Event()
+        last_ok_lock = threading.Lock()
+        last_ok_monotonic = time.monotonic()
+        beat_engine = create_db_engine(self._settings)
+        beat_sessions = create_session_factory(beat_engine)
+
+        def _beat() -> None:
+            nonlocal last_ok_monotonic
+            while not stop.wait(heartbeat_seconds):
+                try:
+                    with beat_sessions() as beat_db:
+                        if not _heartbeat_turn_lease(
+                            beat_db,
+                            turn_id,
+                            owner=owner,
+                            lease_seconds=lease_seconds,
+                            execution_generation=generation,
+                        ):
+                            lost.set()
+                            return
+                    with last_ok_lock:
+                        last_ok_monotonic = time.monotonic()
+                except Exception:
+                    safe_log(
+                        logging.getLogger(__name__),
+                        "turn_lease_heartbeat_failed",
+                        conversation_turn_id=turn_id,
+                        outcome="lost",
+                    )
+                    lost.set()
+                    return
+
+        beat_thread = threading.Thread(
+            target=_beat,
+            name="conversation-turn-lease-heartbeat",
+            daemon=True,
+        )
+        beat_thread.start()
         try:
-            synthesis = _resolve_synthesis(db, self._settings)
-            assembly = PromptAssemblyService(db).assemble(_accepted_refs_for_worker(turn))
-            start = TurnStartResult(
-                turn=turn,
-                replay=False,
-                synthesis=synthesis,
-                prior_user_questions=_prior_user_questions(db, turn.conversation_id),
-                assembly_context=None if assembly.is_empty else assembly,
-                execution_generation=generation,
-            )
-            # Event persistence is the worker's durable side effect. The
-            # iterator is intentionally exhausted here, never by HTTP.
-            list(
-                TurnOrchestrator(
+            try:
+                synthesis = _resolve_synthesis(db, self._settings)
+                assembly = PromptAssemblyService(db).assemble(_accepted_refs_for_worker(turn))
+                start = TurnStartResult(
+                    turn=turn,
+                    replay=False,
+                    synthesis=synthesis,
+                    prior_user_questions=_prior_user_questions(db, turn.conversation_id),
+                    assembly_context=None if assembly.is_empty else assembly,
+                    execution_generation=generation,
+                )
+                # Event persistence is the worker's durable side effect. The
+                # iterator is intentionally exhausted here, never by HTTP.
+                stream = TurnOrchestrator(
                     synthesis_adapter=self._synthesis_adapter,
                     retrieval_port=self._retrieval_port,
                 ).stream_turn(db, settings=self._settings, start=start)
-            )
-        except ChatTurnError as exc:
-            _fail_turn(
-                db,
-                turn=turn,
-                code=exc.code,
-                message=exc.message,
-                stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
-                execution_generation=generation,
-            )
-        except RuntimeError:
-            # A lease/status fence intentionally rejects stale execution.
-            db.rollback()
+                for _event in stream:
+                    if lost.is_set():
+                        stream.close()
+                        break
+                    with last_ok_lock:
+                        age = time.monotonic() - last_ok_monotonic
+                    if age > heartbeat_seconds * _TURN_HEARTBEAT_LIVENESS_MISSES:
+                        lost.set()
+                        stream.close()
+                        break
+            except ChatTurnError as exc:
+                if not lost.is_set():
+                    _fail_turn(
+                        db,
+                        turn=turn,
+                        code=exc.code,
+                        message=exc.message,
+                        stop_reason=TURN_STOP_REASON_PROVIDER_FAILURE,
+                        execution_generation=generation,
+                    )
+            except RuntimeError:
+                # A lease/status fence intentionally rejects stale execution.
+                db.rollback()
+        finally:
+            stop.set()
+            beat_thread.join(timeout=max(1, heartbeat_seconds))
+            beat_engine.dispose()
         return True
 
     def _claim_next_turn(self, db: Session) -> ConversationTurn | None:
