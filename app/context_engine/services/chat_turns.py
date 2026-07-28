@@ -67,6 +67,7 @@ from context_engine.services.composer_refs import (
     ComposerRefError,
     ValidatedComposerRef,
     composer_ref_fingerprint,
+    consume_composer_ref_tokens,
     normalize_composer_ref_tokens,
     persist_accepted_composer_refs,
     validate_composer_ref_tokens,
@@ -566,6 +567,11 @@ def start_or_replay_turn(
     db.add(turn)
     db.flush()
     if composer_validation.refs:
+        # Consume only after the post-lock replay fence above returned None.
+        try:
+            consume_composer_ref_tokens(db, owner=owner, tokens=normalized_ref_tokens)
+        except ComposerRefError as exc:
+            raise ChatTurnError(exc.status_code, exc.code, exc.message) from exc
         persist_accepted_composer_refs(db, turn_id=turn.id, refs=composer_validation.refs)
     _persist_event(
         db,

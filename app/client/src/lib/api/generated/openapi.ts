@@ -806,11 +806,16 @@ export interface components {
             kinds?: ("source" | "evidence" | "template")[] | null;
             /**
              * Limit
-             * @default 10
+             * @default 25
              */
             limit: number;
             /** Query */
             query?: string | null;
+        };
+        /** ComposerRefDiscoverResponse */
+        ComposerRefDiscoverResponse: {
+            /** Refs */
+            refs: components["schemas"]["ComposerRefDto"][];
         };
         /** ComposerRefDto */
         ComposerRefDto: {
@@ -2316,9 +2321,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ComposerRefDiscoverResponse"];
                 };
             };
             /** @description Validation Error */

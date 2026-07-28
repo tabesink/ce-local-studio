@@ -33,14 +33,7 @@ export type ConversationDetail = components["schemas"]["ConversationDetailRespon
 export type EvidenceItem = components["schemas"]["EvidenceItemDto"];
 export type TurnStreamEvent = sseComponents["schemas"]["TurnStreamEvent"];
 
-/** Lifted discover shape — catalog `ComposerRefDto.token` vs runtime `refToken` is P11 residual (KTD8). */
-export type ComposerRef = {
-  refToken: string;
-  kind: ComposerRefKind;
-  label: string;
-  description?: string | null;
-  disabledReason?: string | null;
-};
+export type ComposerRef = components["schemas"]["ComposerRefDto"];
 
 type TurnStreamInput = TurnStreamRequest & {
   conversationId: string;
