@@ -109,24 +109,44 @@ This drill is single-worker Compose-matrix reclaim — not multi-failure / resto
 
 ## TLS ingress (P12-05)
 
-Opt-in evidence lane (not default `scripts/verify.sh`):
+Opt-in evidence lane (not default `scripts/verify.sh`). Canonical cwd is `app/` with `--env-file .env.stack.local`.
+
+**Three-file matrix** (`compose.stack.yml` + `compose.stack.live.yml` + `compose.stack.tls.yml`) is the AE1–AE3 authority. Two-file TLS-only may be used only for AE4 compose/unpublished checks when live is unavailable — do not claim AE1 from two-file.
+
+### Boot
 
 ```bash
 python app/scripts/generate_stack_tls_certs.py
-# Set CE_STACK_PUBLIC_ORIGIN=https://127.0.0.1:8443, CONTEXT_ENGINE_TESTING=false,
-# CE_SESSION_COOKIE_SECURE=true, CE_INLINE_TURN_WORKERS=false,
-# CE_STACK_TLS_CERT_DIR=<absolute app/.stack-tls> in .env.stack.local
+# In app/.env.stack.local (env names only; never commit keys):
+#   CE_STACK_PUBLIC_ORIGIN=https://127.0.0.1:8443
+#   CONTEXT_ENGINE_TESTING=false
+#   CE_SESSION_COOKIE_SECURE=true
+#   CE_INLINE_TURN_WORKERS=false
+#   CE_STACK_TLS_CERT_DIR=<absolute app/.stack-tls>
+#   CE_STACK_LIVE_RUNTIME_ROOT=<host-abs live runtime root>
+#   OPENAI_API_KEY or CE_OPENAI_API_KEY (host/env-file; never logged)
 cd app
 docker compose --env-file .env.stack.local \
-  -f compose.stack.yml -f compose.stack.tls.yml up --build -d
-# Optional live LightRAG: also -f compose.stack.live.yml
-python app/scripts/stack_ingress_trust_proof.py --env-file .env.stack.local
-# AE1/AE2 require OPENAI_API_KEY or CE_OPENAI_API_KEY in the environment (never commit):
-# python app/scripts/stack_ingress_sse_proof.py --env-file .env.stack.local --domain-id <id>
-python app/scripts/stack_ingress_drain_proof.py --env-file .env.stack.local
+  -f compose.stack.yml -f compose.stack.live.yml -f compose.stack.tls.yml \
+  up --build -d
 ```
 
-API stop-new-turns returns contracted `503 capacity_unavailable` (unit-proven in `test_api_shutdown_drain.py`).
+### AE1 preflight (synthesis + domain)
+
+Host env key presence is necessary but not sufficient. Install/activate sealed OpenAI synthesis on the stack via the contracted admin runtime-settings provider path (`PUT /api/v1/admin/runtime-settings/providers/{kind}` — see `docs/contracts/http-api-catalog.md` and `docs/operations/provider-deployment-profiles.md`). Seed/index a query-eligible Knowledge Domain per `docs/quality/seeded-demo-and-test-data.md` and P5-04 live overlay; record the public opaque `--domain-id` (never private DB ids).
+
+### Proof commands
+
+```bash
+cd app
+python scripts/stack_ingress_trust_proof.py --env-file .env.stack.local
+# Requires ca=yes (CE_STACK_TLS_CERT_DIR/cert.pem). Digests must not show ca=insecure-local.
+python scripts/stack_ingress_sse_proof.py --env-file .env.stack.local --domain-id <opaque-domain-id>
+# Drain-hold: SIGUSR1 on api (listen stays up) → live 503 capacity_unavailable → worker stop_claim
+python scripts/stack_ingress_drain_proof.py --env-file .env.stack.local
+```
+
+API drain-hold: `SIGUSR1` → `enter_drain_hold` / `api.stop_new_turns` while the process still serves; new `turns:stream` returns contracted `503 capacity_unavailable`. Unit altitude: `tests/test_api_shutdown_drain.py`. Lifespan teardown remains a backstop.
 
 ## Residuals (do not claim from this runbook)
 

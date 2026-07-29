@@ -2,6 +2,7 @@
 """P12-05 AE4 trust proof through TLS public origin (HTTPS + Host/Origin/CSRF + API denial).
 
 Does not claim AE1 incremental deltas. Never prints secrets from the env file.
+Requires verified CA (ca=yes) and positive unpublished-API evidence (KTD13).
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ import argparse
 import http.cookiejar
 import json
 import ssl
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -48,6 +50,7 @@ class _HttpsClient:
         if ca_file is not None:
             ctx.load_verify_locations(cafile=str(ca_file))
         else:
+            # Only for optional direct-API HTTP denial probes — AE4 public origin requires ca=yes.
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
         https_handler = urllib.request.HTTPSHandler(context=ctx)
@@ -92,17 +95,55 @@ class _HttpsClient:
             return 0, str(exc.reason).encode("utf-8")
 
 
+def _assert_api_unpublished(env_file: Path, compose_dir: Path, *, include_live: bool) -> int:
+    """Positive unpublished-API evidence from compose config (no secret env dump)."""
+    files = ["-f", "compose.stack.yml"]
+    if include_live:
+        files.extend(["-f", "compose.stack.live.yml"])
+    files.extend(["-f", "compose.stack.tls.yml"])
+    proc = subprocess.run(
+        ["docker", "compose", "--env-file", str(env_file), *files, "config", "--format", "json"],
+        cwd=compose_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return _fail(f"compose config failed: {proc.stderr or proc.stdout}")
+    try:
+        cfg = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return _fail("compose config JSON parse failed")
+    services = cfg.get("services") or {}
+    for name in ("api", "frontend"):
+        svc = services.get(name)
+        if not isinstance(svc, dict):
+            return _fail(f"compose config missing service {name}")
+        ports = svc.get("ports") or []
+        if ports:
+            return _fail(f"service {name} still publishes ports={ports!r} — AE4 requires unpublished")
+    print("OK: compose config shows api/frontend ports unpublished")
+    return 0
+
+
 def run_trust(
     *,
     public_origin: str,
     username: str,
     password: str,
     api_publish: str | None,
-    ca_file: Path | None,
+    ca_file: Path,
     timeout: float,
+    env_file: Path,
+    compose_dir: Path,
+    include_live: bool,
 ) -> int:
     if not public_origin.startswith("https://"):
         return _fail("CE_STACK_PUBLIC_ORIGIN must be https://… for P12-05 TLS altitude")
+
+    unpublished = _assert_api_unpublished(env_file, compose_dir, include_live=include_live)
+    if unpublished != 0:
+        return unpublished
 
     client = _HttpsClient(public_origin, timeout=timeout, ca_file=ca_file)
 
@@ -149,6 +190,18 @@ def run_trust(
         return _fail(f"hostile Origin expected 403, got {status}")
     print("OK: hostile Origin rejected")
 
+    # Missing CSRF header on unsafe mutation.
+    status, _body = client.request(
+        "POST",
+        "/api/v1/conversations",
+        origin=public_origin,
+        csrf=None,
+        body={"title": "should-fail-csrf-missing"},
+    )
+    if status not in {403, 401}:
+        return _fail(f"CSRF missing expected 401/403, got {status}")
+    print(f"OK: CSRF missing fail-closed HTTP {status}")
+
     status, _body = client.request(
         "POST",
         "/api/v1/conversations",
@@ -177,11 +230,11 @@ def run_trust(
     print("OK: forged trust/identity headers did not break authorized mutation")
 
     if api_publish:
+        # Optional extra negative — direct probe must not be green.
         api_client = _HttpsClient(api_publish, timeout=min(timeout, 15.0), ca_file=None)
-        # Direct API is typically http:// on loopback when published; TLS overlay resets ports.
         status, _body = api_client.request("GET", "/api/v1/auth/csrf", origin=public_origin)
         if status == 0:
-            print("OK: direct API unreachable (connection failed) — public denial")
+            print("OK: direct API unreachable (connection failed) — extra denial probe")
         elif status == 200:
             return _fail("direct API csrf unexpectedly succeeded")
         elif 200 <= status < 300:
@@ -189,7 +242,7 @@ def run_trust(
         else:
             print(f"OK: direct API fail-closed HTTP {status}")
     else:
-        print("OK: API publish omitted (TLS overlay unpublishes API) — treated as denial")
+        print("OK: AE4 unpublished evidence from compose config (no --api-publish vacuous pass)")
 
     return 0
 
@@ -211,7 +264,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--api-publish",
         default="",
-        help="Optional direct API base for denial probe (empty = expect unpublished)",
+        help="Optional extra direct API base probe (compose unpublished evidence is always required)",
+    )
+    parser.add_argument(
+        "--compose-dir",
+        type=Path,
+        default=Path(__file__).resolve().parents[1],
+    )
+    parser.add_argument(
+        "--skip-live-overlay",
+        action="store_true",
+        help="Compose config check uses stack+tls only",
     )
     args = parser.parse_args(argv)
 
@@ -231,12 +294,16 @@ def main(argv: list[str] | None = None) -> int:
             candidate = Path(cert_dir) / "cert.pem"
             if candidate.is_file():
                 ca_file = candidate
+    if ca_file is None:
+        return _fail(
+            "ca=insecure-local forbidden for AE4 — set CE_STACK_TLS_CERT_DIR/cert.pem or --ca-file"
+        )
 
     api_publish = args.api_publish.strip() or None
     # Never echo password / keys — only presence of username.
     print(
         f"P12-05 trust proof -> {public_origin} "
-        f"(user present={bool(username)}; ca={'yes' if ca_file else 'insecure-local'})"
+        f"(user present={bool(username)}; ca=yes)"
     )
     return run_trust(
         public_origin=public_origin,
@@ -245,6 +312,9 @@ def main(argv: list[str] | None = None) -> int:
         api_publish=api_publish,
         ca_file=ca_file,
         timeout=args.timeout,
+        env_file=args.env_file,
+        compose_dir=args.compose_dir,
+        include_live=not args.skip_live_overlay,
     )
 
 

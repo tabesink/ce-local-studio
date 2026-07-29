@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from context_engine.api.contract_app import CANONICAL_API_PREFIX
 from context_engine.api.dependencies import CurrentSession, require_current_session
-from context_engine.app import create_app
+from context_engine.app import create_app, enter_drain_hold
 from context_engine.config import Settings
 from context_engine.db import Base, utc_now
 from context_engine.models import AuthSession, Conversation, User
@@ -59,7 +59,7 @@ def test_turns_stream_rejected_with_capacity_unavailable_when_not_accepting() ->
     try:
         # TestClient lifespan resets accepting_new_turns=True on enter — flip after enter.
         with TestClient(app) as client:
-            client.app.state.accepting_new_turns = False
+            enter_drain_hold(client.app)
             response = client.post(
                 f"{CANONICAL_API_PREFIX}/conversations/{conversation_id}/turns:stream",
                 json={
@@ -71,6 +71,33 @@ def test_turns_stream_rejected_with_capacity_unavailable_when_not_accepting() ->
         assert response.status_code == 503
         body = response.json()
         assert body["error"]["code"] == "capacity_unavailable"
+    finally:
+        identity_db.close()
+        app.dependency_overrides.clear()
+
+
+def test_drain_hold_keeps_listen_path_serving_capacity_unavailable() -> None:
+    """Drain-hold must reject new streams while the app still serves HTTP (KTD10)."""
+    app, identity_db, conversation_id = _app_with_session()
+    try:
+        with TestClient(app) as client:
+            assert client.app.state.accepting_new_turns is True
+            enter_drain_hold(client.app, phase="unit_probe")
+            assert client.app.state.accepting_new_turns is False
+            # Still serving: CSRF bootstrap must work; new turns:stream must 503.
+            csrf = client.get(f"{CANONICAL_API_PREFIX}/auth/csrf")
+            assert csrf.status_code == 200
+            response = client.post(
+                f"{CANONICAL_API_PREFIX}/conversations/{conversation_id}/turns:stream",
+                json={
+                    "clientRequestId": "drain-hold-live-window",
+                    "message": "should not start",
+                    "composerRefTokens": [],
+                },
+            )
+            assert response.status_code == 503
+            assert response.json()["error"]["code"] == "capacity_unavailable"
+            enter_drain_hold(client.app, phase="unit_probe")  # idempotent
     finally:
         identity_db.close()
         app.dependency_overrides.clear()

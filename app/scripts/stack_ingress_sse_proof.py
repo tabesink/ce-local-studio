@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """P12-05 AE1/AE2 chunked SSE proof through TLS origin + live domain-RAG path.
 
-Requires OPENAI_API_KEY or CE_OPENAI_API_KEY in the process environment (never printed).
-Uses chunked/readline consumption — never response.read() for AE1.
+Requires OPENAI_API_KEY or CE_OPENAI_API_KEY (process env or --env-file; never printed).
+Uses chunked consumption — never whole-body response.read() for AE1.
+AE1 inter-arrival is proven on one contiguous stream only (KTD12).
 """
 
 from __future__ import annotations
@@ -19,7 +20,6 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-# Allow `python app/scripts/...` without installing the package on PYTHONPATH.
 _APP_ROOT = Path(__file__).resolve().parents[1]
 if str(_APP_ROOT) not in sys.path:
     sys.path.insert(0, str(_APP_ROOT))
@@ -27,6 +27,17 @@ if str(_APP_ROOT) not in sys.path:
 from context_engine.dev.ingress_sse_proof import (  # noqa: E402
     SSE_DELTA_INTER_ARRIVAL_EPSILON_MS,
     assert_incremental_answer_deltas,
+)
+
+_SECRET_ENV_KEYS = frozenset(
+    {
+        "OPENAI_API_KEY",
+        "CE_OPENAI_API_KEY",
+        "CE_ADMIN_PASSWORD",
+        "CONFIG_ENCRYPTION_KEY",
+        "CE_CSRF_SIGNING_KEY",
+        "POSTGRES_PASSWORD",
+    }
 )
 
 
@@ -41,10 +52,21 @@ def _load_env_file(path: Path) -> dict[str, str]:
     return values
 
 
+def _merge_env_file(env: dict[str, str]) -> None:
+    """Merge allowlisted keys into os.environ without logging values."""
+    for key, value in env.items():
+        if not value:
+            continue
+        if key in _SECRET_ENV_KEYS:
+            if key not in os.environ:
+                os.environ[key] = value
+            continue
+        os.environ.setdefault(key, value)
+
+
 def _credentials_present() -> bool:
     for name in ("OPENAI_API_KEY", "CE_OPENAI_API_KEY"):
-        value = os.environ.get(name, "").strip()
-        if value:
+        if os.environ.get(name, "").strip():
             return True
     return False
 
@@ -61,17 +83,39 @@ def _cookie_value(jar: http.cookiejar.CookieJar, name: str) -> str | None:
     return None
 
 
+def _turn_id_from_frames(frames: list[tuple[float, str, dict[str, object]]]) -> str | None:
+    for _ts, _t, envelope in frames:
+        payload = envelope.get("payload") or {}
+        if isinstance(payload, dict) and payload.get("turnId"):
+            return str(payload["turnId"])
+        if envelope.get("turnId"):
+            return str(envelope["turnId"])
+    for _ts, t, envelope in frames:
+        if t == "turn.accepted":
+            payload = envelope.get("payload") or {}
+            if isinstance(payload, dict) and payload.get("turnId"):
+                return str(payload["turnId"])
+            if envelope.get("turnId"):
+                return str(envelope["turnId"])
+    return None
+
+
+def _replay_flag(envelope: dict[str, object]) -> bool | None:
+    if "replay" in envelope:
+        return bool(envelope["replay"])
+    payload = envelope.get("payload")
+    if isinstance(payload, dict) and "replay" in payload:
+        return bool(payload["replay"])
+    return None
+
+
 class _StreamClient:
-    def __init__(self, base: str, *, timeout: float, ca_file: Path | None) -> None:
+    def __init__(self, base: str, *, timeout: float, ca_file: Path) -> None:
         self.base = base.rstrip("/")
         self.timeout = timeout
         self.jar = http.cookiejar.CookieJar()
         ctx = ssl.create_default_context()
-        if ca_file is not None:
-            ctx.load_verify_locations(cafile=str(ca_file))
-        else:
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
+        ctx.load_verify_locations(cafile=str(ca_file))
         self.opener = urllib.request.build_opener(
             urllib.request.HTTPSHandler(context=ctx),
             urllib.request.HTTPCookieProcessor(self.jar),
@@ -225,22 +269,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ca-file", type=Path, default=None)
     args = parser.parse_args(argv)
 
+    if not args.env_file.is_file():
+        return _fail(f"env file not found: {args.env_file}")
+    env = _load_env_file(args.env_file)
+    # Merge env-file secrets BEFORE the credential gate (R8 / KTD4).
+    _merge_env_file(env)
+
     if not _credentials_present():
         return _fail(
             "OPENAI_API_KEY or CE_OPENAI_API_KEY missing — AE1 does not go green "
             "(credentials present=false; value never printed)"
         )
-
-    if not args.env_file.is_file():
-        return _fail(f"env file not found: {args.env_file}")
-    env = _load_env_file(args.env_file)
-    # Merge non-secret keys into os.environ for any child lookups; never log values.
-    for key, value in env.items():
-        if key in {"OPENAI_API_KEY", "CE_OPENAI_API_KEY", "CE_ADMIN_PASSWORD", "CONFIG_ENCRYPTION_KEY", "CE_CSRF_SIGNING_KEY"}:
-            if key not in os.environ and value:
-                os.environ[key] = value
-            continue
-        os.environ.setdefault(key, value)
 
     public_origin = env.get("CE_STACK_PUBLIC_ORIGIN", "").rstrip("/")
     username = env.get("CE_ADMIN_USERNAME", "")
@@ -255,6 +294,10 @@ def main(argv: list[str] | None = None) -> int:
         cert_dir = env.get("CE_STACK_TLS_CERT_DIR", "")
         if cert_dir and (Path(cert_dir) / "cert.pem").is_file():
             ca_file = Path(cert_dir) / "cert.pem"
+    if ca_file is None:
+        return _fail(
+            "ca=insecure-local forbidden for AE1/AE2 — set CE_STACK_TLS_CERT_DIR/cert.pem or --ca-file"
+        )
 
     client = _StreamClient(public_origin, timeout=args.timeout, ca_file=ca_file)
     status, body = client.json_request("GET", "/api/v1/auth/csrf", origin=public_origin)
@@ -284,20 +327,46 @@ def main(argv: list[str] | None = None) -> int:
     if status != 201:
         return _fail(f"create conversation HTTP {status}")
     conversation_id = json.loads(body.decode("utf-8"))["conversation"]["id"]
-    client_request_id = f"p12-05-sse-{uuid.uuid4().hex}"
 
     print(
         f"P12-05 SSE proof -> {public_origin} "
-        f"(credentials present=true; epsilon_ms={SSE_DELTA_INTER_ARRIVAL_EPSILON_MS})"
+        f"(credentials present=true; ca=yes; epsilon_ms={SSE_DELTA_INTER_ARRIVAL_EPSILON_MS})"
     )
 
-    # Pass 1: disconnect after first delta to prove disconnect ≠ cancel.
+    # AE1: one contiguous full stream (KTD12) — never use resume timestamp skew.
+    full_request_id = f"p12-05-sse-full-{uuid.uuid4().hex}"
+    status, full_frames = client.stream_post_chunked(
+        f"/api/v1/conversations/{conversation_id}/turns:stream",
+        origin=public_origin,
+        csrf=csrf,
+        body={
+            "clientRequestId": full_request_id,
+            "message": args.message,
+            "domainId": args.domain_id,
+            "composerRefTokens": [],
+        },
+        max_seconds=args.timeout,
+        disconnect_after_deltas=None,
+    )
+    if status != 200:
+        return _fail(f"full turns:stream HTTP {status}")
+    typed_full = [(ts, t) for ts, t, _e in full_frames]
+    try:
+        assert_incremental_answer_deltas(typed_full)
+    except AssertionError as exc:
+        return _fail(str(exc))
+    if not any(t == "turn.completed" for _ts, t in typed_full):
+        return _fail("full stream missing turn.completed")
+    print(f"OK: AE1 ≥2 timed answer.delta on contiguous stream (epsilon_ms={SSE_DELTA_INTER_ARRIVAL_EPSILON_MS})")
+
+    # AE2: disconnect ≠ cancel + resume + terminal replay:true
+    ae2_request_id = f"p12-05-sse-ae2-{uuid.uuid4().hex}"
     status, frames = client.stream_post_chunked(
         f"/api/v1/conversations/{conversation_id}/turns:stream",
         origin=public_origin,
         csrf=csrf,
         body={
-            "clientRequestId": client_request_id,
+            "clientRequestId": ae2_request_id,
             "message": args.message,
             "domainId": args.domain_id,
             "composerRefTokens": [],
@@ -306,24 +375,12 @@ def main(argv: list[str] | None = None) -> int:
         disconnect_after_deltas=1,
     )
     if status != 200:
-        return _fail(f"turns:stream HTTP {status}")
+        return _fail(f"AE2 turns:stream HTTP {status}")
     if not any(t == "answer.delta" for _ts, t, _e in frames):
         return _fail("no answer.delta before disconnect — cannot prove AE2 path")
-    turn_id = None
-    for _ts, _t, envelope in frames:
-        payload = envelope.get("payload") or {}
-        if isinstance(payload, dict) and payload.get("turnId"):
-            turn_id = payload["turnId"]
-            break
-        if envelope.get("turnId"):
-            turn_id = envelope["turnId"]
-            break
-    if not turn_id:
-        # Fall back: accepted event often carries turn id at top level in catalog.
-        for _ts, t, envelope in frames:
-            if t == "turn.accepted":
-                turn_id = (envelope.get("payload") or {}).get("turnId") or envelope.get("turnId")
-                break
+    if any(t == "turn.cancelled" for _ts, t, _e in frames):
+        return _fail("disconnect path produced turn.cancelled (disconnect must ≠ cancel)")
+    turn_id = _turn_id_from_frames(frames)
     if not turn_id:
         return _fail("could not resolve turnId after partial stream")
 
@@ -338,46 +395,40 @@ def main(argv: list[str] | None = None) -> int:
     )
     if status != 200:
         return _fail(f"resume events HTTP {status}")
-    combined = [(ts, t) for ts, t, _e in frames] + [
-        (ts + 10_000.0, t) for ts, t, _e in resume_frames
-    ]
-    # Prefer a second full stream when disconnect path did not yield ≥2 deltas total.
-    all_delta_types = [t for _ts, t in combined if t == "answer.delta"]
-    if len(all_delta_types) < 2:
-        status, full_frames = client.stream_post_chunked(
-            f"/api/v1/conversations/{conversation_id}/turns:stream",
-            origin=public_origin,
-            csrf=csrf,
-            body={
-                "clientRequestId": f"p12-05-sse-full-{uuid.uuid4().hex}",
-                "message": args.message,
-                "domainId": args.domain_id,
-                "composerRefTokens": [],
-            },
-            max_seconds=args.timeout,
-            disconnect_after_deltas=None,
-        )
-        if status != 200:
-            return _fail(f"full turns:stream HTTP {status}")
-        typed = [(ts, t) for ts, t, _e in full_frames]
-        try:
-            assert_incremental_answer_deltas(typed)
-        except AssertionError as exc:
-            return _fail(str(exc))
-        if not any(t == "turn.completed" for _ts, t in typed):
-            return _fail("full stream missing turn.completed")
-        print(f"OK: AE1 ≥2 timed answer.delta (epsilon_ms={SSE_DELTA_INTER_ARRIVAL_EPSILON_MS})")
-        print("OK: AE2 disconnect/resume path exercised (partial) + full completion")
-        return 0
-
-    try:
-        assert_incremental_answer_deltas(combined)
-    except AssertionError as exc:
-        return _fail(str(exc))
-    if any(t == "turn.cancelled" for _ts, t in combined):
-        return _fail("disconnect path produced turn.cancelled (disconnect must ≠ cancel)")
-    print(f"OK: AE1 ≥2 timed answer.delta (epsilon_ms={SSE_DELTA_INTER_ARRIVAL_EPSILON_MS})")
+    if any(t == "turn.cancelled" for _ts, t, _e in resume_frames):
+        return _fail("resume produced turn.cancelled (disconnect must ≠ cancel)")
     print("OK: AE2 disconnect ≠ cancel; resume continued")
+
+    # Terminal durable replay — after=0 should mark replay:true on terminal projection.
+    status, replay_frames = client.stream_get_chunked(
+        f"/api/v1/conversations/{conversation_id}/turns/{turn_id}/events?after=0",
+        origin=public_origin,
+        max_seconds=min(args.timeout, 60.0),
+    )
+    if status != 200:
+        return _fail(f"terminal replay events HTTP {status}")
+    replay_true = any(_replay_flag(envelope) is True for _ts, _t, envelope in replay_frames)
+    if not replay_true:
+        # Allow waiting for terminal if resume path had not completed yet.
+        if not any(t in {"turn.completed", "turn.failed"} for _ts, t, _e in resume_frames + replay_frames):
+            status, wait_frames = client.stream_get_chunked(
+                f"/api/v1/conversations/{conversation_id}/turns/{turn_id}/events?after={after}",
+                origin=public_origin,
+                max_seconds=args.timeout,
+            )
+            if status != 200:
+                return _fail(f"wait-for-terminal events HTTP {status}")
+            status, replay_frames = client.stream_get_chunked(
+                f"/api/v1/conversations/{conversation_id}/turns/{turn_id}/events?after=0",
+                origin=public_origin,
+                max_seconds=min(args.timeout, 60.0),
+            )
+            if status != 200:
+                return _fail(f"terminal replay retry HTTP {status}")
+            replay_true = any(_replay_flag(envelope) is True for _ts, _t, envelope in replay_frames)
+    if not replay_true:
+        return _fail("terminal replay missing replay:true on durable ledger attach")
+    print("OK: AE2 terminal replay marked replay:true")
     return 0
 
 

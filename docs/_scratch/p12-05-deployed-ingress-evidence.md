@@ -4,7 +4,7 @@ Date: 2026-07-28
 
 Owner: P12-05
 
-Status: PARTIAL — unit/config altitude landed; live TLS Compose AE1–AE4 remain operator-run for DONE
+Status: PARTIAL — drain-hold + proof-script honesty landed at unit altitude; live TLS AE1–AE4 blocked this session on Docker Desktop image unpack (`lchown … read-only file system`)
 
 Plan: `docs/plans/2026-07-28-013-feat-p12-05-deployed-ingress-sse-drain-plan.md`
 
@@ -25,48 +25,55 @@ Inventory: `docs/_scratch/p12-05-deployed-ingress-inventory.md`
 
 | Deliverable | Path / proof |
 | --- | --- |
-| Inventory | `docs/_scratch/p12-05-deployed-ingress-inventory.md` |
-| TLS overlay + Caddy unbuffered proxy | `app/compose.stack.tls.yml`, `app/stack-tls/Caddyfile` |
-| Cert generator (gitignored output) | `app/scripts/generate_stack_tls_certs.py` → `app/.stack-tls/` |
-| Trust proof script (AE4) | `app/scripts/stack_ingress_trust_proof.py` |
-| Chunked SSE proof script (AE1/AE2) | `app/scripts/stack_ingress_sse_proof.py` |
-| Drain proof script (AE3) | `app/scripts/stack_ingress_drain_proof.py` |
-| Inter-arrival helper + constant | `context_engine/dev/ingress_sse_proof.py` (`SSE_DELTA_INTER_ARRIVAL_EPSILON_MS=25`) |
-| API stop-new-turns | `app.state.accepting_new_turns`; `503 capacity_unavailable` on `turns:stream` |
-| Unit/config tests | `test_stack_ingress_sse_helpers.py`, `test_api_shutdown_drain.py`, TLS compose contract tests |
-| Runbook / env example | `docs/operations/compose-stack-runbook.md`, `app/.env.stack.example` |
+| Drain-hold seam (`SIGUSR1` + `enter_drain_hold`) | `app/context_engine/app.py` — flag false while listen may still serve; lifespan teardown backstop |
+| Drain unit tests | `app/tests/test_api_shutdown_drain.py` (incl. drain-hold still-serving 503) |
+| Trust proof honesty (AE4) | `app/scripts/stack_ingress_trust_proof.py` — require `ca=yes`; missing+mismatch CSRF; compose unpublished `api`/`frontend` ports |
+| SSE proof honesty (AE1/AE2) | `app/scripts/stack_ingress_sse_proof.py` — env-file merge before credential gate; contiguous AE1; `replay:true` AE2 |
+| Drain proof honesty (AE3) | `app/scripts/stack_ingress_drain_proof.py` — three-file compose; SIGUSR1 drain-hold; live 503; resume/tail; fail closed without `stop_claim` |
+| Runbook | `docs/operations/compose-stack-runbook.md` — three-file boot primary; synthesis/`--domain-id` preflight; SIGUSR1 drain |
+| Plan resume | `docs/plans/2026-07-28-013-feat-p12-05-deployed-ingress-sse-drain-plan.md` — U6→U5 remaining HOW |
 
 ## Commands run (unit altitude)
 
 ```bash
 cd app
-python -m pytest tests/test_stack_ingress_sse_helpers.py tests/test_api_shutdown_drain.py \
-  tests/test_compose_stack_config.py::test_tls_overlay_exists_and_documents_unbuffered_ingress \
-  tests/test_compose_stack_config.py::test_compose_tls_overlay_config_resolves_https_and_ingress -q
-# 9 passed
+python -m pytest tests/test_api_shutdown_drain.py tests/test_stack_ingress_sse_helpers.py -q
+# 8 passed
 python scripts/generate_stack_tls_certs.py
+# OK: wrote cert.pem and key.pem under app/.stack-tls
+```
+
+## Live attempt (blocked)
+
+```text
+# Docker Desktop started; three-file up --build pulled Caddy and built live image extras.
+# Parallel api/worker export raced: image "context-engine-live:local": already exists
+# Serial api rebuild then failed unpack:
+#   failed to Lchown ".../xlsxwriter/chart.py" ... read-only file system
+# Operator action: repair Docker Desktop disk/WSL, then re-run three-file boot + AE1–AE4 scripts.
 ```
 
 ## AE matrix
 
 | AE | Status | Notes |
 | --- | --- | --- |
-| AE1 ≥2 timed deltas | NOT YET (live) | Script ready; needs TLS+live stack + `OPENAI_API_KEY`/`CE_OPENAI_API_KEY` (env only; never logged) |
-| AE2 disconnect/resume | NOT YET (live) | Script ready |
-| AE3 drain | PARTIAL | Unit: `503 capacity_unavailable` + lifespan flag; Compose stop_claim script ready, not executed this revision |
-| AE4 trust/TLS denial | NOT YET (live) | Script + overlay ready; `docker compose … config` resolves HTTPS/ingress |
+| AE1 ≥2 timed deltas | NOT YET (live) | Script hardened; needs healthy three-file stack + sealed synthesis + `--domain-id` |
+| AE2 disconnect/resume/replay | NOT YET (live) | Script asserts `replay:true` |
+| AE3 drain | PARTIAL | Unit drain-hold 503 green; live SIGUSR1 digest blocked on Docker |
+| AE4 trust/TLS denial | NOT YET (live) | Script requires `ca=yes` + unpublished compose evidence |
 
 ## Privacy checklist
 
 - No API keys, CSRF secrets, or passwords in this evidence file
 - Cert private key stays under gitignored `app/.stack-tls/`
-- Scripts report `credentials present=true/false` only
+- Scripts report `credentials present=true/false` and `ca=yes` only
+- Do not paste unredacted `docker compose config` env into digests
 
 ## Residuals for DONE / peers
 
 | Residual | Owner |
 | --- | --- |
-| Live TLS AE1–AE4 operator digests | P12-05 (before tracker DONE) |
+| Live TLS AE1–AE4 operator digests (Docker Desktop repair + three-file boot) | P12-05 (before tracker DONE) |
 | Deployed PDF byte-range | P12-07 |
 | Ingress adversarial deletion | P12-07 |
 | Playwright / browser CSRF / two-user cache | P12-07 |
@@ -75,4 +82,4 @@ python scripts/generate_stack_tls_certs.py
 
 ## Tracker
 
-`docs/master-build-plan.md` P12-05 remains **NOT_STARTED → in-progress at unit altitude** until live AE1–AE4 commands are captured. Do not claim DONE from this evidence alone.
+`docs/master-build-plan.md` P12-05 remains **IN_PROGRESS**. Do not claim DONE until live AE1–AE4 digests are captured.

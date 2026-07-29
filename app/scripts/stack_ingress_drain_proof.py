@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""P12-05 AE3 topology drain proof: API stop-new-turns + worker stop_claim + reclaim.
+"""P12-05 AE3 topology drain proof: drain-hold 503 + stop_claim + reclaim.
 
-Operator altitude: start a turn, SIGTERM api/worker per topology, assert new stream
-503 capacity_unavailable, assert resume/tail still works, observe stop_claim logs.
+Sequence:
+1. Authenticate through HTTPS public origin (three-file TLS+live matrix).
+2. Create a conversation (accepted work surface for resume/tail).
+3. SIGUSR1 api → drain-hold while listen socket still serves.
+4. Assert new turns:stream → 503 capacity_unavailable.
+5. Assert resume/tail path still reachable (events GET not gated).
+6. SIGTERM worker → observe stack_worker.stop_claim; restart api/worker.
 """
 
 from __future__ import annotations
@@ -12,11 +17,9 @@ import json
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.request
+import uuid
 from pathlib import Path
 
-# Reuse trust client pieces lightly.
 _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
@@ -27,6 +30,30 @@ from stack_ingress_trust_proof import _HttpsClient, _cookie_value, _load_env_fil
 def _fail(message: str, code: int = 1) -> int:
     print(f"FAIL: {message}", file=sys.stderr)
     return code
+
+
+def _compose_base(env_file: Path, *, include_live: bool) -> list[str]:
+    files = ["-f", "compose.stack.yml"]
+    if include_live:
+        files.extend(["-f", "compose.stack.live.yml"])
+    files.extend(["-f", "compose.stack.tls.yml"])
+    return [
+        "docker",
+        "compose",
+        "--env-file",
+        str(env_file),
+        *files,
+    ]
+
+
+def _run_compose(compose_base: list[str], compose_dir: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [*compose_base, *args],
+        cwd=compose_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -45,9 +72,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--ca-file", type=Path, default=None)
     parser.add_argument(
+        "--skip-live-overlay",
+        action="store_true",
+        help="Use stack+tls only (AE3 capacity half); default includes compose.stack.live.yml",
+    )
+    parser.add_argument(
         "--skip-compose-stop",
         action="store_true",
-        help="Only assert API drain flag via HTTP (requires api already draining)",
+        help="Only assert 503 against an api already in drain-hold (no SIGUSR1/SIGTERM)",
     )
     args = parser.parse_args(argv)
 
@@ -67,6 +99,8 @@ def main(argv: list[str] | None = None) -> int:
         cert_dir = env.get("CE_STACK_TLS_CERT_DIR", "")
         if cert_dir and (Path(cert_dir) / "cert.pem").is_file():
             ca_file = Path(cert_dir) / "cert.pem"
+    if ca_file is None:
+        return _fail("ca=insecure-local forbidden for AE3 — set CE_STACK_TLS_CERT_DIR/cert.pem or --ca-file")
 
     client = _HttpsClient(public_origin, timeout=args.timeout, ca_file=ca_file)
     status, body = client.request("GET", "/api/v1/auth/csrf", origin=public_origin)
@@ -96,80 +130,24 @@ def main(argv: list[str] | None = None) -> int:
     if status != 201:
         return _fail(f"create conversation HTTP {status}")
     conversation_id = json.loads(body.decode("utf-8"))["conversation"]["id"]
+    # Opaque synthetic turn id for resume/tail reachability after drain-hold.
+    # A missing turn yields 404 — still proves the events route is not gated by drain-hold.
+    probe_turn_id = f"turn_{uuid.uuid4().hex}"
 
-    compose_base = [
-        "docker",
-        "compose",
-        "--env-file",
-        str(args.env_file),
-        "-f",
-        "compose.stack.yml",
-        "-f",
-        "compose.stack.tls.yml",
-    ]
+    include_live = not args.skip_live_overlay
+    compose_base = _compose_base(args.env_file, include_live=include_live)
+    print(
+        f"P12-05 drain proof -> {public_origin} "
+        f"(ca=yes; live_overlay={include_live})"
+    )
 
     if not args.skip_compose_stop:
-        print("Stopping api (SIGTERM) to engage stop-new-turns…")
-        stop = subprocess.run(
-            [*compose_base, "stop", "-t", "60", "api"],
-            cwd=args.compose_dir,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if stop.returncode != 0:
-            return _fail(f"compose stop api failed: {stop.stderr or stop.stdout}")
-        # Brief settle — lifespan finally should have logged api.stop_new_turns.
-        time.sleep(2)
+        print("Sending SIGUSR1 to api (drain-hold; listen socket stays up)…")
+        kill = _run_compose(compose_base, args.compose_dir, "kill", "-s", "SIGUSR1", "api")
+        if kill.returncode != 0:
+            return _fail(f"compose kill SIGUSR1 api failed: {kill.stderr or kill.stdout}")
+        time.sleep(1.5)
 
-        print("Stopping worker (SIGTERM) for stop_claim…")
-        stop_w = subprocess.run(
-            [*compose_base, "stop", "-t", "60", "worker"],
-            cwd=args.compose_dir,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if stop_w.returncode != 0:
-            return _fail(f"compose stop worker failed: {stop_w.stderr or stop_w.stdout}")
-
-        logs = subprocess.run(
-            [*compose_base, "logs", "--no-color", "worker"],
-            cwd=args.compose_dir,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if "stack_worker.stop_claim" not in (logs.stdout or ""):
-            print(
-                "WARN: stack_worker.stop_claim not observed in worker logs "
-                "(may have rotated); cite P10-03 if previously proven",
-                file=sys.stderr,
-            )
-        else:
-            print("OK: observed stack_worker.stop_claim")
-
-        # Restart api alone to probe stop-new-turns is lifespan-bound (fresh api accepts again).
-        # AE3 requires rejection *during* drain — probe against stopped api should fail connect.
-        # Prefer: start api in drained state is not exposed; instead document that unit tests
-        # own the 503 gate and this script proves stop order + stop_claim.
-        up = subprocess.run(
-            [*compose_base, "up", "-d", "api", "worker"],
-            cwd=args.compose_dir,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if up.returncode != 0:
-            return _fail(f"compose up api/worker failed: {up.stderr or up.stdout}")
-        print("OK: AE3 stop order completed; api/worker restarted for recovery")
-        print(
-            "NOTE: 503 capacity_unavailable during live drain is proven at unit altitude "
-            "(test_api_shutdown_drain.py); Compose SIGTERM proves stop_claim + reclaim path"
-        )
-        return 0
-
-    # skip-compose-stop: expect api already draining — new stream must 503.
     status, body = client.request(
         "POST",
         f"/api/v1/conversations/{conversation_id}/turns:stream",
@@ -182,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
         },
     )
     if status != 503:
-        return _fail(f"expected 503 during drain, got {status}")
+        return _fail(f"expected 503 during drain-hold, got {status}")
     try:
         code = json.loads(body.decode("utf-8")).get("error", {}).get("code")
     except json.JSONDecodeError:
@@ -190,6 +168,39 @@ def main(argv: list[str] | None = None) -> int:
     if code != "capacity_unavailable":
         return _fail(f"expected capacity_unavailable, got {code!r}")
     print("OK: AE3 new turns rejected with 503 capacity_unavailable")
+
+    # Resume/tail must remain reachable (not gated). Unknown turn → 404 is OK.
+    status, _body = client.request(
+        "GET",
+        f"/api/v1/conversations/{conversation_id}/turns/{probe_turn_id}/events?after=0",
+        origin=public_origin,
+    )
+    if status == 503:
+        return _fail("events resume/tail incorrectly gated by drain-hold (got 503)")
+    if status not in {200, 404}:
+        return _fail(f"events resume/tail unexpected HTTP {status}")
+    print(f"OK: AE3 resume/tail path still reachable during drain-hold (HTTP {status})")
+
+    if args.skip_compose_stop:
+        return 0
+
+    print("Stopping worker (SIGTERM) for stop_claim…")
+    stop_w = _run_compose(compose_base, args.compose_dir, "stop", "-t", "60", "worker")
+    if stop_w.returncode != 0:
+        return _fail(f"compose stop worker failed: {stop_w.stderr or stop_w.stdout}")
+
+    logs = _run_compose(compose_base, args.compose_dir, "logs", "--no-color", "--tail", "200", "worker")
+    if "stack_worker.stop_claim" not in (logs.stdout or ""):
+        return _fail(
+            "stack_worker.stop_claim not observed in worker logs — AE3 incomplete "
+            "(cite P10-03 only as prior credit; this matrix must re-prove it)"
+        )
+    print("OK: observed stack_worker.stop_claim")
+
+    up = _run_compose(compose_base, args.compose_dir, "up", "-d", "api", "worker")
+    if up.returncode != 0:
+        return _fail(f"compose up api/worker failed: {up.stderr or up.stdout}")
+    print("OK: AE3 drain-hold + stop_claim completed; api/worker restarted for recovery")
     return 0
 
 

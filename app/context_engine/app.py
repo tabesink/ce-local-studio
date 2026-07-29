@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import signal
 import uuid
 import time
 from collections.abc import AsyncIterator
@@ -34,6 +35,35 @@ from context_engine.services.request_security import RequestSecurityError, build
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def enter_drain_hold(app: FastAPI, *, phase: str = "drain_hold") -> None:
+    """Stop accepting new turns while the listen socket may still serve HTTP.
+
+    Used for topology stream-drain: new ``turns:stream`` starts fail closed with
+    ``503 capacity_unavailable``; resume/tail of already-accepted turns stay open.
+    Idempotent — safe to call from SIGUSR1 and again from lifespan teardown.
+    """
+    if getattr(app.state, "accepting_new_turns", True) is False:
+        return
+    app.state.accepting_new_turns = False
+    safe_log(logger, "api.stop_new_turns", outcome="succeeded", phase=phase)
+
+
+def _install_drain_hold_signal(app: FastAPI) -> None:
+    """SIGUSR1 enters drain-hold without stopping the listen socket (Linux/Compose)."""
+    sig = getattr(signal, "SIGUSR1", None)
+    if sig is None:
+        return
+
+    def _handle(_signum: int, _frame: object) -> None:
+        enter_drain_hold(app, phase="signal_usr1")
+
+    try:
+        signal.signal(sig, _handle)
+    except (ValueError, OSError):
+        # Non-main thread or unsupported platform — lifespan finally remains the backstop.
+        pass
 
 
 def _emit_http_metric(
@@ -75,6 +105,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.engine = engine
         app.state.session_factory = session_factory
         app.state.accepting_new_turns = True
+        _install_drain_hold_signal(app)
         db = session_factory()
         try:
             seed_runtime_config(db)
@@ -83,10 +114,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
-            # Topology shutdown: stop accepting new turns before disposing the engine.
+            # Topology shutdown backstop: stop accepting new turns before disposing.
+            # Prefer SIGUSR1 drain-hold so live probes can observe 503 while listening.
             # Resume/tail of already-accepted turns uses GET .../events (not gated here).
-            app.state.accepting_new_turns = False
-            safe_log(logger, "api.stop_new_turns", outcome="succeeded")
+            enter_drain_hold(app, phase="lifespan_teardown")
             engine.dispose()
 
     app = FastAPI(title=API_TITLE, version=API_VERSION, lifespan=lifespan)

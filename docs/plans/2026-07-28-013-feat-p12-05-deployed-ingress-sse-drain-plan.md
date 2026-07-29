@@ -16,12 +16,12 @@ deepened: 2026-07-28
 
 ## Goal Capsule
 
-- **Objective:** Close P12-05 by proving deployed-ingress incremental domain-RAG SSE (≥2 `answer.delta` before terminal with measurable inter-arrival), reconnect/resume/replay, graceful shutdown/stream-drain (ingress stop-new-traffic → API stop-new-turns → worker stop-claim → reclaimable leases), TLS/Host/Origin/CSRF through the public edge, and direct FastAPI denial — through the real private LightRAG runtime and credential-gated live OpenAI streaming synthesis.
-- **Authority:** `docs/architecture/deployment-topology.md` (Network/ingress; Boot/shutdown; ≥2-delta gate); `docs/architecture/frontend-security-boundary.md` (BFF pass-through; deployed-ingress negatives); `docs/contracts/sse-event-catalog.md`; interaction cases M-03 / M-10 / C-01 / C-05; DRIFT-05/24/25 deployed halves; `docs/master-build-plan.md` P12-05 (depends P5-04, P7-06, P9, P12-02 — all DONE).
-- **Execution profile:** Compose TLS + live LightRAG overlay altitude (`compose.stack.yml` + `compose.stack.live.yml` + new TLS overlay); scripted proof clients (not Playwright); evidence-owned like P5-04/P10 live — not a default `scripts/verify.sh` gate.
-- **Readiness checkpoint:** Implementation-ready; prerequisites DONE. Cite `docs/_scratch/p5-04-lightrag-real-runtime-evidence.md`, `p7-04-sse-pipeline-evidence.md`, `p7-06-synthesis-isolation-heartbeat-evidence.md`, `p9-05-ci-validators-evidence.md`, `p10-01-compose-config-evidence.md`, `p10-02-stack-smoke-evidence.md`, `p10-03-worker-lifecycle-evidence.md`, `p12-02-suite-contract-convergence-evidence.md`.
-- **Stop conditions:** Stop if DONE claims Playwright/browser matrix (P12-07), SBOM (P12-06), backup/DR (P12-04), HA/multi-region (P12-08), WebSockets/second stream protocol, in-process synthetic LightRAG as production runtime, whole-body `response.read()` as AE1, HTTP+`testing=true` as TLS/`testing=false` evidence, or green AE1 without live streaming credentials present.
-- **Tail ownership:** Deployed PDF byte-range residual → P12-07; ingress adversarial deletion residual → P12-07 (not DONE P12-03/P7-05); hard provider-I/O abort beyond cooperative topology drain → P12-08; P12-07 also owns browser/CSRF/Playwright; P12-08 owns acceptance digests/HA.
+- **Objective:** Close P12-05 by capturing live TLS Compose AE1–AE4 operator digests (incremental domain-RAG SSE, reconnect/resume/replay, topology stream-drain, Host/Origin/CSRF + direct-API denial) through the real private LightRAG runtime and credential-gated live OpenAI streaming, then publish evidence and advance tracker/DRIFT residuals.
+- **Authority:** `docs/architecture/deployment-topology.md` (Network/ingress; Boot/shutdown; ≥2-delta gate); `docs/architecture/frontend-security-boundary.md`; `docs/contracts/sse-event-catalog.md`; interaction cases **M-03** (streamed answer + disconnect≠cancel/resume) and **C-01** (capacity `503` race/failure half for drain); DRIFT-05/24/25 deployed halves; `docs/master-build-plan.md` P12-05.
+- **Execution profile:** Unit/config altitude is **credit** (TLS overlay, API stop-new-turns unit gate, helpers, proof scripts). Remaining work is U6 live digests (plus targeted seam/script honesty) → U5 evidence/tracker close — evidence-owned like P5-04/P10 live, not a default `scripts/verify.sh` gate.
+- **Readiness checkpoint:** Implementation-ready. Credit inventory/evidence: `docs/_scratch/p12-05-deployed-ingress-{inventory,evidence}.md` (PARTIAL). Prerequisites DONE — cite P5-04 / P7-04 / P7-06 / P9-05 / P10-01..03 / P12-02 evidence revisions.
+- **Stop conditions:** Stop if DONE claims Playwright (P12-07), SBOM (P12-06), backup/DR (P12-04), HA (P12-08), WebSockets/second protocol, synthetic LightRAG as production runtime, whole-body `response.read()` as AE1, HTTP+`testing=true` as TLS evidence, green AE1 without live streaming credentials + ready synthesis, AE3 from worker `stop_claim` alone without live `503 capacity_unavailable`, AE4 green from omitted `--api-publish` alone, or TLS digests with `ca=insecure-local`.
+- **Tail ownership:** Deployed PDF byte-range + ingress adversarial deletion + Playwright / concurrent multi-user browser → P12-07; hard provider-I/O abort + HA/production digests → P12-08.
 
 ---
 
@@ -31,63 +31,66 @@ deepened: 2026-07-28
 
 Prove the production trust and streaming boundary through TLS ingress → Next BFF → private FastAPI → leased worker → real LightRAG domain-RAG, including unbuffered incremental SSE and topology stream-drain.
 
-Product Contract preservation: changed R2 (hard wait → cite DONE prerequisites); clarified R4 chunked/inter-arrival delta measurement; added R8–R10 (credential-gated live OpenAI synthesis, API stop-new-turns, evidence/tracker + residual naming); clarified deferred byte-range/adversarial-deletion residuals — WHY: prerequisites landed and research exposed topology gaps the thin bootstrap deferred.
+Product Contract preservation: unchanged R1–R10 intent; clarified AE2/F2 case tags (M-03 disconnect≠cancel; C-01 only for capacity drain half); extended AE4 negatives (forged trust headers; missing CSRF; verified CA; unpublished API evidence) — WHY: resume + doc-review exposed misbound case IDs and vacuous AE4 paths that would false-green DONE.
 
 ### Problem Frame
 
-Local BFF strip/emit (P9-05), SSE producer/resume/replay (P7-04), worker SIGTERM stop-claim (P10-03), turn-lease heartbeat (P7-06), and real LightRAG (P5-04) are proven. Deployed TLS ingress, unbuffered ≥2-delta measurement through the public origin, API stop-new-turns on shutdown, and full topology stream-drain remain open. P10 smokes buffer entire SSE bodies and often terminate with provider-not-ready / zero deltas — those cannot close P12-05. Without ingress proofs, concurrent multi-user production streaming is not release-proven.
+Unit/config seams for P12-05 have landed: TLS overlay + Caddy unbuffered proxy, API `accepting_new_turns` → `503 capacity_unavailable` (unit), chunked SSE/trust/drain proof scripts, inter-arrival helpers, and unit tests. Live TLS Compose AE1–AE4 operator digests are still open. Without those digests, deployed-ingress incremental SSE, resume/replay, cooperative stream-drain, and TLS-edge trust boundaries are not release-proven, and DRIFT-05/24/25 deployed halves cannot advance. Concurrent multi-user browser concurrency remains a P12-07 residual — this slice proves scripted single-origin HTTPS clients.
 
 ### Actors
 
 | Actor | Role |
 | --- | --- |
 | Member | Streams `domain_rag` through the public HTTPS origin |
-| Operator | Runs TLS Compose matrix and drain drills |
-| Coding agent | Inventory, TLS overlay, API drain seam, proof scripts, evidence, tracker |
+| Operator | Runs three-file TLS+live Compose matrix and drain drills; captures digests |
+| Coding agent | Drain-hold seam if needed, runbook/script honesty, evidence, tracker/DRIFT close |
 
 ### Key Flows
 
 **F1 — Incremental domain-RAG SSE.** CSRF→login→conversation→`turns:stream` via public HTTPS origin and BFF; real LightRAG retrieve + live OpenAI streaming synthesis; ≥2 `answer.delta` with measurable inter-arrival before terminal (M-03).
 
-**F2 — Disconnect ≠ cancel; resume/replay.** Mid-stream client close does not cancel; worker continues; resume `GET .../events?after=` continues; terminal replay uses durable ledger with `replay:true`; closed socket ≠ completion (C-01 / P7-04 re-proof at edge).
+**F2 — Disconnect ≠ cancel; resume/replay.** Mid-stream client close does not cancel; worker continues; resume `GET .../events?after=` continues; terminal replay uses durable ledger with `replay:true`; closed socket ≠ completion (M-03 race/failure).
 
-**F3 — Topology stream-drain.** SIGTERM order: ingress stops new traffic → API stops new turns → workers stop claims → in-flight streams/work drain within grace → unresolved work reclaimable by lease; new stream during drain fails closed.
+**F3 — Topology stream-drain.** Ordered drain with API stop-new-turns while still serving long enough to return contracted `503 capacity_unavailable` on new `turns:stream`; workers stop claims; in-flight accepted work drains or leases reclaim; resume/tail of accepted turns through grace (C-01 capacity half + topology).
 
-**F4 — Trust through edge.** TLS public origin; Host/Origin/CSRF; forged `X-CE-*` stripped/replaced by BFF; direct public FastAPI denied (C-05 session/role recheck remains API credit; edge proves Host/Origin/CSRF + denial).
+**F4 — Trust through edge.** TLS public origin with verified CA; Host/Origin/CSRF (missing and mismatch); forged trust headers stripped/replaced by BFF; direct public FastAPI denied with positive unpublished-port evidence.
 
 ### Requirements
 
-- R1. Inventory credit/gap/defer in `docs/_scratch/p12-05-deployed-ingress-inventory.md` (mirror p12-03 disposition legend).
-- R2. Prerequisites are DONE — cite P5-04 / P7-04 / P7-06 / P9-05 / P10-01..03 / P12-02 evidence revisions in inventory before AE green. No hard wait remains.
-- R3. TLS Compose overlay (or staging-equivalent profile): HTTPS public origin only to Next; FastAPI private; `testing=false` fail-closed CE_*/CONTEXT_ENGINE_* origin/peer/host settings; SSE proxy buffering/compression/caching/body-transform disabled; idle timeout > heartbeat + reconnect margin; certificates/config outside app images.
-- R4. Prove ≥2 incremental `answer.delta` before terminal through the public origin with chunked/readline consumption and inter-arrival timing; a single buffered blob fails the proof (`deployment-topology.md`).
-- R5. Prove disconnect ≠ cancel, resume after cursor, and terminal durable replay through the public origin (M-03 / C-01).
-- R6. Prove graceful stream-drain: API stop-new-turns on SIGTERM/shutdown, worker `stack_worker.stop_claim` (credit P10-03), drain within configured grace, unresolved leases reclaimable; closed socket ≠ completion.
-- R7. Prove Host/Origin/CSRF through TLS edge and direct FastAPI denial from untrusted peers; forge trust headers are not honored.
-- R8. AE1 synthesis path is credential-gated live OpenAI streaming. Proof scripts load `OPENAI_API_KEY` / `CE_OPENAI_API_KEY` (and stack env files) from the process environment / Compose `--env-file` only. Never embed, log, print, or attach key material in inventory, evidence, runbooks, fixtures, or CI artifacts. Missing credentials → AE1 does not go green (honest residual), not a false pass.
-- R9. Implement API stop-new-turns on shutdown as an in-slice product seam (topology-required; missing today). Worker stop-claim alone does not close AE3.
-- R10. Evidence + tracker; advance DRIFT-05/24/25 deployed halves; cite-close stale brownfield P7-06 `NOT_STARTED` if still present; rewrite residual owners to live lanes: deployed PDF byte-range → P12-07; ingress adversarial deletion → P12-07 (never leave owned-by-DONE-P12-03/P7-05); cooperative topology drain closes here while hard provider-I/O abort → P12-08; Playwright → P12-07; HA → P12-08.
+- R1. Inventory credit/gap/defer in `docs/_scratch/p12-05-deployed-ingress-inventory.md`.
+- R2. Prerequisites are DONE — cite P5-04 / P7-04 / P7-06 / P9-05 / P10-01..03 / P12-02 evidence revisions before AE green.
+- R3. TLS Compose overlay: HTTPS public origin only to Next; FastAPI private; `testing=false` fail-closed; SSE unbuffered; idle timeout > heartbeat + reconnect margin; certificates outside app images; proof clients use verified CA (`ca=yes`).
+- R4. Prove ≥2 incremental `answer.delta` before terminal through the public origin with chunked consumption and inter-arrival timing on a **single contiguous** stream; a single buffered blob fails; artificial resume timestamp skew must not satisfy AE1.
+- R5. Prove disconnect ≠ cancel, resume after cursor, and terminal durable replay (`replay:true`) through the public origin (M-03).
+- R6. Prove graceful stream-drain: API stop-new-turns observable as live `503 capacity_unavailable`, worker `stack_worker.stop_claim`, resume/tail of an already-accepted turn through grace, unresolved leases reclaimable.
+- R7. Prove Host/Origin/CSRF (missing + mismatch) through TLS edge; forged trust headers not honored; direct FastAPI denial with positive unpublished evidence.
+- R8. AE1 synthesis path is credential-gated live OpenAI streaming. Proof scripts load `OPENAI_API_KEY` / `CE_OPENAI_API_KEY` from process environment / `--env-file` (merge env-file **before** the boolean gate). Never embed, log, print, or attach key material. Missing credentials → AE1 does not go green.
+- R9. API stop-new-turns is an in-slice product seam; worker stop-claim alone does not close AE3. If Compose SIGTERM cannot observe live 503, reopen the drain-hold seam so the flag is false while the listen socket still serves.
+- R10. Evidence + tracker; advance DRIFT-05/24/25 deployed halves only when AE1–AE4 are green; rewrite residual owners to P12-07 / P12-08.
 
 ### Acceptance Examples
 
-- AE1. Through public HTTPS origin on live LightRAG + live OpenAI streaming: ≥2 timestamped `answer.delta` before terminal; proof fails if deltas share one read burst within `SSE_DELTA_INTER_ARRIVAL_EPSILON_MS` (U3 helper constant) or if `<2` deltas.
-- AE2. After mid-stream disconnect (no cancel): turn still running or completes normally; resume/replay after cursor continues; no completion inferred from prior socket close.
-- AE3. Drain drill: new turns rejected after API stop-new-turns; worker emits `stack_worker.stop_claim`; in-flight work drains or leases reclaimable within grace; cites P10-03 + P7-06 revisions.
-- AE4. Direct FastAPI from untrusted peer/host denied; hostile Origin / CSRF mismatch rejected through TLS edge; login/mutation CSRF happy path succeeds.
+- AE1. Through public HTTPS origin on live LightRAG + live OpenAI streaming: ≥2 timestamped `answer.delta` on one contiguous chunked stream before terminal; proof fails if deltas share one read burst within `SSE_DELTA_INTER_ARRIVAL_EPSILON_MS`, if `<2` deltas, if credentials/synthesis not ready, or if `ca=insecure-local`.
+- AE2. After mid-stream disconnect (no cancel): turn still running or completes normally; resume after cursor continues; post-terminal replay through ingress asserts `replay:true`; no completion inferred from prior socket close (M-03).
+- AE3. Drain drill: start an accepted turn; enter drain-hold; resume/tail of that turn through grace; new `turns:stream` returns live `503 capacity_unavailable`; worker emits `stack_worker.stop_claim`; leases reclaimable within grace (C-01 capacity half).
+- AE4. CSRF happy path through HTTPS; hostile Origin rejected; CSRF missing and mismatch rejected; forged `X-CE-Public-Host` / `X-User-*` not honored; direct FastAPI denied with compose-config unpublished evidence; digest shows `ca=yes`.
 
 ### Scope Boundaries
 
 #### In scope
 
-- TLS Compose overlay + env contract; API stop-new-turns; chunked SSE/reconnect/drain proof scripts; trust negatives; inventory/evidence/runbook; DRIFT deployed halves
+- Live three-file TLS+live Compose operator digests for AE1–AE4
+- Runbook gap-fill for three-file boot, seed/index/`--domain-id`, sealed synthesis readiness, drain honesty, canonical cwd
+- Drain-hold seam reopen + drain/SSE/trust script honesty required for AE green
+- Evidence AE matrix green + master-build-plan DONE + DRIFT/residual rewrites
 
 #### Deferred to Follow-Up Work
 
-- Deployed PDF byte-range through ingress → **P12-07** (not DONE here; rewrite P12-04 residual owner on evidence close)
-- Ingress adversarial deletion through deployed edge → **P12-07** (rewrite away from DONE P12-03/P7-05 ownership when closing this slice)
-- Browser E2E / Playwright / two-user cache / BFCache → **P12-07**
+- Deployed PDF byte-range through ingress → **P12-07**
+- Ingress adversarial deletion through deployed edge → **P12-07**
+- Browser E2E / Playwright / two-user cache / concurrent multi-user → **P12-07**
 - Full HA multi-region / production digests → **P12-08**
-- Hard abort of blocking provider I/O mid-token beyond cooperative fences → **P12-08** (P12-05 closes cooperative topology drain only; split the P7-06 hard-drain residual accordingly)
+- Hard abort of blocking provider I/O mid-token beyond cooperative fences → **P12-08**
 
 #### Outside this product's identity
 
@@ -98,7 +101,7 @@ Local BFF strip/emit (P9-05), SSE producer/resume/replay (P7-04), worker SIGTERM
 ### Success Criteria
 
 - AE1–AE4 reproducible from evidence commands with cited prerequisite revisions
-- P12-05 tracker DONE with honest residuals
+- P12-05 tracker DONE only when AE1–AE4 are green; AE1 credential/synthesis residual blocks DONE; other residuals may remain as named P12-07/P12-08 follow-ups
 - DRIFT-05/24/25 deployed halves advanced without claiming Playwright or HA
 
 ---
@@ -109,14 +112,19 @@ Local BFF strip/emit (P9-05), SSE producer/resume/replay (P7-04), worker SIGTERM
 
 | ID | Decision | Rationale |
 | --- | --- | --- |
-| KTD1 | Prerequisites are credit, not a hard wait | P5-04 / P7-06 / P9 / P12-02 DONE; inventory cites evidence revisions |
-| KTD2 | Compose TLS overlay + live LightRAG is DONE altitude | Matches local-production topology; staging-equivalent acceptable; HTTP+`testing=true` is non-evidence |
-| KTD3 | Chunked/readline SSE consumer with inter-arrival timing | Whole-body `response.read()` cannot detect buffering; topology fails one buffered blob |
-| KTD4 | Credential-gated live OpenAI for AE1 `(session-settled: user-directed — chosen over Compose multi-chunk synthesis stub: operator has OPENAI_API_KEY in gitignored .env; proofs load env only and never expose the key)` | Real streaming synthesis required for ≥2 deltas; missing key → AE1 residual, not green |
-| KTD5 | API stop-new-turns implemented in-slice; new stream starts during drain return contracted `503 capacity_unavailable` (closed error union in `docs/contracts/http-api-catalog.md`) unless an existing chat-specific code already applies — do not invent a new error code | `deployment-topology.md` shutdown table + P10-03 residual; worker stop-claim alone insufficient; catalog keeps `503 capacity_unavailable` for admission/shed |
-| KTD6 | SSE/drain/trust only; byte-range + adversarial deletion residual `(session-settled: user-directed — chosen over pulling Range/deletion into this slice: keep focus on master-build-plan P12-05 noun phrase)` | Avoid unbounded scope; U5 rewrites residual owners to live P12-07 / P12-08 lanes (not DONE peers) |
+| KTD1 | Prerequisites are credit, not a hard wait | Cite P5-04 / P7-04 / P7-06 / P9-05 / P10-01..03 / P12-02 evidence revisions before AE green |
+| KTD2 | Compose TLS overlay + live LightRAG is DONE altitude | HTTP+`testing=true` is non-evidence |
+| KTD3 | Chunked SSE consumer with inter-arrival timing | Whole-body `response.read()` cannot detect buffering |
+| KTD4 | Credential-gated live OpenAI for AE1 `(session-settled: user-directed — chosen over Compose multi-chunk synthesis stub: operator loads OPENAI_API_KEY / CE_OPENAI_API_KEY via gitignored app/.env.stack.local or process env; proofs never expose the key)` | Real streaming synthesis required; missing key → AE1 residual |
+| KTD5 | API stop-new-turns returns contracted `503 capacity_unavailable` | Topology shutdown table; catalog closed error union |
+| KTD6 | SSE/drain/trust only; byte-range + adversarial deletion residual `(session-settled: user-directed — chosen over pulling Range/deletion into this slice: keep focus on master-build-plan P12-05 noun phrase)` | Avoid unbounded scope |
 | KTD7 | Matrix uses `CE_INLINE_TURN_WORKERS=false` + Compose worker | Live-tail ledger + disconnect≠cancel require worker path |
-| KTD8 | Keep P12-05 evidence-owned; do not force live TLS into default `verify.sh` | Same discipline as P5-04/P10 live lanes; unit helpers may land in pytest |
+| KTD8 | Keep P12-05 evidence-owned; do not force live TLS into default `verify.sh` | Same discipline as P5-04/P10 live lanes |
+| KTD9 | Three-file Compose (`compose.stack.yml` + `compose.stack.live.yml` + `compose.stack.tls.yml`) is the AE1–AE3 authority | Two-file TLS-only may close AE4 but not domain-RAG incremental SSE |
+| KTD10 | AE3 requires live `503 capacity_unavailable` through the public origin during drain-hold, plus `stack_worker.stop_claim` / reclaim and resume/tail of an accepted turn | Lifespan-`finally`-only flip is not reliably probeable under Compose SIGTERM; reopen U4 drain-hold so the flag is false while the listen socket still serves; forbid DONE from default stop/restart + unit-altitude NOTE |
+| KTD11 | Host env key presence is necessary but not sufficient for AE1 — sealed/stack synthesis credential must be ready via contracted admin/runtime provider path | P10 smokes historically `synthesis_profile_not_ready` / zero deltas |
+| KTD12 | AE1 inter-arrival gate applies only to one contiguous chunked stream | Resume timestamp padding must not satisfy AE1; disconnect/resume remains AE2 |
+| KTD13 | AE4 requires verified CA (`ca=yes`) and positive unpublished-API evidence | Omitted `--api-publish` alone is vacuous; `ca=insecure-local` invalidates TLS altitude |
 
 ### High-Level Technical Design
 
@@ -133,54 +141,38 @@ flowchart LR
 ```
 
 ```mermaid
-sequenceDiagram
-  participant C as Client
-  participant I as Ingress
-  participant B as BFF
-  participant A as API
-  participant W as Worker
-  participant L as LightRAG
-  Note over C,L: F1 incremental SSE
-  C->>I: POST turns:stream (CSRF+Origin)
-  I->>B: HTTPS
-  B->>A: allowlisted + X-CE-Public-*
-  A->>W: claimable turn
-  W->>L: retrieve
-  W-->>A: answer.delta xN (ledger)
-  A-->>C: chunked SSE (≥2 deltas)
-  Note over C,W: F2 disconnect ≠ cancel
-  C--xA: close socket
-  W->>W: continue synthesis
-  C->>A: GET events?after=N
-  A-->>C: later frames / terminal
-  Note over I,W: F3 drain
-  I->>I: stop new traffic
-  A->>A: stop new turns
-  W->>W: stop_claim
-  W->>W: drain or lease reclaim
+flowchart TD
+  Credit[Credit U1-U4 unit/config] --> Prep[U6 prep: certs + three-file + domain + sealed synthesis]
+  Prep --> Hold[U6a drain-hold seam if needed]
+  Hold --> AE4[AE4 trust digest]
+  Prep --> AE1[AE1 contiguous SSE + AE2 disconnect/resume/replay]
+  Hold --> AE3[AE3 drain: resume/tail + live 503 + stop_claim]
+  AE4 --> Close[U5 evidence + tracker + DRIFT]
+  AE1 --> Close
+  AE3 --> Close
 ```
 
 ### Assumptions
 
-- P9-05 BFF body pass-through and header strip/emit remain credit; edge buffering is the new risk surface.
-- Operator provides `OPENAI_API_KEY` / `CE_OPENAI_API_KEY` via gitignored env (repo `.env` is gitignored; prefer stack-local `--env-file` for Compose). Plan and scripts reference env **names** only.
-- P12-02 default verify stays green baseline; live TLS proofs are opt-in evidence commands.
-- Seeded demo corpus / domain fixture from `docs/quality/seeded-demo-and-test-data.md` is sufficient for a grounded domain_rag question when indexed on the live overlay.
+- U1–U4 unit/config deliverables in `docs/_scratch/p12-05-deployed-ingress-evidence.md` are credit unless U6 honesty forces a targeted seam/script fix.
+- Operator provides OpenAI env names via gitignored `app/.env.stack.local`; evidence references names only.
+- Seeded demo corpus from `docs/quality/seeded-demo-and-test-data.md` is sufficient when indexed and exposed as a public `--domain-id`.
+- P12-02 default verify stays green baseline.
 
 ### Risks and Dependencies
 
 | Risk | Mitigation |
 | --- | --- |
-| Proxy/TLS buffering false green | Chunked timestamps; fail single-burst deltas; disable buffer/compress on `text/event-stream` |
-| Missing OpenAI credentials | AE1 does not pass; evidence residual — never fabricate deltas |
-| Provider rate-limit / network flake | Bounded retries in proof script; record request ID; do not weaken ≥2-delta gate |
-| Scope into Playwright or byte-range | KTD6 residuals; stop conditions |
-| API drain race with in-flight attach | Spec: reject new starts; allow resume/tail of accepted turns through grace |
-| Secret leakage into evidence | Privacy checklist; redact env dumps; never cat `.env` into artifacts |
+| Proxy/TLS buffering false green | Chunked timestamps; fail single-burst; Caddy unbuffered; contiguous-stream AE1 only |
+| Missing credentials or unready synthesis | AE1 does not pass; KTD11 runbook recipe |
+| Lifespan-finally 503 unobservable | KTD10 drain-hold seam reopen |
+| Vacuous AE4 / insecure TLS client | KTD13: `ca=yes` + unpublished compose evidence |
+| Secret leakage into evidence | Privacy checklist; never paste full `compose config` env; `credentials present=true/false` only |
+| Runbook cwd footguns | Canonical `cd app` + `.env.stack.local` |
 
 ### Sequencing
 
-U1 → U2 → U3 → U4 → U5. U3 requires U2 + credentials + live overlay. U4 requires U2 and prefers a long turn from U3 patterns. U5 closes after AE1–AE4.
+Credit: U1–U4. Remaining: U6 (prep + drain-hold honesty + AE1–AE4 digests) → U5 (evidence/tracker/DRIFT close). Refuse U5 DONE advances unless AE matrix is green.
 
 ---
 
@@ -188,122 +180,131 @@ U1 → U2 → U3 → U4 → U5. U3 requires U2 + credentials + live overlay. U4 
 
 ### U1. Deployed-ingress inventory
 
-**Goal:** Freeze credit/gap/defer for TLS, SSE, drain, trust, and residuals; clear stale hard-wait language.
+**Goal:** Credit — inventory already FROZEN at unit/config altitude.
 
 **Requirements:** R1, R2, R10
 
 **Dependencies:** None
 
 **Files:**
-- Create: `docs/_scratch/p12-05-deployed-ingress-inventory.md`
+- Landed: `docs/_scratch/p12-05-deployed-ingress-inventory.md`
 
-**Approach:** Mirror `docs/_scratch/p12-03-adversarial-security-inventory.md` disposition legend (`credit` / `gap-fill` / `out-of-scope` / `defer`). Credit P7-04 disconnect/resume/cancel, P9-05 BFF strip/`X-Accel-Buffering`, P10-01 dual origin/peer pin, P10-02 CSRF→SSE terminal smoke + AE6 partial denial, P10-03 worker `stop_claim`, P5-04 live runtime, P7-06 heartbeat. Gap-fill: TLS overlay, chunked SSE proof, API stop-new-turns, full topology drain, `testing=false` HTTPS. Defer: Playwright, HA, deployed byte-range, ingress adversarial deletion. Cite prerequisite evidence paths + dates.
-
-**Patterns to follow:** `docs/_scratch/p12-03-adversarial-security-inventory.md`, `docs/_scratch/p12-04-backup-restore-inventory.md`
+**Approach:** Status: CREDIT. Do not rewrite unless live digests change a disposition. On DONE, optionally annotate live-proven rows.
 
 **Test scenarios:**
-- Test expectation: none -- inventory document.
+- Test expectation: none -- credit inventory.
 
-**Verification:** Residuals and gap-fill worklist named; no “blocked on P5-04/P7-06” language.
+**Verification:** Inventory exists with residual owners named.
 
 ---
 
 ### U2. TLS ingress topology and trust smoke
 
-**Goal:** Public HTTPS → Next only; private API; Host/Origin/CSRF + direct-API denial through the edge.
+**Goal:** Credit — TLS overlay, Caddy, cert generator, trust script, compose contract tests landed.
 
 **Requirements:** R3, R7, AE4
 
 **Dependencies:** U1
 
 **Files:**
-- Create: `app/compose.stack.tls.yml` (name flexible if inventory chooses equivalent)
-- Modify: `app/.env.stack.example` (HTTPS / tls profile knobs; placeholder env **names** only)
-- Modify: `docs/operations/compose-stack-runbook.md` (TLS profile + trust negatives)
-- Modify: `app/tests/test_compose_stack_config.py` (overlay/env contract assertions)
-- Create: `app/scripts/stack_ingress_trust_proof.py` (or fold trust section into shared ingress harness)
+- Landed: `app/compose.stack.tls.yml`, `app/stack-tls/Caddyfile`, `app/scripts/generate_stack_tls_certs.py`, `app/scripts/stack_ingress_trust_proof.py`, related compose tests / `.env.stack.example` / runbook TLS section
 
-**Approach:** Terminate TLS at ingress (Caddy/nginx/traefik — pick one with buffering/compression disable for SSE). Certificates outside app images. Publish only ingress→frontend path to the host; keep API off the untrusted public surface (or peer-deny equivalently under `testing=false`). Align `CE_PUBLIC_ORIGIN` / `CONTEXT_ENGINE_PUBLIC_ORIGIN` to `https://…`. Configure ingress idle timeout strictly greater than turn/SSE heartbeat + reconnect margin (`deployment-topology.md`). Prove login/mutation CSRF happy path; hostile Origin 403; CSRF mismatch rejected; forged trust headers ignored; direct API non-green. Do not claim AE1 here.
-
-**Patterns to follow:** `docs/architecture/frontend-security-boundary.md`; `app/scripts/stack_smoke_core.py` AE6; `app/tests/test_postgres_ingress_security.py`; `app/client/src/lib/server/bff-proxy.ts`
-
-**Execution note:** Prefer config/smoke verification of the overlay before investing in long SSE runs.
+**Approach:** Status: CREDIT. Do not re-implement overlay. Live AE4 honesty (missing CSRF probe, `ca=yes`, unpublished evidence) is U6 script/runbook gap-fill.
 
 **Test scenarios:**
-- Happy: CSRF bootstrap → login → authenticated mutation through HTTPS public origin succeeds.
-- Error: hostile Origin on unsafe method → 403 through ingress.
-- Error: CSRF missing/mismatch → safe denial envelope.
-- Error: direct FastAPI from untrusted peer/host denied (AE4).
-- Edge: forged `X-CE-Public-Host` / `X-User-*` from client do not grant trust.
-- Integration: `docker compose … -f compose.stack.yml -f compose.stack.tls.yml config` validates; compose contract tests cover required env keys.
+- Test expectation: none -- credit unit/config altitude; live AE4 owned by U6.
 
-**Verification:** AE4 commands reproducible; runbook documents TLS profile; no raw key material in example files.
+**Verification:** Cite evidence unit-altitude commands; live AE4 in U6.
 
 ---
 
 ### U3. Incremental SSE and reconnect/replay proof
 
-**Goal:** ≥2 timed `answer.delta` + disconnect/resume/replay through public origin with real LightRAG and live OpenAI.
+**Goal:** Credit — chunked SSE client, inter-arrival helpers/tests, and SSE proof script landed.
 
 **Requirements:** R4, R5, R8, AE1, AE2
 
-**Dependencies:** U2; live overlay; credentials present in environment
+**Dependencies:** U2
 
 **Files:**
-- Create: `app/scripts/stack_ingress_sse_proof.py`
-- Create: `app/tests/test_stack_ingress_sse_helpers.py` (pure helpers: frame parse, inter-arrival gate — no live network required)
-- Modify: `docs/operations/compose-stack-runbook.md` (SSE proof commands)
+- Landed: `app/scripts/stack_ingress_sse_proof.py`, `app/context_engine/dev/ingress_sse_proof.py`, `app/tests/test_stack_ingress_sse_helpers.py`
 
-**Approach:** Boot `compose.stack.yml` + `compose.stack.live.yml` + TLS overlay; `CE_INLINE_TURN_WORKERS=false`. Seed/index a domain per seeded-demo fixtures as needed. Script: chunked/readline SSE consumer recording `(t_i, event_type, cursor)` — never `response.read()` for AE1. Define proof-helper constant `SSE_DELTA_INTER_ARRIVAL_EPSILON_MS` (default **25ms**, rationale: distinguishes proxy one-blob flush / same-readline coalescing from intentional multi-chunk streaming; not a product SSE timing contract). Assert ≥2 `answer.delta` before terminal with inter-arrival > that constant. Unit-test the gate in `test_stack_ingress_sse_helpers.py` with synthetic timestamps. Mid-stream disconnect without cancel; assert turn not cancelled; resume `?after=`; optional terminal replay `replay:true`. Fail closed if credentials absent (exit non-zero with safe message). Case IDs M-03 / C-01 (and M-10 attach lite if cheap). Privacy: redact secrets from any captured headers/logs.
-
-**Patterns to follow:** `docs/contracts/sse-event-catalog.md`; `app/tests/fixtures/sse/disconnect-resume.sse`; `app/scripts/stack_smoke_core.py` (cookie/CSRF client only — replace body read); P5-04 live boot; P10-05 provider env names (`OPENAI_API_KEY`, `CE_OPENAI_API_KEY`)
-
-**Execution note:** Gate AE1 on credential presence check that only reports boolean presence (e.g. key non-empty), never prints the value.
+**Approach:** Status: CREDIT. Live AE1/AE2 digests and script honesty (env-file merge order; contiguous AE1; `replay:true`) are U6.
 
 **Test scenarios:**
-- Happy: Covers AE1 / M-03 — ≥2 timed deltas before terminal through HTTPS origin on live LightRAG + OpenAI.
-- Happy: Covers AE2 / C-01 — disconnect without cancel; resume continues; worker completes.
-- Edge: terminal replay through ingress marks replay; no second provider/LightRAG call (ledger attach).
-- Edge: identical `(conversationId, clientRequestId)` attach does not double-dispatch (M-10 lite) when inexpensive.
-- Error: credentials absent → script fails AE1 with safe message (no key material).
-- Error: single buffered blob / inter-arrival ≤ `SSE_DELTA_INTER_ARRIVAL_EPSILON_MS` / `<2` deltas → proof failure.
-- Integration: helpers unit-test inter-arrival gate — two frames 0ms apart fail; two frames > ε pass; cite constant name in evidence commands.
+- Test expectation: none -- credit helpers; live AE1/AE2 owned by U6.
 
-**Verification:** AE1/AE2 commands in evidence; cite P5-04 + P7-04 revisions; no secrets in artifacts.
+**Verification:** Helper unit tests remain green; live digests in U6.
 
 ---
 
 ### U4. API stop-new-turns and topology drain proof
 
-**Goal:** Implement API shutdown stop-new-turns; prove ordered drain with reclaimability.
+**Goal:** Credit unit gate + reopen drain-hold only if required for live 503 observability.
 
 **Requirements:** R6, R9, AE3
 
-**Dependencies:** U2; U3 patterns for long turn; P10-03 / P7-06 credit
+**Dependencies:** U2
 
 **Files:**
-- Modify: `app/context_engine/app.py` (lifespan / shutdown signaling)
-- Modify: related request/turn entry seam that rejects new stream starts when draining (keep handlers thin; service owns gate)
-- Create: `app/scripts/stack_ingress_drain_proof.py`
-- Create/Modify: unit/service tests for stop-new-turns gate (e.g. `app/tests/test_api_shutdown_drain.py`)
-- Modify: `docs/operations/compose-stack-runbook.md` (shutdown order + drain drill)
+- Landed: `app.state.accepting_new_turns` seam, `app/tests/test_api_shutdown_drain.py`, `app/scripts/stack_ingress_drain_proof.py`
+- Modify (conditional): API lifespan / signal path so drain-hold sets `accepting_new_turns=False` while the process still serves HTTP long enough for a public-origin `503 capacity_unavailable` probe (KTD10)
+- Modify (conditional): `app/tests/test_api_shutdown_drain.py` for drain-hold behavior
 
-**Approach:** On SIGTERM/lifespan shutdown: set API drain flag so new `turns:stream` starts fail closed with `503 capacity_unavailable` (KTD5) before headers become SSE. Document and assert resume/tail of already-accepted turns through grace (reject new starts only). Worker keeps P10-03 `should_continue` / `stack_worker.stop_claim`. Drain script: start long domain_rag turn → observe ≥1 delta → signal stop (ingress/API/worker per topology) → assert new stream rejected with `503 capacity_unavailable` → assert resume/tail of the in-flight turn still works through grace → assert stop_claim / reclaimable lease → assert prior close ≠ completion. Record wall-clock within grace. Cite P7-06 heartbeat for mid-turn lease liveness; hard provider-I/O abort remains P12-08 residual.
+**Approach:** Unit gate remains credit. If Compose SIGTERM cannot observe live 503 (lifespan-`finally`-only flip), reopen this seam for an explicit drain-hold window before listen close. Do not weaken AE3 to unit-only 503.
 
-**Patterns to follow:** `docs/architecture/deployment-topology.md` shutdown paragraph; `app/context_engine/worker.py` stop_claim; `app/scripts/stack_smoke_worker.py`; `app/scripts/stack_incident_reclaim_drill.py`; P7-06 lease heartbeat tests
-
-**Execution note:** Implement stop-new-turns test-first at unit/service altitude, then Compose drain drill.
+**Execution note:** Prefer a failing live AE3 probe first; only then change the product seam.
 
 **Test scenarios:**
-- Happy: Covers AE3 — drain completes or leaves only reclaimable leased work within grace.
-- Happy: new `turns:stream` after API drain flag → fail closed with `503 capacity_unavailable`.
-- Happy: resume/tail of already-accepted turn succeeds through grace after stop-new-turns.
-- Edge: disconnect during drain ≠ cancel; resume policy documented and asserted.
-- Edge: worker `stack_worker.stop_claim` still observed (P10-03 credit re-proven in matrix).
-- Integration: cites P10-03 + P7-06 evidence revisions; grace timing recorded; hard I/O abort not claimed.
-- Error: claiming AE3 from worker-only stop without API gate → forbidden (test or inventory non-claim).
+- Happy: unit — new stream after drain flag → `503 capacity_unavailable`.
+- Happy (if seam reopened): drain-hold flag false while TestClient/process still serves → 503; resume/tail routes not gated.
+- Error: claiming AE3 from worker-only stop without API gate → forbidden.
 
-**Verification:** AE3 in evidence; unit tests for gate green without live Docker; Compose drain drill required for DONE (evidence-owned opt-in command; not in default `verify.sh`).
+**Verification:** Unit tests green; live AE3 owned by U6 under KTD10.
+
+---
+
+### U6. Live TLS AE1–AE4 operator digests
+
+**Goal:** Capture reproducible live digests for AE1–AE4 on the three-file matrix; close runbook/script honesty gaps.
+
+**Requirements:** R2–R9, AE1–AE4
+
+**Dependencies:** U1–U4 credit; U4 drain-hold if KTD10 requires it
+
+**Files:**
+- Modify: `docs/operations/compose-stack-runbook.md` (three-file boot primary for AE1–AE3; seed/index/`--domain-id`; sealed synthesis readiness recipe; drain-hold drill; canonical `cd app` + `.env.stack.local`)
+- Modify: `app/scripts/stack_ingress_sse_proof.py` (merge env-file secrets before credential gate; AE1 on contiguous stream only; AE2 includes `replay:true`)
+- Modify: `app/scripts/stack_ingress_drain_proof.py` (three-file `-f` set; sequenced AE3: accepted turn → drain-hold → resume/tail → live 503 → stop_claim; fail closed without live 503)
+- Modify: `app/scripts/stack_ingress_trust_proof.py` (missing CSRF negative; require `ca=yes` for green; unpublished-API evidence beyond omitted `--api-publish`)
+- Modify: `docs/_scratch/p12-05-deployed-ingress-evidence.md`
+- Modify: `docs/_scratch/p12-05-deployed-ingress-inventory.md` (only if dispositions change)
+
+**Approach:**
+1. Generate certs; set `.env.stack.local` (HTTPS origin, `CONTEXT_ENGINE_TESTING=false`, secure cookies, `CE_INLINE_TURN_WORKERS=false`, TLS cert dir, live runtime root, OpenAI env names).
+2. Boot three-file matrix. Preflight: sealed OpenAI synthesis via contracted admin/runtime provider path (env names only); seeded/indexed query-eligible domain; record public `--domain-id`.
+3. AE4: trust proof with `ca=yes`; CSRF happy; hostile Origin; CSRF missing + mismatch; forged trust headers; compose-config excerpt proving `api`/`frontend` unpublished (redact env values — never paste secrets); optional `--api-publish` only as an extra fail-closed probe.
+4. AE1: contiguous full stream ≥2 timed deltas; inter-arrival > ε; no resume-skew for AE1.
+5. AE2: disconnect without cancel; resume continues; post-terminal replay asserts `replay:true`.
+6. AE3: start accepted turn → enter drain-hold → resume/tail through grace → new stream live `503 capacity_unavailable` → observe `stack_worker.stop_claim` / reclaim; three-file compose set.
+7. Paste safe digests into evidence only (`# OK:`, exit codes, safe request IDs, `credentials present=true/false`, `ca=yes`).
+
+**Patterns to follow:** `docs/_scratch/p5-04-lightrag-real-runtime-evidence.md`; `docs/_scratch/p10-02-stack-smoke-evidence.md`; current P12-05 evidence privacy checklist
+
+**Execution note:** Smoke/runtime-first. Prefer failing digests over fabricated greens. Reopen U4 only when live 503 is unreachable.
+
+**Test scenarios:**
+- Happy: Covers AE4 — trust proof exit 0 with `ca=yes`, unpublished compose evidence, missing+mismatch CSRF, forged headers stripped.
+- Happy: Covers AE1 / M-03 — contiguous ≥2 timed deltas; credentials present=true; synthesis ready.
+- Happy: Covers AE2 / M-03 — disconnect ≠ cancel; resume; terminal `replay:true`.
+- Happy: Covers AE3 / C-01 capacity half — resume/tail + live 503 + stop_claim/reclaim.
+- Error: credentials absent or synthesis not ready → AE1 NOT YET (blocks DONE).
+- Error: two-file boot for AE1, `ca=insecure-local`, omitted-`--api-publish`-only AE4, or AE3 without live 503 → invalid evidence.
+- Error: AE1 satisfied via resume timestamp padding → invalid.
+- Integration: evidence privacy — no keys/cookies/prompts/runtime URLs; no unredacted compose env dumps.
+- Edge: canonical cwd/env-file path documented once.
+
+**Verification:** Evidence AE matrix AE1–AE4 green; commands cite three-file compose + prerequisite revisions.
 
 ---
 
@@ -311,25 +312,25 @@ U1 → U2 → U3 → U4 → U5. U3 requires U2 + credentials + live overlay. U4 
 
 **Goal:** Close P12-05 with honest residuals; advance DRIFT deployed halves.
 
-**Requirements:** R10, AE4
+**Requirements:** R10, AE1–AE4
 
-**Dependencies:** U1–U4
+**Dependencies:** U6 with AE1–AE4 green
 
 **Files:**
-- Create: `docs/_scratch/p12-05-deployed-ingress-evidence.md`
-- Modify: `docs/master-build-plan.md` (P12-05 DONE + residual language)
-- Modify: `docs/brownfield-refactor-register.md` (DRIFT-05/24/25 deployed halves; stale P7-06 row if needed)
-- Modify: `docs/operations/compose-stack-runbook.md` (demote closed residuals; keep byte-range/Playwright/HA pointers)
+- Modify: `docs/_scratch/p12-05-deployed-ingress-evidence.md`
+- Modify: `docs/master-build-plan.md`
+- Modify: `docs/brownfield-refactor-register.md` (DRIFT-05/24/25; follow-up row; stale P7-06 row if needed)
+- Modify: `docs/operations/compose-stack-runbook.md`
 
-**Approach:** Mirror `docs/_scratch/p12-03-adversarial-security-evidence.md` / `p12-04-backup-restore-evidence.md`: what landed, prerequisite citation table, AE command matrix, privacy checklist (no keys, runtime URLs, prompts, lease owners). On tracker close, rewrite residual owners in `docs/master-build-plan.md`, brownfield register, and cited p12-03/p7-06 residual tables: byte-range → P12-07; ingress adversarial deletion → P12-07; cooperative topology drain closed here; hard provider-I/O abort → P12-08; Playwright → P12-07; HA → P12-08. Advance DRIFT-05/24/25 only for deployed halves actually proven.
+**Approach:** Preflight: refuse master-build-plan DONE / DRIFT deployed-half advances unless evidence AE matrix shows AE1–AE4 green under KTD10. Rewrite residual owners to P12-07 / P12-08. Update brownfield follow-up from stale `NOT_STARTED` to DONE with evidence path.
 
-**Patterns to follow:** prior P12 evidence docs; brownfield register disposition language
+**Patterns to follow:** `docs/_scratch/p12-04-backup-restore-evidence.md`
 
 **Test scenarios:**
 - Test expectation: none -- documentation and tracker closure.
-- Checklist: evidence contains zero secret substrings; commands use env-file references only.
+- Checklist: zero secret substrings; env-file references only; DRIFT language matches proven altitude.
 
-**Verification:** Tracker DONE; residuals named; DRIFT rows match evidence altitude.
+**Verification:** Tracker DONE; residuals named; no DONE from unit altitude alone.
 
 ---
 
@@ -337,48 +338,46 @@ U1 → U2 → U3 → U4 → U5. U3 requires U2 + credentials + live overlay. U4 
 
 | Gate | Altitude | Notes |
 | --- | --- | --- |
-| Inventory dispositions | Docs | U1 |
-| Compose TLS config contract | `app/tests/test_compose_stack_config.py` | U2 |
-| Trust proof AE4 | Opt-in script against TLS matrix | U2 |
-| SSE helper unit tests | `app/tests/test_stack_ingress_sse_helpers.py` | U3 |
-| SSE AE1/AE2 | Opt-in `stack_ingress_sse_proof.py` + live + TLS + credentials | U3 |
-| API stop-new-turns unit/service | `app/tests/test_api_shutdown_drain.py` | U4 |
-| Drain AE3 | Opt-in `stack_ingress_drain_proof.py` | U4 |
-| Default `scripts/verify.sh` | Must stay green; must not require live TLS/OpenAI | Non-regression |
-| Privacy scan of evidence/artifacts | Manual + existing privacy tests where applicable | No key leakage |
+| Inventory / TLS / SSE helpers / API unit drain | Credit | U1–U4 |
+| Trust AE4 | Opt-in live | U6; `ca=yes` + unpublished evidence |
+| SSE AE1/AE2 | Opt-in three-file live | U6; contiguous AE1; `replay:true` |
+| Drain AE3 | Opt-in live 503 + stop_claim + resume/tail | U6; drain-hold if needed |
+| Evidence + tracker + DRIFT | Docs | U5 after AE greens |
+| Default `scripts/verify.sh` | Must stay green | Non-regression |
+| Privacy scan | Manual | No key leakage |
 
-Evidence must cite prerequisite document revisions. Missing `OPENAI_API_KEY`/`CE_OPENAI_API_KEY` blocks AE1 only — do not weaken the ≥2-delta gate.
+Missing credentials/unready synthesis blocks AE1 and keeps P12-05 incomplete — do not weaken the ≥2-delta gate.
 
 ---
 
 ## Definition of Done
 
-- R1–R10 and AE1–AE4 satisfied at the altitudes above (AE1 requires credentials present).
-- API stop-new-turns seam landed and tested; worker stop-claim re-proven in drain matrix.
-- Inventory + evidence published; runbook updated; P12-05 DONE in master-build-plan with residual owners rewritten to P12-07 (byte-range, adversarial deletion, Playwright) and P12-08 (HA, hard provider-I/O abort).
-- DRIFT-05/24/25 deployed halves advanced only to the proven altitude.
-- No abandoned experimental TLS/proxy code left unreferenced; secrets never committed or pasted into docs.
-- Abandoned-attempt code from alternate ingress choices removed from the final diff.
+- R1–R10 and AE1–AE4 satisfied at live TLS Compose altitude with verified CA.
+- Live `503 capacity_unavailable` observed during drain-hold; worker stop-claim re-proven; resume/tail of accepted work through grace proven.
+- Inventory + evidence published with live digests; runbook documents three-file boot + synthesis/`--domain-id` + drain-hold; P12-05 DONE with residuals rewritten to P12-07 / P12-08.
+- DRIFT-05/24/25 deployed halves advanced only to the proven altitude; brownfield follow-up row no longer `NOT_STARTED`.
+- Secrets never committed or pasted into docs; cert private keys stay under gitignored `app/.stack-tls/`.
 
 ---
 
 ## Sources & Research
 
-- `docs/architecture/deployment-topology.md` — ≥2-delta gate; shutdown order; SSE proxy rules
-- `docs/architecture/frontend-security-boundary.md` — BFF allowlist; deployed-ingress negatives
-- `docs/contracts/sse-event-catalog.md` — event order; resume/replay
-- `docs/_scratch/p5-04-lightrag-real-runtime-evidence.md` — live runtime credit
-- `docs/_scratch/p7-04-sse-pipeline-evidence.md` — disconnect≠cancel / replay credit
-- `docs/_scratch/p7-06-synthesis-isolation-heartbeat-evidence.md` — heartbeat; hard drain residual
-- `docs/_scratch/p9-05-ci-validators-evidence.md` — local BFF credit
-- `docs/_scratch/p10-01-compose-config-evidence.md` / `p10-02-stack-smoke-evidence.md` / `p10-03-worker-lifecycle-evidence.md` — compose/smoke/stop-claim credit + P12-05 residuals
-- `docs/_scratch/p12-02-suite-contract-convergence-evidence.md` / `p12-03-adversarial-security-evidence.md` / `p12-04-backup-restore-evidence.md` — evidence shape + residual handoffs
-- `app/client/src/lib/server/bff-proxy.ts` — pass-through streaming
-- `app/context_engine/worker.py` — `stack_worker.stop_claim`
-- `app/scripts/stack_smoke_core.py` / `stack_smoke_worker.py` — cookie/CSRF client patterns (not AE1 body-read)
-- External research: skipped — strong local topology/SSE/compose patterns
+- `docs/architecture/deployment-topology.md`
+- `docs/architecture/frontend-security-boundary.md`
+- `docs/contracts/sse-event-catalog.md`
+- `docs/interaction-behavior-prd.md` — M-03 disconnect≠cancel/resume; C-01 capacity `503`
+- `docs/_scratch/p12-05-deployed-ingress-inventory.md` / `p12-05-deployed-ingress-evidence.md`
+- `docs/_scratch/p5-04-lightrag-real-runtime-evidence.md`
+- `docs/_scratch/p7-04-sse-pipeline-evidence.md` / `p7-06-synthesis-isolation-heartbeat-evidence.md`
+- `docs/_scratch/p9-05-ci-validators-evidence.md`
+- `docs/_scratch/p10-01-compose-config-evidence.md` / `p10-02-stack-smoke-evidence.md` / `p10-03-worker-lifecycle-evidence.md`
+- `docs/operations/compose-stack-runbook.md`
+- `app/scripts/stack_ingress_{trust,sse,drain}_proof.py`
+- `app/context_engine/dev/ingress_sse_proof.py`
+- External research: skipped — strong local patterns; resume re-scopes remaining HOW
 
 ## Assumptions (planning)
 
-- Session-settled KTD4/KTD6 stand unless invalidating evidence appears at implementation time.
-- TLS terminator choice (Caddy vs nginx vs traefik) is an implementation detail inside U2 as long as buffering/compression are disabled for SSE and certs stay outside app images.
+- Session-settled KTD4/KTD6 stand unless invalidating evidence appears.
+- Caddy remains acceptable unless live buffering invalidates AE1.
+- Doc-review resolved AE3 observability by requiring drain-hold (KTD10) rather than weakening live 503.
