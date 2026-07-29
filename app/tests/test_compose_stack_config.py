@@ -335,6 +335,22 @@ def test_env_example_documents_minio_overlay() -> None:
     assert "CE_STACK_OBJECT_STORE_IMAGE" in text
 
 
+def test_env_example_documents_host_live_test_provider_keys() -> None:
+    text = ENV_EXAMPLE.read_text(encoding="utf-8")
+    assert "Host live-test credentials" in text
+    assert "OPENAI_API_KEY=<set locally>" in text
+    assert "REDUCTO_API_KEY=<set locally>" in text
+    assert "never commit" in text.lower() or "Never commit" in text
+    assert "Compose api/worker do not consume" in text
+    assert "Not sealed Settings" in text or "not sealed Settings" in text
+    # Placeholders only — no sk-/rk- style committed secret material on those lines.
+    for line in text.splitlines():
+        if line.startswith("OPENAI_API_KEY=") or line.startswith("REDUCTO_API_KEY="):
+            assert "<set locally>" in line
+            assert "sk-" not in line
+            assert "rk_" not in line
+
+
 def test_compose_config_default_has_no_minio() -> None:
     result = subprocess.run(
         ["docker", "compose", "-f", str(COMPOSE), "config"],
