@@ -1,0 +1,10 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "components": [
+    {
+      "name": "controller.cdx.json",
+      "type": "library"
+    }
+  ]
+}

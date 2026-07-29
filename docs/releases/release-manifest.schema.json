@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://context-engine.local/schemas/release-manifest-v1.json",
+  "title": "Context Engine release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "profile",
+    "source",
+    "platform",
+    "locks",
+    "schema",
+    "contracts",
+    "lightrag",
+    "imageGates",
+    "generator"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "1" },
+    "profile": { "type": "string", "enum": ["pr", "release"] },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gitSha", "dirty"],
+      "properties": {
+        "gitSha": { "type": "string", "minLength": 7 },
+        "dirty": { "type": "boolean" }
+      }
+    },
+    "platform": { "type": "string", "const": "linux/amd64" },
+    "roles": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "web": { "$ref": "#/$defs/rolePin" },
+        "api": { "$ref": "#/$defs/rolePin" },
+        "worker": { "$ref": "#/$defs/rolePin" },
+        "lightragRuntime": { "$ref": "#/$defs/rolePin" }
+      }
+    },
+    "upstreamImages": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "minio": { "$ref": "#/$defs/upstreamPin" },
+        "mc": { "$ref": "#/$defs/upstreamPin" },
+        "postgres": { "$ref": "#/$defs/upstreamPin" }
+      }
+    },
+    "locks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uvLockSha256", "packageLockSha256"],
+      "properties": {
+        "uvLockSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "packageLockSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alembicHead"],
+      "properties": {
+        "alembicHead": { "type": "string", "minLength": 1 }
+      }
+    },
+    "contracts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["apiVersion", "sseSchemaVersion"],
+      "properties": {
+        "apiVersion": { "type": "string", "minLength": 1 },
+        "sseSchemaVersion": { "type": "string", "minLength": 1 }
+      }
+    },
+    "lightrag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pinnedVersion", "vendoredVersion"],
+      "properties": {
+        "pinnedVersion": { "type": "string", "minLength": 1 },
+        "vendoredVersion": { "type": "string", "minLength": 1 }
+      }
+    },
+    "imageGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "CE_STACK_LIVE_IMAGE",
+        "CE_STACK_PARSERS_IMAGE",
+        "CE_STACK_OBJECT_STORE_IMAGE",
+        "CE_STACK_PREVIEW_IMAGE"
+      ],
+      "properties": {
+        "CE_STACK_LIVE_IMAGE": { "type": "string", "enum": ["0", "1"] },
+        "CE_STACK_PARSERS_IMAGE": { "type": "string", "enum": ["0", "1"] },
+        "CE_STACK_OBJECT_STORE_IMAGE": { "type": "string", "enum": ["0", "1"] },
+        "CE_STACK_PREVIEW_IMAGE": { "type": "string", "enum": ["0", "1"] }
+      }
+    },
+    "packages": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Resolved package versions only; never production-supported labels"
+    },
+    "rendererIds": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "sboms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["subjectDigest", "path", "sha256"],
+        "properties": {
+          "subjectDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gitSha": { "type": "string" },
+        "dirty": { "type": "boolean" },
+        "builtAt": { "type": "string" },
+        "ciRunId": { "type": ["string", "null"] },
+        "syftVersion": { "type": ["string", "null"] },
+        "generator": { "type": "string" },
+        "subjectDigests": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "sbomSha256s": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "lockSha256s": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "imageGates": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "syftVersion": { "type": ["string", "null"] }
+      }
+    },
+    "residuals": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "rolePin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["digest"],
+      "properties": {
+        "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "imageRef": { "type": "string" },
+        "sameAs": { "type": "string", "enum": ["web", "api", "worker", "lightragRuntime"] }
+      }
+    },
+    "upstreamPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tag"],
+      "properties": {
+        "tag": { "type": "string", "minLength": 1 },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "residual": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "contracts": {
+    "apiVersion": "0.1.0",
+    "sseSchemaVersion": "1.0"
+  },
+  "generator": {
+    "name": "generate_release_manifest.py",
+    "syftVersion": "v1.20.0"
+  },
+  "imageGates": {
+    "CE_STACK_LIVE_IMAGE": "0",
+    "CE_STACK_OBJECT_STORE_IMAGE": "0",
+    "CE_STACK_PARSERS_IMAGE": "0",
+    "CE_STACK_PREVIEW_IMAGE": "0"
+  },
+  "lightrag": {
+    "pinnedVersion": "1.4.16",
+    "vendoredVersion": "1.4.16"
+  },
+  "locks": {
+    "packageLockSha256": "205d6b850e21d806e5b6b181b1e202cb444802cc99ad4e6e76c83dd65b1cf478",
+    "uvLockSha256": "5aed928983dc3d025ad97061d0054b8d5904e13e68d4534875339b3f12ea9b0c"
+  },
+  "packages": {
+    "boto3": "1.43.57",
+    "docling": "2.115.0",
+    "httpx": "0.28.1",
+    "openai": "2.48.0",
+    "python-docx": "1.2.0",
+    "reductoai": "0.22.0"
+  },
+  "platform": "linux/amd64",
+  "profile": "pr",
+  "rendererIds": [
+    "ce-preview-v1",
+    "ce-preview-text-v1",
+    "ce-preview-pdf-passthrough-v1"
+  ],
+  "schema": {
+    "alembicHead": "d4e7a1b92c80"
+  },
+  "schemaVersion": "1",
+  "source": {
+    "dirty": true,
+    "gitSha": "0159fa454f364b4a7bb9bb01064a8b26eb8bdb4f"
+  },
+  "upstreamImages": {
+    "mc": {
+      "tag": "minio/mc:RELEASE.2024-11-17T19-35-56Z"
+    },
+    "minio": {
+      "tag": "minio/minio:RELEASE.2024-12-18T13-15-44Z"
+    },
+    "postgres": {
+      "tag": "postgres:16"
+    }
+  }
+}
