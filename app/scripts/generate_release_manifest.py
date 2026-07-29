@@ -257,11 +257,22 @@ def normalize_digest(value: str) -> str:
 
 def is_placeholder_controller(image_ref: str | None, digest: str | None = None) -> bool:
     ref = (image_ref or "").strip().lower()
+    if not ref:
+        return False
     if ref in PLACEHOLDER_CONTROLLER_IMAGES or ref.startswith("alpine:"):
         return True
     # Digest alone cannot prove Alpine; imageRef is authoritative for stub detect.
     _ = digest
     return False
+
+
+def require_controller_ref(controller_ref: str) -> str:
+    ref = (controller_ref or "").strip()
+    if not ref:
+        raise ManifestError("controller_ref_required")
+    if is_placeholder_controller(ref):
+        raise ManifestError("lightrag_stub_controller", ref)
+    return ref
 
 
 def build_role_map(
@@ -273,8 +284,7 @@ def build_role_map(
 ) -> dict[str, dict[str, Any]]:
     web = normalize_digest(web_digest)
     controller = normalize_digest(controller_digest)
-    if is_placeholder_controller(controller_ref, controller):
-        raise ManifestError("lightrag_stub_controller", controller_ref or controller)
+    controller_ref = require_controller_ref(controller_ref)
     return {
         "web": {"digest": web, "imageRef": web_ref},
         "api": {"digest": controller, "imageRef": controller_ref},
@@ -460,7 +470,6 @@ def generate_manifest(
             if digest:
                 upstream[key]["digest"] = normalize_digest(digest)
 
-    image_gates = dict(RELEASE_GATES if profile == "release" else PR_GATES_PRESENT)
     packages = parse_uv_lock_versions(uv_lock)
 
     roles: dict[str, dict[str, Any]] | None = None
@@ -473,6 +482,12 @@ def generate_manifest(
         )
     elif profile == "release":
         raise ManifestError("role_digest_missing", "web/api")
+
+    # Release gates are declared build intent. Callers must pass the gates used
+    # for the inspected controller image (CLI --assert-release-gates).
+    image_gates = dict(PR_GATES_PRESENT)
+    if profile == "release":
+        image_gates = dict(RELEASE_GATES)
 
     if profile == "release":
         for key in ("minio", "mc"):
@@ -558,6 +573,7 @@ def check_manifest_file(
     *,
     profile: str | None = None,
     expected: Mapping[str, Any] | None = None,
+    allow_dirty: bool = False,
 ) -> list[str]:
     try:
         manifest = json.loads(path.read_text(encoding="utf-8"))
@@ -566,7 +582,9 @@ def check_manifest_file(
     prof = profile or str(manifest.get("profile") or "")
     if not prof:
         return ["profile_missing"]
-    errors = validate_manifest_shape(manifest, profile=prof)
+    errors = validate_manifest_shape(
+        manifest, profile=prof, allow_dirty=allow_dirty
+    )
     if expected is not None:
         # Compare regeneratable pin fields against a freshly generated baseline.
         for key in ("locks", "schema", "contracts", "lightrag"):
@@ -624,6 +642,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Escape hatch for local evidence runs on a dirty worktree",
     )
+    parser.add_argument(
+        "--assert-release-gates",
+        action="store_true",
+        help="Required for --profile release: attest CE_STACK_* build args were all 1",
+    )
     return parser.parse_args(argv)
 
 
@@ -655,11 +678,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         if args.check:
-            expected = None
-            if args.profile == "pr":
-                expected = generate_manifest(profile="pr")
+            # Always compare regeneratable pins (locks/head/contracts/lightrag).
+            expected = generate_manifest(
+                profile="pr",
+                allow_dirty_release=True,
+            )
+            # Re-shape expected comparison fields only; profile of file wins for shape.
             errors = check_manifest_file(
-                args.check, profile=args.profile, expected=expected
+                args.check,
+                profile=args.profile,
+                expected=expected,
+                allow_dirty=args.allow_dirty_release,
             )
             if errors:
                 print("FAIL " + " ".join(errors), file=sys.stderr)
@@ -667,12 +696,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"OK {args.check}")
             return 0
 
+        if args.profile == "release" and not args.assert_release_gates:
+            raise ManifestError(
+                "release_gates_unattested",
+                "pass --assert-release-gates after building with all CE_STACK_*=1",
+            )
+
         role_digests = None
         if args.web_inspect or args.controller_inspect:
             if not args.web_inspect or not args.controller_inspect:
                 raise ManifestError(
                     "role_digest_missing", "need --web-inspect and --controller-inspect"
                 )
+            require_controller_ref(args.controller_ref)
             role_digests = {
                 "web": {
                     "digest": load_inspect_digest(args.web_inspect),

@@ -18,6 +18,14 @@ if ! command -v syft >/dev/null 2>&1; then
   exit 1
 fi
 
+# Fail closed if installed Syft version does not match the pin (substring match).
+INSTALLED="$(syft version 2>/dev/null | tr -d '\r' || true)"
+PIN_STRIPPED="${SYFT_VERSION#v}"
+if [[ -z "$INSTALLED" ]] || ! grep -Fqi "$PIN_STRIPPED" <<<"$INSTALLED"; then
+  echo "FAIL syft_version_mismatch want=${SYFT_VERSION} got=${INSTALLED:-unknown}" >&2
+  exit 1
+fi
+
 mkdir -p "$(dirname "$OUTPUT")"
 # Prefer digest-capable scan; Syft accepts image refs.
 syft "$IMAGE_REF" -o cyclonedx-json >"$OUTPUT"

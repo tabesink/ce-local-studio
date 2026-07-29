@@ -107,12 +107,16 @@ Observed: fixture manifest written. Digests are **not** release authority.
 # 3) CE_SYFT_VERSION=v1.20.0 bash scripts/generate_release_sbom.sh <ref> docs/releases/web.cdx.json
 # 4) Same for controller digest → docs/releases/controller.cdx.json
 # 5) cd app && python -m scripts.generate_release_manifest --profile release \
+#      --assert-release-gates \
 #      --web-inspect ... --controller-inspect ... --controller-ref context-engine-live:<tag> \
 #      --minio-digest sha256:... --mc-digest sha256:... --postgres-digest sha256:... \
 #      --sbom sha256:...=../docs/releases/web.cdx.json \
 #      --sbom sha256:...=../docs/releases/controller.cdx.json \
 #      --output ../docs/releases/release-manifest.json
 # 6) python -m scripts.generate_release_manifest --profile release --check ../docs/releases/release-manifest.json
+```
+
+Review follow-up (same branch): release `--check` compares regeneratable pins; empty `--controller-ref` fails; `--assert-release-gates` required for release profile; Syft script fails closed on version mismatch; dirty check honors `--allow-dirty-release`.
 ```
 
 ## Tracker

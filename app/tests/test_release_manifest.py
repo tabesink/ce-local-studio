@@ -84,6 +84,16 @@ def test_release_stub_controller_fails(tmp_path: Path) -> None:
     assert is_placeholder_controller("alpine:3.20")
 
 
+def test_release_empty_controller_ref_fails() -> None:
+    with pytest.raises(ManifestError) as exc:
+        build_role_map(
+            web_digest=DIGEST_A,
+            controller_digest=DIGEST_B,
+            controller_ref="",
+        )
+    assert exc.value.code == "controller_ref_required"
+
+
 def test_release_complete_fixture(tmp_path: Path) -> None:
     roles = {
         "web": {"digest": DIGEST_A, "imageRef": "ce-web:local"},
@@ -233,6 +243,7 @@ def test_main_release_stub_exits(tmp_path: Path) -> None:
         [
             "--profile",
             "release",
+            "--assert-release-gates",
             "--allow-dirty-release",
             "--web-inspect",
             str(web),
@@ -255,3 +266,44 @@ def test_main_release_stub_exits(tmp_path: Path) -> None:
         ]
     )
     assert code == 1
+
+
+def test_main_release_requires_gate_attestation(tmp_path: Path) -> None:
+    code = main(
+        [
+            "--profile",
+            "release",
+            "--allow-dirty-release",
+            "--output",
+            str(tmp_path / "out.json"),
+        ]
+    )
+    assert code == 1
+
+
+def test_release_check_detects_lock_drift(tmp_path: Path) -> None:
+    roles = {
+        "web": {"digest": DIGEST_A, "imageRef": "ce-web:local"},
+        "api": {"digest": DIGEST_B, "imageRef": "context-engine-live:local"},
+    }
+    sboms = [
+        _sbom_entry(tmp_path, DIGEST_A, "web.cdx.json"),
+        _sbom_entry(tmp_path, DIGEST_B, "controller.cdx.json"),
+    ]
+    manifest = generate_manifest(
+        profile="release",
+        role_digests=roles,
+        upstream_digests={"minio": DIGEST_C, "mc": DIGEST_C, "postgres": DIGEST_C},
+        sboms=sboms,
+        allow_dirty_release=True,
+    )
+    manifest["locks"]["uvLockSha256"] = "0" * 64
+    out = tmp_path / "release.json"
+    write_manifest(manifest, out)
+    errors = check_manifest_file(
+        out,
+        profile="release",
+        expected=generate_manifest(profile="pr", allow_dirty_release=True),
+        allow_dirty=True,
+    )
+    assert any(e.startswith("pin_drift:") for e in errors)

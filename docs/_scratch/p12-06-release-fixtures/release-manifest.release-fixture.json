@@ -32,11 +32,11 @@
   "platform": "linux/amd64",
   "profile": "release",
   "provenance": {
-    "builtAt": "2026-07-29T01:36:09Z",
+    "builtAt": "2026-07-29T01:41:00Z",
     "ciRunId": null,
     "dirty": true,
     "generator": "generate_release_manifest.py",
-    "gitSha": "5b574c90fc9b266bea7ef14242028c7a9e517161",
+    "gitSha": "aec54f318bc800e2fae7718a4ed2e458f72ca493",
     "imageGates": {
       "CE_STACK_LIVE_IMAGE": "1",
       "CE_STACK_OBJECT_STORE_IMAGE": "1",
@@ -104,7 +104,7 @@
   "schemaVersion": "1",
   "source": {
     "dirty": true,
-    "gitSha": "5b574c90fc9b266bea7ef14242028c7a9e517161"
+    "gitSha": "aec54f318bc800e2fae7718a4ed2e458f72ca493"
   },
   "upstreamImages": {
     "mc": {
