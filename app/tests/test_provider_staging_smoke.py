@@ -80,9 +80,88 @@ def test_smoke_live_refuses_without_openai_credential() -> None:
         "live",
         "--profile",
         "openai-embedding",
+        "--env-file",
+        str(APP_ROOT / ".env.stack.example"),
     )
     assert result.returncode != 0
     assert "credential_refused" in result.stderr
+
+
+def test_smoke_live_accepts_openai_from_env_file(tmp_path: Path) -> None:
+    env_path = tmp_path / "keys.env"
+    secret = "test-openai-key-not-for-network"
+    env_path.write_text(f"OPENAI_API_KEY={secret}\n", encoding="utf-8")
+    result = _run(
+        {"CE_PROVIDER_STAGING_SMOKE": "1"},
+        "--mode",
+        "live",
+        "--profile",
+        "openai-embedding",
+        "--env-file",
+        str(env_path),
+    )
+    # Credential gate must pass; live may still fail at network boundary.
+    assert "credential_refused" not in result.stderr
+    assert secret not in result.stdout
+    assert secret not in result.stderr
+    if result.returncode != 0:
+        assert "live_failed" in result.stderr or "adapter_failed" in result.stderr
+
+
+def test_smoke_live_accepts_reducto_from_env_file(tmp_path: Path) -> None:
+    env_path = tmp_path / "keys.env"
+    secret = "test-reducto-key-not-for-network"
+    env_path.write_text(f"REDUCTO_API_KEY={secret}\n", encoding="utf-8")
+    result = _run(
+        {"CE_PROVIDER_STAGING_SMOKE": "1"},
+        "--mode",
+        "live",
+        "--profile",
+        "reducto",
+        "--env-file",
+        str(env_path),
+    )
+    assert "credential_refused" not in result.stderr
+    assert secret not in result.stdout
+    assert secret not in result.stderr
+    if result.returncode != 0:
+        assert "live_failed" in result.stderr or "adapter_failed" in result.stderr
+
+
+def test_smoke_env_file_merge_preserves_process_env(tmp_path: Path) -> None:
+    env_path = tmp_path / "keys.env"
+    env_path.write_text("OPENAI_API_KEY=from-file-should-not-win\n", encoding="utf-8")
+    process_secret = "from-process-env-wins"
+    result = _run(
+        {"CE_PROVIDER_STAGING_SMOKE": "1", "OPENAI_API_KEY": process_secret},
+        "--mode",
+        "live",
+        "--profile",
+        "openai-embedding",
+        "--env-file",
+        str(env_path),
+    )
+    assert "credential_refused" not in result.stderr
+    assert "from-file-should-not-win" not in result.stdout
+    assert "from-file-should-not-win" not in result.stderr
+    assert process_secret not in result.stdout
+    assert process_secret not in result.stderr
+
+
+def test_smoke_missing_env_file_soft_skips() -> None:
+    missing = APP_ROOT / ".no-such-env-file-for-smoke-test"
+    assert not missing.exists()
+    result = _run(
+        {"CE_PROVIDER_STAGING_SMOKE": "1"},
+        "--mode",
+        "check",
+        "--profile",
+        "docling",
+        "--env-file",
+        str(missing),
+    )
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["status"] == "gate_ok"
 
 
 def test_smoke_adapters_matrix_fixture_proofs() -> None:

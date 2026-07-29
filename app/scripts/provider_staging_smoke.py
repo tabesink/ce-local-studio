@@ -3,6 +3,8 @@
 
 Never wired into scripts/verify.sh. Refuses before network unless
 CE_PROVIDER_STAGING_SMOKE=1 and the selected profile's credentials are present.
+Optional --env-file (default app/.env.stack.local) merges OPENAI_API_KEY /
+REDUCTO_API_KEY (and CE_* aliases) into process env; missing file soft-skips.
 
 Modes:
   check     — validate gate/profile/env only (CI refuse proof)
@@ -24,6 +26,15 @@ from pathlib import Path
 from typing import Any
 
 GATE_ENV = "CE_PROVIDER_STAGING_SMOKE"
+_DEFAULT_ENV_FILE = Path(__file__).resolve().parents[1] / ".env.stack.local"
+_SECRET_ENV_KEYS = frozenset(
+    {
+        "OPENAI_API_KEY",
+        "CE_OPENAI_API_KEY",
+        "REDUCTO_API_KEY",
+        "CE_REDUCTO_API_KEY",
+    }
+)
 PROFILES = frozenset(
     {
         "docling",
@@ -112,6 +123,36 @@ def require_live_credentials(profile: str) -> str | None:
     if name and not value:
         return f"{name} is required for profile={profile}"
     return None
+
+
+def _load_env_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw in path.read_text(encoding="utf-8-sig").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+def _merge_env_file(env: dict[str, str]) -> None:
+    """Merge allowlisted keys into os.environ without logging values."""
+    for key, value in env.items():
+        if not value or value == "<set locally>":
+            continue
+        if key in _SECRET_ENV_KEYS:
+            if key not in os.environ:
+                os.environ[key] = value
+            continue
+        os.environ.setdefault(key, value)
+
+
+def _maybe_merge_env_file(path: Path) -> None:
+    """Soft-skip when missing (unlike SSE proof hard-fail)."""
+    if not path.is_file():
+        return
+    _merge_env_file(_load_env_file(path))
 
 
 def run_adapters_fixture_proofs(profile: str) -> dict[str, Any]:
@@ -377,7 +418,17 @@ def main(argv: list[str] | None = None) -> int:
         default=os.environ.get("CE_PROVIDER_STAGING_PROFILE", ""),
         help="docling|reducto|openai-embedding|openai-synthesis|matrix",
     )
+    parser.add_argument(
+        "--env-file",
+        type=Path,
+        default=_DEFAULT_ENV_FILE,
+        help="Optional gitignored stack env file (default: app/.env.stack.local). "
+        "Missing file soft-skips; never prints secret values.",
+    )
     args = parser.parse_args(argv)
+
+    # Merge host credentials before live gate (process env wins if already set).
+    _maybe_merge_env_file(args.env_file)
 
     gate_err = require_gate()
     if gate_err:

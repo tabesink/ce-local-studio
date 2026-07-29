@@ -6,7 +6,7 @@ TLS / `testing=false` HTTPS / stream-drain: opt-in P12-05 overlay (`compose.stac
 Local-production MinIO object store: opt-in `compose.stack.minio.yml` (P10-04).  
 Parser/provider packaging and support matrix: `docs/operations/provider-deployment-profiles.md` (P10-05).  
 Governed preview (DOCX/Markdown/text→PDF): worker preview slot after prepare; optional image gate `CE_STACK_PREVIEW_IMAGE=1` / `--extra preview-renderer` (P10-06).  
-Credential-gated provider staging smoke: `scripts/provider_staging_smoke.py` with `CE_PROVIDER_STAGING_SMOKE=1` (never default verify).  
+Credential-gated provider staging smoke: `scripts/provider_staging_smoke.py` with `CE_PROVIDER_STAGING_SMOKE=1` and optional `--env-file .env.stack.local` (never default verify). Host live-test keys use unprefixed `OPENAI_API_KEY` / `REDUCTO_API_KEY` in gitignored `.env.stack.local` only — not `app/.env`, not Compose api/worker env, and not a substitute for sealed Settings credentials.  
 Full upload→Evidence Compose live path: opt-in `CE_P10_05_PIPELINE_LIVE=1` plus live/minio overlays; P5-04 remains topology credit only.  
 Backup/restore/incident drills (Compose matrix): [`backup-restore-incident-runbook.md`](./backup-restore-incident-runbook.md) (P12-04).  
 Production KMS/escrow/HA/RPO-RTO acceptance: **P12-08 only**.
@@ -134,7 +134,9 @@ python app/scripts/generate_stack_tls_certs.py
 #   CE_INLINE_TURN_WORKERS=false
 #   CE_STACK_TLS_CERT_DIR=<absolute app/.stack-tls>
 #   CE_STACK_LIVE_RUNTIME_ROOT=<host-abs live runtime root>
-#   OPENAI_API_KEY or CE_OPENAI_API_KEY (host/env-file; never logged)
+#   OPENAI_API_KEY=<set locally>   # host SSE proof / staging smoke only; never logged
+#   REDUCTO_API_KEY=<set locally>  # host staging smoke only; optional
+# Unsupported for stack operator keys: app/.env — use .env.stack.local.
 cd app
 docker compose --env-file .env.stack.local \
   -f compose.stack.yml -f compose.stack.live.yml -f compose.stack.tls.yml \
@@ -143,7 +145,7 @@ docker compose --env-file .env.stack.local \
 
 ### AE1 preflight (synthesis + domain)
 
-Host env key presence is necessary but not sufficient. Install/activate sealed OpenAI synthesis on the stack via the contracted admin runtime-settings provider path (`PUT /api/v1/admin/runtime-settings/providers/{kind}` — see `docs/contracts/http-api-catalog.md` and `docs/operations/provider-deployment-profiles.md`). Seed/index a query-eligible Knowledge Domain per `docs/quality/seeded-demo-and-test-data.md` and P5-04 live overlay; record the public opaque `--domain-id` (never private DB ids).
+Host `OPENAI_API_KEY` in `.env.stack.local` (loaded via `--env-file`) is necessary but not sufficient for product synthesis. Install/activate sealed OpenAI synthesis on the stack via the contracted admin runtime-settings provider path (`PUT /api/v1/admin/runtime-settings/providers/{kind}` — see `docs/contracts/http-api-catalog.md` and `docs/operations/provider-deployment-profiles.md`). Seed/index a query-eligible Knowledge Domain per `docs/quality/seeded-demo-and-test-data.md` and P5-04 live overlay; record the public opaque `--domain-id` (never private DB ids).
 
 ### Proof commands
 
