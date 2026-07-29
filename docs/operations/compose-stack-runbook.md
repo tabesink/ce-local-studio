@@ -149,6 +149,8 @@ Host `OPENAI_API_KEY` in `.env.stack.local` (loaded via `--env-file`) is necessa
 
 Optional operator helper (not a verify gate): `python scripts/_p12_05_live_domain_preflight.py --env-file .env.stack.local` seals/activates OpenAI synthesis, starts the domain, uploads/prepares/indexes the fixture source when needed, and prints `DOMAIN_ID=<opaque-slug>`.
 
+Rich live corpus for upload/parse/Evidence/synthesis lanes: fixture key `doc_vehicle_suspension` at `tests/fixtures/documents/Vehicle_Suspension_System_Technology_And_Design_TEST.pdf` (see `docs/quality/seeded-demo-and-test-data.md` and plan `docs/plans/2026-07-29-002-feat-vehicle-suspension-corpus-fixture-plan.md`). Prefer this over ad-hoc repo-root PDFs.
+
 ### Proof commands
 
 ```bash

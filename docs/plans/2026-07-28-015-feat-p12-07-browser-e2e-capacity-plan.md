@@ -49,7 +49,7 @@ P9 closed component/Vitest altitude and deliberately left `/database-visualize` 
 
 **F2 — Playwright PR-fast matrix.** Login/CSRF/logout BFCache; chat/documents/settings/enabled graph; two-user cache; M-11 open-panel; a11y; laptop+mobile visual baselines — production Next + BFF + API, deterministic adapters, real PG/object store.
 
-**F3 — Real document + preview pipeline (`@release`).** Upload supported source → real parser/provider profile → index ready → expected mapped Evidence → governed preview/evidence focus; renderer/provider/runtime failure → safe contracted UI.
+**F3 — Real document + preview pipeline (`@release`).** Upload supported source → real parser/provider profile → index ready → expected mapped Evidence → governed preview/evidence focus; renderer/provider/runtime failure → safe contracted UI. For rich multi-modal Evidence (text/table/figure) and grounded synthesis on `@release`, use fixture `doc_vehicle_suspension` (`app/tests/fixtures/documents/Vehicle_Suspension_System_Technology_And_Design_TEST.pdf`) per `docs/quality/seeded-demo-and-test-data.md` and `docs/plans/2026-07-29-002-feat-vehicle-suspension-corpus-fixture-plan.md`; keep `doc_pump_manual` / deterministic adapters as PR-fast authority.
 
 **F4 — Capacity/failure (`@release`).** Concurrent members on one domain; isolation of transcript/evidence/request IDs; load shed `429`/`503` before collapse.
 
@@ -92,7 +92,7 @@ P9 closed component/Vitest altitude and deliberately left `/database-visualize` 
 - AE6. `/settings?section=domains` production-boundary Playwright proof (P9-04 Settings F3 residual — not Key Flow F3) green with server-produced DTOs (no intercept).
 - AE7. M-11: while answer + Evidence/PDF open, admin deletes cited source → turn redacts (question kept), viewer closes safely, cache does not re-serve protected bytes.
 - AE8. The deterministic PR fixture yields exact answer `The relief valve is downstream of the pump [1].`; the live `@release` pipeline must preserve the normalized downstream-of-pump fact, citation `[1]`, and mapped Evidence ref without requiring provider prose or punctuation to be byte-identical.
-- AE9. Ava selects an extraction-capable synthesis profile and embedding profile, creates/starts Equipment Manuals, uploads the pump PDF with Reducto, and the completed index yields a non-empty domain graph and query-eligible retrieval state.
+- AE9. Ava selects an extraction-capable synthesis profile and embedding profile, creates/starts Equipment Manuals, uploads a PDF with Reducto, and the completed index yields a non-empty domain graph and query-eligible retrieval state. PR-fast / deterministic graph baselines may keep `doc_pump_manual`; the rich `@release` upload→parse→Evidence (text/table/figure)→synthesis path uses `doc_vehicle_suspension`.
 - AE10. Mina opens `/database-visualize?domain=<opaque-domain-ref>`, receives only safe graph DTO fields through the BFF, searches/selects the relief-valve node from the accessible list, and the canvas and `node` URL state follow the same selection.
 - AE11. Unknown/unauthorized domains return the same `404` shape; stopped/unready domains and runtime failures render contracted safe states with request IDs; no raw runtime, provider, source-block, or graph-storage identifiers appear in URL/DOM/network/log artifacts.
 - AE12. Deleting the indexed source removes its derived graph contribution after fenced runtime cleanup/reconciliation; refresh cannot continue showing deleted nodes from browser cache.
@@ -510,7 +510,7 @@ Loading uses bounded skeleton rows plus a named canvas status; refresh keeps the
 
 **Files:**
 - Create: `app/tests/fixtures/manifest.json`
-- Create: `app/tests/fixtures/documents/**` (incl. `doc_pump_manual` 24-page synthetic PDF and at least one supported non-PDF source for R9)
+- Create: `app/tests/fixtures/documents/**` (incl. `doc_pump_manual` 24-page synthetic PDF, committed rich live corpus `doc_vehicle_suspension` / `Vehicle_Suspension_System_Technology_And_Design_TEST.pdf`, and at least one supported non-PDF source for R9)
 - Create: `app/tests/fixtures/previews/**` as required by manifest
 - Create: `app/tests/fixtures/expected/**` (figure answer constant; safe projections)
 - Create/modify: `app/context_engine/dev/seed*.py` (or sibling) for `--manifest` world seed under existing seed gate

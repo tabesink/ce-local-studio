@@ -81,6 +81,24 @@ Canonical Pump Manual fixtures:
 
 All excerpts are synthetic and <=500 characters. Tests assert normalized coordinates, one-based pages, safe labels, document refs, citation order, PDF ranges, and semantic fallback. A malicious upload fixture includes path-like filename/control characters, MIME mismatch, oversized metadata, and decompression-bomb signature; it must never become usable content.
 
+### Rich live corpus — vehicle suspension (forward standard)
+
+Use this PDF as the **forward standard** for live / `@release` / operator lanes that exercise real upload → prepare/parse → index → retrieval → Evidence (text, table, figure/image) → grounded synthesis. It does **not** replace the small deterministic synthetic fixtures above for PR-fast seeds, exact SSE answer strings, or visual baselines.
+
+| Field | Value |
+| --- | --- |
+| Fixture key | `doc_vehicle_suspension` |
+| Path | `app/tests/fixtures/documents/Vehicle_Suspension_System_Technology_And_Design_TEST.pdf` |
+| Display filename (sanitized) | `Vehicle_Suspension_System_Technology_And_Design_TEST.pdf` |
+| SHA-256 | `8fbda29d44b910e997f8235ab6bb5d5b61419a5b80ef965793738656920688b8` |
+| Byte size | `1680934` |
+| Media type | `application/pdf` |
+| Intended coverage | multi-page text; tables; figures/images; mapped Evidence kinds; domain-RAG synthesis grounded only in authorized Evidence |
+| Altitude | `@release` / Compose live + real parser (Docling or Reducto) + embedding + LightRAG; not a default `scripts/verify.sh` body |
+| Non-claims | Exact provider prose; deterministic citation labels from seed constants; PR-fast visual baselines |
+
+Plans and operator helpers that need a rich corpus must cite `doc_vehicle_suspension` (this path/hash) rather than ad-hoc PDFs outside the fixtures tree. When expected Evidence anchors for this document are frozen, record them under `tests/fixtures/expected/` and update the manifest in the same change.
+
 ## Domain graph fixtures
 
 Deterministic graph projections for Equipment Manuals live under `tests/fixtures/expected/graph/` and are keyed by domain fixture plus optional label focus. Public refs are opaque fixture tokens, never vendor LightRAG IDs.

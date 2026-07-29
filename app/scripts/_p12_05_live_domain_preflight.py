@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """One-shot P12-05 operator preflight: seal OpenAI, create/start domain, index a fixture.
 
+Prefers rich corpus doc_vehicle_suspension
+(`tests/fixtures/documents/Vehicle_Suspension_System_Technology_And_Design_TEST.pdf`)
+when present; else doc_safety_bulletin.
+
 Prints only the public domain id and safe status lines. Never prints credentials.
 Not part of default verify. Delete or leave as operator helper.
 """
@@ -21,7 +25,11 @@ from pathlib import Path
 DOMAIN_ID = "p12-05-sse-live"
 EMBED_PROFILE = "openai-embedding-default"
 SYNTH_PROFILE = "openai-synthesis-default"
-FIXTURE = Path(__file__).resolve().parents[1] / "tests/fixtures/documents/doc_safety_bulletin.pdf"
+# Prefer rich live corpus (doc_vehicle_suspension); fall back to small deterministic PDF.
+_FIXTURES = Path(__file__).resolve().parents[1] / "tests/fixtures/documents"
+_RICH = _FIXTURES / "Vehicle_Suspension_System_Technology_And_Design_TEST.pdf"
+_FALLBACK = _FIXTURES / "doc_safety_bulletin.pdf"
+FIXTURE = _RICH if _RICH.is_file() else _FALLBACK
 
 
 def _load_env(path: Path) -> dict[str, str]:

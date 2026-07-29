@@ -59,7 +59,7 @@ M-04 requires figure-region focus, and seed fixtures define regions, but parsers
 - R3. Authorized location/deep-link DTOs may include region when proven; server ignores browser-supplied region for authority.
 - R4. Viewer: valid region → page + fit/highlight; else containing-block highlight → sectionLabel → page with Exact location unavailable; unauthorized → Evidence no longer available.
 - R5. Keep P6-02 retrieval EvidenceItemDto / RetrievalEvidenceAnchorDto page/section-only unless an approved coordinated contract change lands in this slice.
-- R6. Seed/fixture alignment with docs/quality/seeded-demo-and-test-data.md figure/table region constants, including live `SourceBlock` rows.
+- R6. Seed/fixture alignment with docs/quality/seeded-demo-and-test-data.md figure/table region constants, including live `SourceBlock` rows. Live/operator region + multi-kind Evidence characterization that needs a real multi-page PDF with tables/figures uses `doc_vehicle_suspension` (`Vehicle_Suspension_System_Technology_And_Design_TEST.pdf`); deterministic seed constants remain `doc_pump_manual` / `ev_mina_*`.
 - R7. Evidence docs/_scratch/p4-05-region-provenance-evidence.md; tracker DONE.
 - R8. Shared live anchor projector owns location + turn/SSE evidence anchors; never silent page-1 fabrication for unprovable pages.
 
