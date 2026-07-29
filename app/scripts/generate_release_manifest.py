@@ -108,16 +108,20 @@ class ManifestError(Exception):
         super().__init__(msg)
 
 
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def sha256_file(path: Path, *, normalize_newlines: bool = False) -> str:
+    """Hash file bytes. Lockfiles use LF-normalized hashing for cross-platform pins."""
+    data = path.read_bytes()
+    if normalize_newlines:
+        data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return sha256_bytes(data)
+
+
+def sha256_lockfile(path: Path) -> str:
+    return sha256_file(path, normalize_newlines=True)
 
 
 def _read_text(path: Path) -> str:
@@ -446,8 +450,8 @@ def generate_manifest(
     uv_lock = app / "uv.lock"
     pkg_lock = app / "client" / "package-lock.json"
     locks = {
-        "uvLockSha256": sha256_file(uv_lock),
-        "packageLockSha256": sha256_file(pkg_lock),
+        "uvLockSha256": sha256_lockfile(uv_lock),
+        "packageLockSha256": sha256_lockfile(pkg_lock),
     }
     pinned, vendored = read_lightrag_versions(
         runtime_path=app / "context_engine" / "services" / "lightrag_runtime.py",

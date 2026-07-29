@@ -4,4 +4,4 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT/app"
-exec python -m pytest tests/test_release_manifest.py -q --tb=line
+exec uv run --frozen --python 3.12 --extra test pytest tests/test_release_manifest.py -q --tb=line

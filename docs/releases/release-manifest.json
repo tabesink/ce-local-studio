@@ -18,8 +18,8 @@
     "vendoredVersion": "1.4.16"
   },
   "locks": {
-    "packageLockSha256": "aaae22fc481d022a30ffb4ba369ecf9d75d8ef2373f68dad65165fde226bdb2b",
-    "uvLockSha256": "5857a0092c9fa0b5c6fef023372ecfd93aca809079aca3e0db74153839cdeb26"
+    "packageLockSha256": "205d6b850e21d806e5b6b181b1e202cb444802cc99ad4e6e76c83dd65b1cf478",
+    "uvLockSha256": "5aed928983dc3d025ad97061d0054b8d5904e13e68d4534875339b3f12ea9b0c"
   },
   "packages": {
     "boto3": "1.43.57",
@@ -42,7 +42,7 @@
   "schemaVersion": "1",
   "source": {
     "dirty": true,
-    "gitSha": "5b574c90fc9b266bea7ef14242028c7a9e517161"
+    "gitSha": "0159fa454f364b4a7bb9bb01064a8b26eb8bdb4f"
   },
   "upstreamImages": {
     "mc": {
