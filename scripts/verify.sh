@@ -29,6 +29,10 @@ run_check "backend tests" bash -c "cd '$APP_DIR' && uv run --frozen --python 3.1
 run_check "frontend dependency lock" bash -c "cd '$APP_DIR/client' && npm ci"
 run_check "generated contract snapshots" bash "$ROOT_DIR/scripts/check-generated-contracts.sh"
 run_check "generated contract snapshot fixtures" bash "$ROOT_DIR/scripts/tests/check-generated-contracts.sh"
+# P12-06 PR-light pins only (locks/heads/contracts). Release-full digests/SBOM stay
+# operator/release-job — do not require Docker image matrix or Syft here.
+run_check "release manifest PR-light" bash -c "cd '$APP_DIR' && python -m scripts.generate_release_manifest --profile pr --check '$ROOT_DIR/docs/releases/release-manifest.json'"
+run_check "release manifest unit fixtures" bash "$ROOT_DIR/scripts/tests/check-release-manifest.sh"
 run_check "frontend typecheck" bash -c "cd '$APP_DIR/client' && npm run typecheck"
 run_check "frontend tests" bash -c "cd '$APP_DIR/client' && npm test"
 run_check "frontend production build" bash -c "cd '$APP_DIR/client' && npm run build"

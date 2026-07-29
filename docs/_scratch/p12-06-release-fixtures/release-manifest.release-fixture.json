@@ -1,0 +1,123 @@
+{
+  "contracts": {
+    "apiVersion": "0.1.0",
+    "sseSchemaVersion": "1.0"
+  },
+  "generator": {
+    "name": "generate_release_manifest.py",
+    "syftVersion": "v1.20.0-fixture"
+  },
+  "imageGates": {
+    "CE_STACK_LIVE_IMAGE": "1",
+    "CE_STACK_OBJECT_STORE_IMAGE": "1",
+    "CE_STACK_PARSERS_IMAGE": "1",
+    "CE_STACK_PREVIEW_IMAGE": "1"
+  },
+  "lightrag": {
+    "pinnedVersion": "1.4.16",
+    "vendoredVersion": "1.4.16"
+  },
+  "locks": {
+    "packageLockSha256": "aaae22fc481d022a30ffb4ba369ecf9d75d8ef2373f68dad65165fde226bdb2b",
+    "uvLockSha256": "5857a0092c9fa0b5c6fef023372ecfd93aca809079aca3e0db74153839cdeb26"
+  },
+  "packages": {
+    "boto3": "1.43.57",
+    "docling": "2.115.0",
+    "httpx": "0.28.1",
+    "openai": "2.48.0",
+    "python-docx": "1.2.0",
+    "reductoai": "0.22.0"
+  },
+  "platform": "linux/amd64",
+  "profile": "release",
+  "provenance": {
+    "builtAt": "2026-07-29T01:36:09Z",
+    "ciRunId": null,
+    "dirty": true,
+    "generator": "generate_release_manifest.py",
+    "gitSha": "5b574c90fc9b266bea7ef14242028c7a9e517161",
+    "imageGates": {
+      "CE_STACK_LIVE_IMAGE": "1",
+      "CE_STACK_OBJECT_STORE_IMAGE": "1",
+      "CE_STACK_PARSERS_IMAGE": "1",
+      "CE_STACK_PREVIEW_IMAGE": "1"
+    },
+    "lockSha256s": {
+      "packageLockSha256": "aaae22fc481d022a30ffb4ba369ecf9d75d8ef2373f68dad65165fde226bdb2b",
+      "uvLockSha256": "5857a0092c9fa0b5c6fef023372ecfd93aca809079aca3e0db74153839cdeb26"
+    },
+    "sbomSha256s": [
+      "22f6d63d343ce6383018eb18b346fa150c8ba0b4fbfd29743176ca2238015ee1",
+      "2f645a673b87e37ec392738b0d89dac82049e642712e1edea8d837c67624e9dc"
+    ],
+    "subjectDigests": [
+      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ],
+    "syftVersion": "v1.20.0-fixture"
+  },
+  "rendererIds": [
+    "ce-preview-v1",
+    "ce-preview-text-v1",
+    "ce-preview-pdf-passthrough-v1"
+  ],
+  "residuals": {
+    "cosign": "P12-08",
+    "liveSyftBuiltDigests": "Not production pins \u2014 fixture digests only. Operator: build images, install Syft CE_SYFT_VERSION=v1.20.0, regenerate under docs/releases/."
+  },
+  "roles": {
+    "api": {
+      "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "imageRef": "context-engine-live:fixture"
+    },
+    "lightragRuntime": {
+      "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "imageRef": "context-engine-live:fixture",
+      "sameAs": "api"
+    },
+    "web": {
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "imageRef": "ce-web:fixture"
+    },
+    "worker": {
+      "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "imageRef": "context-engine-live:fixture",
+      "sameAs": "api"
+    }
+  },
+  "sboms": [
+    {
+      "path": "docs/_scratch/p12-06-release-fixtures/web.cdx.json",
+      "sha256": "22f6d63d343ce6383018eb18b346fa150c8ba0b4fbfd29743176ca2238015ee1",
+      "subjectDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "path": "docs/_scratch/p12-06-release-fixtures/controller.cdx.json",
+      "sha256": "2f645a673b87e37ec392738b0d89dac82049e642712e1edea8d837c67624e9dc",
+      "subjectDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ],
+  "schema": {
+    "alembicHead": "d4e7a1b92c80"
+  },
+  "schemaVersion": "1",
+  "source": {
+    "dirty": true,
+    "gitSha": "5b574c90fc9b266bea7ef14242028c7a9e517161"
+  },
+  "upstreamImages": {
+    "mc": {
+      "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "tag": "minio/mc:RELEASE.2024-11-17T19-35-56Z"
+    },
+    "minio": {
+      "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "tag": "minio/minio:RELEASE.2024-12-18T13-15-44Z"
+    },
+    "postgres": {
+      "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "tag": "postgres:16"
+    }
+  }
+}

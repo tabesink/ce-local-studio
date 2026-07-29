@@ -97,7 +97,7 @@ Source: read-only comparison of `.references/code/context_engine` against Phase 
 | Contracted browser workflows (rename/delete, refs, If-Match, op history) | add | P9-07 | NOT_STARTED | Credits P9-02/P9-04/P11 backend; unlocks M-08/M-09/A-01/A-03 admin UX |
 | Backup/restore with MinIO consistency + LightRAG rebuild | retain-and-reverify | P12-04 | DONE | Evidence `docs/_scratch/p12-04-backup-restore-evidence.md`; unit altitude + runbook; Compose live digests residual; KMS/HA/RPO-RTO → P12-08 |
 | Deployed ingress SSE / stream-drain / TLS | retain-and-reverify | P12-05 | NOT_STARTED | Advances DRIFT-05/24/25 deployed halves |
-| Immutable artifact / SBOM / provenance | add | P12-06 | NOT_STARTED | Production release gate |
+| Immutable artifact / SBOM / provenance | add | P12-06 | DONE | Evidence `docs/_scratch/p12-06-immutable-artifact-evidence.md`; unit + PR-light; live Syft digests residual → ops/P12-08 |
 | Browser E2E / a11y / capacity / fixtures | retain-and-reverify | P12-07 | NOT_STARTED | Advances DRIFT-07/09/19/29 browser halves; CSRF product path |
 | Production acceptance aggregation | add | P12-08 | NOT_STARTED | Go/no-go only after P12-03..07 |
 
