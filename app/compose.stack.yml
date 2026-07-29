@@ -42,6 +42,9 @@ services:
     command: ["python", "-m", "context_engine.migrate_release"]
     environment:
       CONTEXT_ENGINE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?set POSTGRES_USER locally}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD locally}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB locally}
+      # Required when CONTEXT_ENGINE_TESTING=false (TLS / P12-05); Settings loads on migrate entry.
+      CONTEXT_ENGINE_TESTING: ${CONTEXT_ENGINE_TESTING:-true}
+      CE_GRAPH_REF_KEY: ${CE_GRAPH_REF_KEY:?set CE_GRAPH_REF_KEY locally}
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,6 +60,8 @@ services:
     command: ["python", "-m", "context_engine.bootstrap_admin"]
     environment:
       CONTEXT_ENGINE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?set POSTGRES_USER locally}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD locally}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB locally}
+      CONTEXT_ENGINE_TESTING: ${CONTEXT_ENGINE_TESTING:-true}
+      CE_GRAPH_REF_KEY: ${CE_GRAPH_REF_KEY:?set CE_GRAPH_REF_KEY locally}
       CE_ADMIN_USERNAME: ${CE_ADMIN_USERNAME:?set CE_ADMIN_USERNAME locally}
       CE_ADMIN_PASSWORD: ${CE_ADMIN_PASSWORD:?set CE_ADMIN_PASSWORD locally}
     depends_on:

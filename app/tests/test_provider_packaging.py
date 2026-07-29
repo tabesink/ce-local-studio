@@ -24,6 +24,9 @@ def test_dockerfile_default_has_additive_extra_gates_off() -> None:
     # Default path must not force provider extras without gates.
     assert 'CE_STACK_LIVE_IMAGE" = "1"' in text or "CE_STACK_LIVE_IMAGE" in text
     assert "CE_STACK_PARSERS_IMAGE" in text
+    # Docling/OpenCV table pipeline needs libxcb in the parsers image (not default slim).
+    assert "libxcb1" in text
+    assert 'CE_STACK_PARSERS_IMAGE" = "1"' in text
 
 
 def test_pyproject_declares_parsers_synthesis_embeddings_extras() -> None:

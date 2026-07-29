@@ -147,6 +147,8 @@ docker compose --env-file .env.stack.local \
 
 Host `OPENAI_API_KEY` in `.env.stack.local` (loaded via `--env-file`) is necessary but not sufficient for product synthesis. Install/activate sealed OpenAI synthesis on the stack via the contracted admin runtime-settings provider path (`PUT /api/v1/admin/runtime-settings/providers/{kind}` — see `docs/contracts/http-api-catalog.md` and `docs/operations/provider-deployment-profiles.md`). Seed/index a query-eligible Knowledge Domain per `docs/quality/seeded-demo-and-test-data.md` and P5-04 live overlay; record the public opaque `--domain-id` (never private DB ids).
 
+Optional operator helper (not a verify gate): `python scripts/_p12_05_live_domain_preflight.py --env-file .env.stack.local` seals/activates OpenAI synthesis, starts the domain, uploads/prepares/indexes the fixture source when needed, and prints `DOMAIN_ID=<opaque-slug>`.
+
 ### Proof commands
 
 ```bash

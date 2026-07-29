@@ -4,6 +4,8 @@
 {
 	auto_https off
 	admin off
+	# Host clients often omit SNI when dialing an IP literal (curl/OpenSSL to 127.0.0.1).
+	default_sni {$CE_STACK_TLS_HOST:127.0.0.1}
 }
 
 https://{$CE_STACK_TLS_HOST:127.0.0.1}:{$CE_STACK_TLS_PORT:8443} {

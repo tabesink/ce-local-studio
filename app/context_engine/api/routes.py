@@ -14,9 +14,9 @@ from fastapi import (
     Query,
     Request,
     Response,
-    UploadFile,
 )
 from fastapi.responses import JSONResponse, StreamingResponse
+from starlette.datastructures import UploadFile
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session

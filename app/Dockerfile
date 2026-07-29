@@ -22,10 +22,17 @@ COPY vendor ./vendor
 # MinIO overlay (CE_STACK_OBJECT_STORE_IMAGE=1): boto3 object-store extra.
 # Parsers overlay (CE_STACK_PARSERS_IMAGE=1): Docling/Reducto + synthesis extras for API/worker.
 # Preview overlay (CE_STACK_PREVIEW_IMAGE=1): DOCX governed-preview renderer extra.
+# Parsers image needs OpenCV shared libs for Docling table-structure (cv2 → libxcb).
+# Without these, preparation fails closed as parser_unavailable while source stays pending.
 RUN python -m pip install --no-cache-dir uv==0.8.9 \
-    && if [ "$CE_STACK_LIVE_IMAGE" = "1" ]; then \
+    && if [ "$CE_STACK_LIVE_IMAGE" = "1" ] || [ "$CE_STACK_PARSERS_IMAGE" = "1" ]; then \
          apt-get update \
-         && apt-get install -y --no-install-recommends ca-certificates docker.io \
+         && APT_PKGS="ca-certificates" \
+         && if [ "$CE_STACK_LIVE_IMAGE" = "1" ]; then APT_PKGS="$APT_PKGS docker-cli"; fi \
+         && if [ "$CE_STACK_PARSERS_IMAGE" = "1" ]; then \
+              APT_PKGS="$APT_PKGS libxcb1 libglib2.0-0 libgl1 libsm6 libxext6 libxrender1"; \
+            fi \
+         && apt-get install -y --no-install-recommends $APT_PKGS \
          && rm -rf /var/lib/apt/lists/*; \
        fi \
     && EXTRA_ARGS="" \

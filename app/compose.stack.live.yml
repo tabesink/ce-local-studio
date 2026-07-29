@@ -14,7 +14,9 @@ networks:
   ce_domain_runtimes:
     name: ce-domain-runtimes
     driver: bridge
-    internal: true
+    # Not internal: domain containers must reach sealed provider endpoints
+    # (OpenAI embeddings/synthesis). Host ports stay unpublished; isolation is
+    # private network + no published bindings, not deny-all egress.
 
 services:
   api:
@@ -32,6 +34,7 @@ services:
       CE_DOMAIN_RUNTIME_CONTROLLER_KIND: docker
       CE_LIGHTRAG_CLIENT_KIND: native
       CE_LIGHTRAG_INPROCESS_SYNTHETIC: "false"
+      CE_DOMAIN_CONTROLLER_COMMAND: ${CE_DOMAIN_CONTROLLER_COMMAND:-python -m context_engine.tools.domain_runtime_controller}
       CE_DOMAIN_CONTROLLER_IMAGE: ${CE_DOMAIN_CONTROLLER_IMAGE:-context-engine-live:local}
       CE_DOMAIN_CONTROLLER_NETWORK: ce-domain-runtimes
       CE_DOMAIN_RUNTIME_ROOT: ${CE_STACK_LIVE_RUNTIME_ROOT:?set CE_STACK_LIVE_RUNTIME_ROOT to a host-absolute path}
@@ -54,6 +57,7 @@ services:
       CE_DOMAIN_RUNTIME_CONTROLLER_KIND: docker
       CE_LIGHTRAG_CLIENT_KIND: native
       CE_LIGHTRAG_INPROCESS_SYNTHETIC: "false"
+      CE_DOMAIN_CONTROLLER_COMMAND: ${CE_DOMAIN_CONTROLLER_COMMAND:-python -m context_engine.tools.domain_runtime_controller}
       CE_DOMAIN_CONTROLLER_IMAGE: ${CE_DOMAIN_CONTROLLER_IMAGE:-context-engine-live:local}
       CE_DOMAIN_CONTROLLER_NETWORK: ce-domain-runtimes
       CE_DOMAIN_RUNTIME_ROOT: ${CE_STACK_LIVE_RUNTIME_ROOT:?set CE_STACK_LIVE_RUNTIME_ROOT to a host-absolute path}

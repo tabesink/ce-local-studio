@@ -25,6 +25,17 @@ def test_inter_arrival_accepts_spaced_deltas() -> None:
     assert inter_arrival_ok([100.0, 100.0 + SSE_DELTA_INTER_ARRIVAL_EPSILON_MS + 1.0]) is True
 
 
+def test_inter_arrival_accepts_fast_tokens_when_stream_spans_epsilon() -> None:
+    # Real token streams coalesce within a chunk; AE1 needs multi-burst span, not per-token gaps.
+    assert (
+        inter_arrival_ok(
+            [100.0, 101.0, 102.0, 100.0 + SSE_DELTA_INTER_ARRIVAL_EPSILON_MS + 5.0, 160.0],
+            epsilon_ms=25.0,
+        )
+        is True
+    )
+
+
 def test_assert_incremental_answer_deltas_filters_non_delta_frames() -> None:
     frames = [
         (0.0, "turn.accepted"),

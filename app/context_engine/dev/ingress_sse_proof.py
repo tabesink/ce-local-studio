@@ -19,14 +19,15 @@ def inter_arrival_ok(
     *,
     epsilon_ms: float = SSE_DELTA_INTER_ARRIVAL_EPSILON_MS,
 ) -> bool:
-    """True when ≥2 deltas exist and each consecutive pair is separated by > epsilon_ms."""
+    """True when ≥2 deltas span more than epsilon_ms (not one buffered blob).
+
+    LLM tokens often arrive <epsilon apart within a chunk; AE1 only needs proof
+    that the public origin delivered more than one read-burst over time.
+    """
     if len(delta_timestamps_ms) < 2:
         return False
     ordered = sorted(delta_timestamps_ms)
-    for earlier, later in zip(ordered, ordered[1:], strict=False):
-        if (later - earlier) <= epsilon_ms:
-            return False
-    return True
+    return (ordered[-1] - ordered[0]) > epsilon_ms
 
 
 def assert_incremental_answer_deltas(

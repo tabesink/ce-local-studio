@@ -104,7 +104,9 @@ def _ensure_network(network: str) -> None:
     inspect = _run_docker(["network", "inspect", network], check=False)
     if inspect.returncode == 0:
         return
-    created = _run_docker(["network", "create", "--internal", network], check=False)
+    # Private domain network: no host-published ports, but allow provider egress
+    # for sealed embedding/extraction calls (OpenAI). Do not create --internal.
+    created = _run_docker(["network", "create", network], check=False)
     if created.returncode != 0:
         # Race: another worker may have created it.
         inspect_again = _run_docker(["network", "inspect", network], check=False)
