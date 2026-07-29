@@ -54,7 +54,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 ADMIN_URL_ENV = "CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL"
 OPT_IN_ENV = "CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS"
 DATABASE_NAME_PATTERN = re.compile(r"^ce_p301_[a-z0-9_]+$")
-HEAD_REVISION = "d4e7a1b92c80"
+HEAD_REVISION = "e5b8c1d94f20"
 
 pytestmark = pytest.mark.postgresql
 
@@ -175,6 +175,7 @@ def test_p3_01_domains_schema_lifecycle_and_http_on_postgresql_16(tmp_path: Path
                         domain_id="domain-manuals",
                         display_name="Equipment Manuals",
                         embedding_profile_id="openai-embedding-default",
+                        graph_extraction_profile_id="openai-synthesis-default",
                         requested_by_user=admin,
                         audit_context=audit,
                     )
@@ -265,6 +266,7 @@ def test_p3_01_domains_schema_lifecycle_and_http_on_postgresql_16(tmp_path: Path
                             "id": "domain-policies",
                             "displayName": "Policies",
                             "embeddingProfileId": "openai-embedding-default",
+                            "graphExtractionProfileId": "openai-synthesis-default",
                         },
                     )
                     assert created.status_code == 201
@@ -272,6 +274,7 @@ def test_p3_01_domains_schema_lifecycle_and_http_on_postgresql_16(tmp_path: Path
                     assert body["state"] == DOMAIN_STATE_STOPPED
                     assert body["queryEligible"] is False
                     assert body["embeddingProfile"]["vectorDimensions"] == 1536
+                    assert body["graphExtractionProfile"]["id"] == "openai-synthesis-default"
                     assert "storageSummary" not in body
                     assert "available" not in body
                     etag = created.headers.get("etag") or created.headers.get("ETag")

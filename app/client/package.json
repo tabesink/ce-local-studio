@@ -12,20 +12,30 @@
     "test": "node --experimental-strip-types --test tests/*.mjs tests/structure/**/*.test.ts && vitest run",
     "test:parity": "vitest run",
     "test:foundation": "node --test tests/foundation.test.mjs",
-    "test:e2e": "playwright test",
-    "test:e2e:headed": "playwright test --headed"
+    "test:e2e": "playwright test --grep @pr-fast",
+    "test:e2e:pr-fast": "playwright test --grep @pr-fast",
+    "test:e2e:release": "playwright test --grep @release",
+    "release:capacity": "python ../scripts/p12_07_release_capacity_probe.py",
+    "test:e2e:headed": "playwright test --grep @pr-fast --headed",
+    "test:visual-gate": "python ../scripts/verify_visual_parity_manifest.py",
+    "fixtures:build": "python ../tests/fixtures/build_fixtures.py --update",
+    "fixtures:verify": "python ../tests/fixtures/verify_fixtures.py"
   },
   "dependencies": {
+    "@react-sigma/core": "^5.0.6",
+    "graphology": "^0.26.0",
     "lucide-react": "0.561.0",
     "next": "16.2.10",
     "pdfjs-dist": "4.10.38",
     "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "react-dom": "19.2.7",
+    "sigma": "^3.0.3"
   },
   "overrides": {
     "postcss": "^8.5.10"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.52.0",
     "@tailwindcss/postcss": "4.1.18",
     "@testing-library/jest-dom": "^7.0.0",

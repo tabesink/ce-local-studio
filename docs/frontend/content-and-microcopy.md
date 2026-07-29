@@ -18,6 +18,7 @@ UI copy is part of behavior: it must name product truth without exposing impleme
 | Operation | durable asynchronous admin work | job ID, worker task |
 | Reference picker | governed source/evidence/template selection | Evidence Panel, AI writer |
 | Evidence Panel | evidence for exactly one selected turn | Reference picker, source browser |
+| Knowledge Domain graph | read-only visualization of authorized domain entities/relations | LightRAG console, raw graph DB, editable knowledge graph |
 
 Member copy says what the person can do. Administrator copy may name lifecycle and operations, but never Docker, LightRAG paths, database rows, credentials, queues, provider payloads, or stack traces.
 
@@ -49,8 +50,10 @@ Avoid `Done` when the state is `accepted`, `queued`, or remote cleanup remains.
 | Domains Settings (admin) | same empty as Domains; Deploy remains available when product allows | same load failure; never “Knowledge Graphs” |
 | Evidence | `No evidence was returned for this turn.` | `Evidence no longer available.` |
 | Library | `No Source Documents in this Knowledge Domain.` | `Document is no longer available.` |
+| Domain graph | `No graph nodes are available for this Knowledge Domain.` | `The domain graph could not be loaded.` |
+| Graph refreshing | — | `The domain graph is updating. Try again shortly.` |
 
-Loading labels name the object (`Loading conversation…`, `Opening document…`) and do not promise an outcome. Skeletons normally need no visible text if the route heading is present.
+Loading labels name the object (`Loading conversation…`, `Opening document…`, `Loading domain graph…`) and do not promise an outcome. Skeletons normally need no visible text if the route heading is present.
 
 ## Error pattern
 
@@ -72,6 +75,8 @@ Request ID: <safe request ID>
 | Domains deploy start-failed-keep | `The Knowledge Domain was created, but start did not finish. Try Start again.` |
 | `cursor_expired` | `Live history expired. Loading the saved answer.` |
 | rate limit | `Too many requests. Try again <server-provided time>.` |
+| `graph_refreshing` | `The domain graph is updating. Try again shortly.` |
+| `capacity_unavailable` | `The service is busy. Try again shortly.` |
 | unauthorized target | `This item is unavailable or you do not have access.` |
 | generic dependency | `The request could not be completed. Try again.` |
 

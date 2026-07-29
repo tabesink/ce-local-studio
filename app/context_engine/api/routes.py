@@ -31,6 +31,8 @@ from context_engine.api.catalog_schemas import (
     DocumentSummaryDto,
     DomainSummaryDto,
     EvidenceLocationResponseDto,
+    GraphLabelSearchDto,
+    GraphSnapshotDto,
     ModelProfileDto,
     OperationDto,
     OutlineItemDto,
@@ -147,6 +149,11 @@ from context_engine.services.domains import (
 from context_engine.services.evidence import (
     EvidenceRetrievalError,
     retrieve_scoped_evidence,
+)
+from context_engine.services.graphs import (
+    GraphServiceError,
+    get_domain_graph_snapshot,
+    search_domain_graph_labels,
 )
 from context_engine.services.indexing import (
     SourceIndexError,
@@ -267,6 +274,7 @@ class DomainCreateRequest(BaseModel):
     id: str = Field(pattern=DOMAIN_ID_PATTERN)
     display_name: str | None = Field(default=None, alias="displayName", min_length=1, max_length=120)
     embedding_profile_id: str = Field(alias="embeddingProfileId", min_length=1, max_length=36)
+    graph_extraction_profile_id: str = Field(alias="graphExtractionProfileId", min_length=1, max_length=36)
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -687,6 +695,11 @@ def _evidence_api_error(exc: EvidenceRetrievalError) -> ApiError:
         (503, "dependency_unavailable", "Retrieval is temporarily unavailable."),
     )
     return ApiError(status_code, code, message)
+
+
+def _graph_api_error(exc: GraphServiceError) -> ApiError:
+    headers = {"Retry-After": str(exc.retry_after)} if exc.retry_after is not None else None
+    return ApiError(exc.status_code, exc.code, exc.message, headers=headers)
 
 
 def _conversation_api_error(exc: ConversationError) -> ApiError:
@@ -1400,6 +1413,7 @@ def admin_create_domain(
                     "id": payload.id,
                     "displayName": payload.display_name,
                     "embeddingProfileId": payload.embedding_profile_id,
+                    "graphExtractionProfileId": payload.graph_extraction_profile_id,
                 }
             )
             outcome = begin_idempotent(
@@ -1425,6 +1439,7 @@ def admin_create_domain(
             domain_id=payload.id,
             display_name=payload.display_name,
             embedding_profile_id=payload.embedding_profile_id,
+            graph_extraction_profile_id=payload.graph_extraction_profile_id,
             requested_by_user=admin,
             audit_context=_audit_context(request, admin),
         )
@@ -2159,6 +2174,80 @@ def retrieve_domain_evidence(
         response = RetrievalEvidenceResponseDto.model_validate(result)
     except ValidationError:
         raise ApiError(503, "dependency_unavailable", "Retrieval is temporarily unavailable.") from None
+    return _private_json_response(response.model_dump(by_alias=True))
+
+
+@api_router.get(
+    "/domains/{domainId}/graph",
+    response_model=GraphSnapshotDto,
+    responses={
+        404: {"model": ErrorEnvelope, "description": "Domain not found."},
+        409: {"model": ErrorEnvelope, "description": "Domain or graph not currently available."},
+        422: {"model": ErrorEnvelope, "description": "Request validation failed."},
+        429: {"model": ErrorEnvelope, "description": "Graph read capacity limited."},
+        503: {"model": ErrorEnvelope, "description": "Graph runtime temporarily unavailable."},
+    },
+)
+def get_domain_graph(
+    domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
+    request: Request,
+    label: Annotated[str | None, Query(max_length=160)] = None,
+    current: CurrentSession = Depends(require_current_session),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    _reject_unknown_query(request, {"label"})
+    try:
+        result = get_domain_graph_snapshot(
+            db,
+            settings=settings,
+            domain_id=domain_id,
+            principal_id=current.user.id,
+            label=label,
+        )
+        response = GraphSnapshotDto.model_validate(result)
+    except GraphServiceError as exc:
+        raise _graph_api_error(exc) from exc
+    except ValidationError:
+        raise ApiError(503, "dependency_unavailable", "Graph runtime is temporarily unavailable.") from None
+    return _private_json_response(response.model_dump(by_alias=True))
+
+
+@api_router.get(
+    "/domains/{domainId}/graph/labels",
+    response_model=GraphLabelSearchDto,
+    responses={
+        404: {"model": ErrorEnvelope, "description": "Domain not found."},
+        409: {"model": ErrorEnvelope, "description": "Domain or graph not currently available."},
+        422: {"model": ErrorEnvelope, "description": "Request validation failed."},
+        429: {"model": ErrorEnvelope, "description": "Graph read capacity limited."},
+        503: {"model": ErrorEnvelope, "description": "Graph runtime temporarily unavailable."},
+    },
+)
+def get_domain_graph_labels(
+    domain_id: Annotated[str, Path(alias="domainId", pattern=DOMAIN_ID_PATTERN)],
+    request: Request,
+    q: Annotated[str, Query(min_length=2, max_length=160)],
+    limit: Annotated[int, Query(ge=1, le=50)] = 50,
+    current: CurrentSession = Depends(require_current_session),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    _reject_unknown_query(request, {"q", "limit"})
+    try:
+        result = search_domain_graph_labels(
+            db,
+            settings=settings,
+            domain_id=domain_id,
+            principal_id=current.user.id,
+            q=q,
+            limit=limit,
+        )
+        response = GraphLabelSearchDto.model_validate(result)
+    except GraphServiceError as exc:
+        raise _graph_api_error(exc) from exc
+    except ValidationError:
+        raise ApiError(503, "dependency_unavailable", "Graph runtime is temporarily unavailable.") from None
     return _private_json_response(response.model_dump(by_alias=True))
 
 

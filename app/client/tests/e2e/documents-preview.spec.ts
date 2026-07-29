@@ -4,8 +4,8 @@ import { readSeedInfo } from "./helpers/stack-seed";
 
 test.describe.configure({ mode: "serial" });
 
-test.describe("Phase 1 documents library preview (P9-03)", () => {
-  test("member library lists documents without admin mutating controls", async ({ page }) => {
+test.describe("Phase 1 documents library preview (P9-03) @pr-fast", () => {
+  test("member library lists documents without admin mutating controls @pr-fast", async ({ page }) => {
     await loginAsMember(page);
     await page.goto("/documents");
     await expect(page.getByRole("heading", { name: "Source Documents" })).toBeVisible();
@@ -15,7 +15,7 @@ test.describe("Phase 1 documents library preview (P9-03)", () => {
     await logout(page);
   });
 
-  test("admin can open a library row and see role-gated ops without inventing text preview", async ({
+  test("admin can open a library row and see role-gated ops without inventing text preview @pr-fast", async ({
     page,
   }) => {
     const seed = readSeedInfo();
@@ -36,12 +36,11 @@ test.describe("Phase 1 documents library preview (P9-03)", () => {
     await logout(page);
   });
 
-  test("graph route stays unavailable with no domain selector", async ({ page }) => {
+  test("graph route renders workbench shell for member @pr-fast", async ({ page }) => {
     await loginAsMember(page);
     await page.goto("/database-visualize");
-    await expect(page.getByTestId("graph-unavailable")).toBeVisible();
-    await expect(page.getByText(/Graph visualization is not available/i)).toBeVisible();
-    await expect(page.getByLabel("Knowledge Domain")).toHaveCount(0);
+    await expect(page.getByTestId("graph-workbench")).toBeVisible();
+    await expect(page.getByText(/Graph visualization is not available/i)).toHaveCount(0);
     await logout(page);
   });
 });

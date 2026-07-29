@@ -201,6 +201,7 @@ AUDIT_EVENT_RUNTIME_DEFAULTS_UPDATED = "runtime_settings.defaults_updated"
 AUDIT_EVENT_DOMAIN_CREATED = "domain.created"
 AUDIT_EVENT_DOMAIN_STARTED = "domain.started"
 AUDIT_EVENT_DOMAIN_STOPPED = "domain.stopped"
+AUDIT_EVENT_DOMAIN_GRAPH_EXTRACTION_ASSIGNED = "domain.graph_extraction_assigned"
 AUDIT_EVENT_DOMAIN_DELETE_QUEUED = "domain.delete_queued"
 AUDIT_EVENT_DOMAIN_DELETE_SUCCEEDED = "domain.delete_succeeded"
 AUDIT_EVENT_DOMAIN_DELETE_FAILED = "domain.delete_failed"
@@ -229,6 +230,7 @@ AUDIT_EVENT_NAMES = (
     AUDIT_EVENT_DOMAIN_CREATED,
     AUDIT_EVENT_DOMAIN_STARTED,
     AUDIT_EVENT_DOMAIN_STOPPED,
+    AUDIT_EVENT_DOMAIN_GRAPH_EXTRACTION_ASSIGNED,
     AUDIT_EVENT_DOMAIN_DELETE_QUEUED,
     AUDIT_EVENT_DOMAIN_DELETE_SUCCEEDED,
     AUDIT_EVENT_DOMAIN_DELETE_FAILED,
@@ -374,6 +376,8 @@ class Domain(Base):
         CheckConstraint("state in ('stopped', 'running', 'deleting')", name="ck_domains_state"),
         CheckConstraint("control_generation >= 1", name="ck_domains_control_generation_positive"),
         CheckConstraint("version >= 1", name="ck_domains_version_positive"),
+        CheckConstraint("graph_desired_generation >= 0", name="ck_domains_graph_desired_generation_nonneg"),
+        CheckConstraint("graph_applied_generation >= 0", name="ck_domains_graph_applied_generation_nonneg"),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -385,13 +389,23 @@ class Domain(Base):
         index=True,
         nullable=False,
     )
+    graph_extraction_profile_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("model_profiles.id"),
+        index=True,
+        nullable=True,
+    )
+    indexing_ever_started: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    graph_desired_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    graph_applied_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     runtime_instance_id: Mapped[str] = mapped_column(String(36), nullable=False, default=lambda: str(uuid.uuid4()))
     control_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, default=utc_now, onupdate=utc_now)
 
-    embedding_profile: Mapped[ModelProfile] = relationship()
+    embedding_profile: Mapped[ModelProfile] = relationship(foreign_keys=[embedding_profile_id])
+    graph_extraction_profile: Mapped[ModelProfile | None] = relationship(foreign_keys=[graph_extraction_profile_id])
     operations: Mapped[list["DomainOperation"]] = relationship(
         back_populates="domain",
         cascade="all, delete-orphan",

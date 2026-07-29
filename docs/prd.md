@@ -42,7 +42,7 @@ Includes Member capabilities and may additionally:
 
 ## 4. Core domain concepts
 
-- **Knowledge Domain:** isolated retrieval boundary with one private LightRAG runtime, embedding profile, corpus, lifecycle, and query-eligibility state.
+- **Knowledge Domain:** isolated retrieval boundary with one private LightRAG runtime, immutable embedding profile, immutable graph-extraction-capable synthesis profile, corpus, lifecycle, query-eligibility state, and bounded read-only graph projection.
 - **Source Document:** uploaded file belonging to exactly one domain.
 - **Canonical Source / Source Block:** normalized, parser-independent representation and stable citable units.
 - **Evidence:** authorized mapping from retrieval output to safe source labels/excerpts and private source identities.
@@ -67,6 +67,7 @@ Do not add a Workspace entity or use “domain” to mean tenant/deployment envi
 - Encrypt credentials at rest; return only safe presence/update metadata.
 - Maintain synthesis and embedding model profiles; embedding profiles require fixed vector dimensions.
 - Freeze a domain’s embedding profile after creation.
+- Bind each Knowledge Domain to one immutable, catalog-declared graph-extraction-capable synthesis model profile for private LightRAG entity/relation extraction, sealed separately from chat synthesis defaults. Profiles bound in either role cannot be mutated or deleted while in use. Detail for one-time legacy assignment and ineligibility rules lands with the owning implementation slice.
 - Maintain singleton defaults for active synthesis model and parser.
 
 ### FR-03 Knowledge Domain lifecycle
@@ -92,6 +93,14 @@ Do not add a Workspace entity or use “domain” to mean tenant/deployment envi
 - Map raw LightRAG results back to authorized local Source Blocks; never return raw hits.
 - Return ordered Evidence with safe source labels/excerpts and no storage/runtime/provider details.
 
+### FR-05a Read-only Knowledge Domain graph
+
+- Expose authenticated, domain-authorized, `private, no-store` read-only graph snapshot and label-search endpoints defined by the HTTP and DTO catalogs.
+- Project only opaque purpose-derived graph refs (`CE_GRAPH_REF_KEY`), safe labels, closed kinds, non-negative degrees, and truncation metadata. Reject raw properties, source/chunk IDs, paths, URLs, prompts, provider payloads, and coordinates.
+- Keep depth, node/edge/byte/time bounds server-owned. Unknown or unauthorized domains share the same `404` shape; stopped, unready, or deleting domains return approved safe conflict or dependency states; deletion races where desired generation is ahead of applied return retryable `409 graph_refreshing`.
+- Admit graph reads through per-domain and global in-flight permits with a zero-length wait queue (`429` + `Retry-After` or `503 capacity_unavailable`). Private adapter payloads above 2 MiB become `dependency_unavailable`; mapper truncation sets `truncated: true`.
+- The `/database-visualize` workbench is read-only: domain selection, bounded refresh, canvas pan/zoom/select, searchable list/detail equivalent, and URL state limited to opaque `domain` and `node` refs. Browser→LightRAG/runtime access and graph mutation APIs remain prohibited.
+
 ### FR-06 Conversations and grounded streaming chat
 
 - Persist user-owned conversations and turns.
@@ -115,6 +124,7 @@ This is the sole normative capability manifest for member chat. The server may c
 ### FR-08 Deletion and redaction
 
 - Block retrieval before deleting a source/domain.
+- Fence and rebuild derived domain graph contribution with generation-aware reconciliation; graph reads during the gap return retryable `graph_refreshing`.
 - Redact every affected turn as a unit: preserve the user question, clear assistant answer and public evidence/citation fields, retain internal redaction rows for audit.
 - Public conversation and SSE replay must omit redacted evidence.
 ### FR-09 Operational safety and accountability
@@ -131,6 +141,7 @@ This is the sole normative capability manifest for member chat. The server may c
 - Default to the `zai-dark` layered-charcoal theme with Geist typography.
 - Keep the client thin: all product truth and authorization come from versioned Context Engine APIs.
 - Display the evidence for exactly one selected turn in the read-only Evidence Panel; keep the governed reference picker distinct from evidence inspection.
+- Provide the read-only `/database-visualize` Knowledge Domain graph through the approved graph contract only, with keyboard/touch-accessible list/detail equivalent to the canvas.
 
 ### FR-11 Production delivery and recovery
 
@@ -157,12 +168,13 @@ This is the sole normative capability manifest for member chat. The server may c
 - Generic multi-tenant workspaces, plugin systems, workflow engines, Redis/RQ/Celery, or WebSocket migration.
 - Browser-selected controller/runtime URLs, API keys, host paths, direct Docker/DB/storage/provider access, or browser-calculated cost/storage truth.
 - A second retrieval stack or fallback to ungrounded model knowledge for domain questions.
+- Graph entity/relation create, edit, rename, merge, or delete; browser-selected LightRAG/runtime ports; direct browser `/graphs` access; or exposure of raw vendor graph identifiers/properties.
 - Logs, Usage, or Server observability screens; audit/diagnostic browsing; runtime-log session APIs; live log SSE; log download/deletion/retention UI; usage/cost/model analytics; operator exports; and observability-specific persistence. These require the Phase 2 feature branch and a separately approved contract; see `future/observability-layer.md`.
 - Wiki pages, revisions, contributions, review/publication workflows, wiki composer refs, and wiki UI/API/schema scaffolding. These require the future feature branch and a separately approved contract; see `future/wiki-layer.md`.
 
 ## 8. Product acceptance outcomes
 
-The product is rebuild-complete when an admin can configure providers/models, create and run a domain, upload and prepare a document, index it, and a member can receive a durable streamed answer whose citations map to safe authorized evidence. Idempotent replay must avoid repeated external work; deleting the source/domain must block retrieval and redact derived chat state; audit/log output must remain safe; and the frontend must operate exclusively through the backend contract.
+The product is rebuild-complete when an admin can configure providers/models, create and run a domain with immutable embedding and graph-extraction bindings, upload and prepare a document, index it so retrieval and the bounded domain graph are ready, and a member can receive a durable streamed answer whose citations map to safe authorized evidence and can open the read-only `/database-visualize` graph through the approved safe projection. Idempotent replay must avoid repeated external work; deleting the source/domain must block retrieval, refresh derived graph state, and redact derived chat state; audit/log output must remain safe; and the frontend must operate exclusively through the backend contract.
 
 It is production-ready only when the same outcomes pass in the deployed topology with migration/rollback, backup/restore, lease recovery, graceful shutdown, capacity and failure tests, accessibility, and release evidence. A locally functional pilot is not production acceptance.
 

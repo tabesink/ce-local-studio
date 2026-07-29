@@ -37,7 +37,7 @@ Context Engine Phase 1 is a governed internal knowledge workstation, not a local
 
 The closed Phase 1 chat-capability manifest is owned only by `docs/prd.md#closed-phase-1-chat-capability-manifest`. Guidance, plans, microcopy, tasks, and tests must reference that anchor and must not create a competing capability list.
 
-- A **Knowledge Domain** is the isolated retrieval boundary. It owns one private LightRAG runtime, one immutable embedding profile, its corpus, lifecycle, and query eligibility.
+- A **Knowledge Domain** is the isolated retrieval boundary. It owns one private LightRAG runtime, one immutable embedding profile, one immutable graph-extraction-capable synthesis profile, its corpus, lifecycle, and query eligibility.
 - A **Source Document** belongs to exactly one domain. Canonical Source Blocks are parser-independent, ordered, stable citable units.
 - **Evidence** is a safe, authorized projection from private retrieval results to source labels, excerpts, document references, and semantic anchors.
 - A **Conversation** belongs to one member. A turn is either `domain_rag` with exactly one domain or `direct_llm` with none.
@@ -99,7 +99,8 @@ untrusted browser -> public TLS ingress -> Next.js web/BFF -> private FastAPI
 ## Domains, Sources, Retrieval, and Evidence
 
 - Domains start `stopped`. Lifecycle operations use monotonically increasing generations; stale workers cannot overwrite newer start, stop, or delete decisions.
-- Freeze a domain’s embedding profile and vector dimensions at creation. A migration to another embedding profile requires a separately approved re-index workflow.
+- Freeze a domain’s embedding profile, vector dimensions, and graph-extraction-capable synthesis profile at creation. A migration to another embedding or extraction profile requires a separately approved re-index workflow. Detail for binding, one-time legacy assignment, and private runtime graph operations lands with the owning implementation slice.
+- Expose only the approved read-only Knowledge Domain graph projection through FastAPI. Public graph refs are purpose-derived opaque values under `CE_GRAPH_REF_KEY` and are not bearer grants. Reject raw properties, source/chunk IDs, paths, URLs, prompts, provider payloads, and coordinates. The browser never calls LightRAG, private runtimes, or direct `/graphs` paths; graph entity/relation mutation APIs are out of scope.
 - Stream uploads through server-side limits. Sniff and allowlist content, compute SHA-256 server-side, deduplicate within the domain, randomize object keys, sanitize display filenames, reject bombs, and freeze parser kind for the operation.
 - Preparation atomically replaces ordered text/table/figure Source Blocks and safe image metadata. Never expose canonical source text through an outline endpoint.
 - Render the versioned LightRAG handoff with local provenance markers. Index submit, readiness, retry, cancel, and delete are idempotent and fenced by lease/generation.
@@ -129,7 +130,7 @@ The frontend is a compact workstation informed by Local Studio’s visual patter
 
 - Required Phase 1 routes are `/login`, `/chat`, `/documents`, `/database-visualize`, `/settings`, and the safe forbidden/not-found states described in the route contract.
 - The authenticated shell uses a collapsible discovery rail, one route-owned primary work surface, and an optional route-specific inspector. Chat specializes this into conversation discovery, transcript/composer, and a turn-scoped Evidence/Refs/Source inspector.
-- `/database-visualize` remains deliberately unavailable and makes no graph or LightRAG request until a versioned graph API/DTO and coordinated product contract are approved.
+- `/database-visualize` is the Phase 1 read-only Knowledge Domain graph workbench. It uses only the approved graph HTTP/DTO contract through the same-origin BFF, keeps URL state to opaque `domain` and `node` refs, and always provides a searchable list/detail equivalent to the canvas.
 - Default to the `zai-dark` layered-charcoal theme and support `zai-light` without geometry drift. Use Geist typography, semantic/component tokens, compact density, restrained borders/elevation, and the documented blue focus/link treatment.
 - Feature code may use semantic or component tokens only. Do not scatter raw colors, spacing, radii, shadows, or transitions when a token exists.
 - Implement loading, empty, ready, stale/refresh, safe failure with request ID, conflict, forbidden/not-found, reconnecting/offline, cancelled, deleted/redacted, and recovery states wherever reachable.
@@ -168,7 +169,7 @@ Local Studio and any reviewed Context Engine checkout are read-only evidence, no
 - A second retrieval stack or ungrounded fallback for domain questions.
 - Phase 2 product-observability routes, read APIs, dashboards, live log streams, exports, retention controls, or analytics. Retain only the private Phase 1 operational-safety baseline defined by the PRD and architecture contracts.
 - Phase 3 knowledge-publication schema, APIs, routes, composer refs, contribution/review workflows, fixtures, or release gates.
-- A functional graph UI before the graph contract is approved.
+- Graph entity/relation create, edit, rename, merge, or delete APIs; browser-selected LightRAG/runtime ports; or direct browser access to private graph storage identifiers.
 
 ## Testing and Verification
 

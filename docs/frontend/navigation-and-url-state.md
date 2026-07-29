@@ -10,13 +10,13 @@ This contract makes navigation deterministic and shareable without treating a UR
 | `/login` | anonymous | `next=<allowlisted-relative-url>` | authenticated users replace to `next` or `/chat` |
 | `/chat` | member | `conversation`, `turn`, `evidence`, `domain` safe refs | remove the narrowest invalid value; preserve draft |
 | `/documents` | member/admin | `domain`, `document`, `evidence`, positive `page` | close protected preview and show safe unavailable state |
-| `/database-visualize` | member/admin | reserved `domain`, optional `node` safe ref | while graph contract is unavailable, drop both values and render deliberate unavailable state |
+| `/database-visualize` | member/admin | opaque `domain`, optional opaque `node` | drop invalid/unauthorized values left-to-right; render contracted empty/conflict/failure states |
 | `/settings` | authenticated | allowlisted `section`; admin sections require admin | select first permitted section |
 | `/forbidden` | authenticated | none | provide return to `/chat`, not protected details |
 
 Do not add nested `/documents/[id]`; document preview remains inline. Do not rename `/database-visualize`. New routes require the product and route/workspace contracts to change together.
 
-`/database-visualize` is a reserved route, not an enabled graph capability. Until the HTTP catalog defines an approved graph endpoint and DTO, its parser drops `domain` and `node`, the route makes no graph/LightRAG request, and visual/browser tests cover only the deliberate unavailable state. When enabled, `node` remains the canonical selection key.
+`/database-visualize` is the enabled Phase 1 read-only graph route. Its parser accepts only opaque `domain` and `node` refs; `node` is the canonical selection key. Product loads use the approved graph endpoints through the BFF. Unknown keys, private identifiers, coordinates, and raw vendor IDs are rejected.
 
 ## URL value rules
 

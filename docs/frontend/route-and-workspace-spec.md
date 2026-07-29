@@ -9,7 +9,7 @@ Status: normative route, composition, role, and safe URL contract.
 | /login | anonymous | LoginCard | return path only when same-origin allowlisted |
 | /chat | member/admin | ConversationRail + Transcript + EvidenceInspector | conversation, turn, evidence, domain |
 | /documents | member read; admin operate | DocumentLibrary + DocumentViewer | domain, document, evidence, page |
-| /database-visualize | member/admin if authorized | DeliberateUnavailable until graph contract approval | reserved domain, node |
+| /database-visualize | member/admin if authorized | DomainGraphWorkbench (read-only) | domain, node |
 | /settings | member/admin | SettingsNav + Section | section |
 | /forbidden | authenticated | SafeForbidden | from reason category, not resource ID |
 
@@ -77,10 +77,11 @@ Detailed behavior is in document-viewer-spec.md.
 
 ## /database-visualize
 
-- The route is reserved but renders a deliberate `Graph visualization is not available` state until a versioned Context Engine graph endpoint and DTO are approved.
-- While unavailable, the route makes no graph, LightRAG, or runtime request and drops `domain` and `node` during URL canonicalization.
-- Do not scaffold a canvas, inspector, filters, or fixture-only loaded state. Enabling the capability requires coordinated updates to the PRD, HTTP catalog, route schema, accessibility contract, seeded fixtures, visual baselines, and browser tests.
-- Once enabled, the canonical selection parameter is `node`, never `entity`; graph coordinates remain presentation state rather than product truth.
+- The route is the Phase 1 read-only Knowledge Domain graph workbench backed by `GET /domains/{domainId}/graph` and `GET /domains/{domainId}/graph/labels`.
+- Composition: authorized domain selection, bounded refresh, Sigma/Graphology canvas pan/zoom/select, searchable node list/detail equivalent to the canvas, and safe empty/loading/ready/stale/truncated/failure states.
+- Canonical URL state is opaque `domain` and optional opaque `node` only. The selection parameter is `node`, never `entity`. Graph coordinates, layout, hover, focus, and client-side pruning are presentation state, not product truth.
+- All product data loads through the same-origin BFF and generated client. The route must not call LightRAG, private runtimes, or a direct `/graphs` path, and must not expose raw vendor identifiers, property bags, or mutation controls.
+- Below 1024 px, secondary list/detail becomes an accessible drawer rather than disappearing. Keyboard and touch paths must equal pointer selection.
 
 ## /settings
 
@@ -121,4 +122,4 @@ Every enabled route must pass:
 5. two-user cache isolation and logout/back-navigation;
 6. URL validation proving private identifiers and unsafe return paths are rejected.
 
-The reserved `/database-visualize` route instead proves one stable unavailable state at every required viewport and proves zero graph/runtime network calls until its contract is approved.
+`/database-visualize` proves authorized ready/empty/truncated/failure states, list/detail and canvas selection convergence, opaque `domain`/`node` URL state, and zero browser requests to LightRAG or private runtimes.

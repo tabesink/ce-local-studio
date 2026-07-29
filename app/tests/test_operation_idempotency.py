@@ -71,6 +71,7 @@ def _context(tmp_path: Path):
             domain_id="domain-idem",
             display_name="Idempotency Domain",
             embedding_profile_id="openai-embedding-default",
+            graph_extraction_profile_id="openai-synthesis-default",
             requested_by_user=admin,
             audit_context=audit,
         )

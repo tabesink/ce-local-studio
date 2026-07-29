@@ -64,6 +64,7 @@ type ModelProfileDto = {
   providerKind: "openai" | "bedrock" | "ollama";
   modelName: string;
   vectorDimensions: number | null;
+  supportsGraphExtraction: boolean;
   inUse: boolean;
   version: Version;
 };
@@ -89,6 +90,7 @@ type DomainSummaryDto = {
 
 type AdminDomainDto = DomainSummaryDto & {
   embeddingProfile: { id: OpaqueRef; name: SafeLabel; vectorDimensions: number };
+  graphExtractionProfile: { id: OpaqueRef; name: SafeLabel } | null;
   runtimeReady: boolean;
   controlGeneration: number;
   activeOperationId: OpaqueRef | null;
@@ -234,6 +236,48 @@ type ComposerRefDto = {
 
 Composer tokens appear only in discovery responses and turn-start requests; they are never returned in histories.
 
+## Graph DTOs
+
+```ts
+type GraphDomainDto = {
+  ref: OpaqueRef;
+  name: SafeLabel;
+};
+
+type GraphNodeDto = {
+  ref: OpaqueRef;
+  label: SafeLabel;
+  kind: SafeLabel | null;
+  degree: number; // non-negative integer
+};
+
+type GraphEdgeDto = {
+  ref: OpaqueRef;
+  sourceRef: OpaqueRef;
+  targetRef: OpaqueRef;
+  label: SafeLabel | null;
+};
+
+type GraphLabelDto = {
+  nodeRef: OpaqueRef;
+  label: SafeLabel;
+  kind: SafeLabel | null;
+};
+
+type GraphLabelSearchDto = {
+  items: GraphLabelDto[];
+};
+
+type GraphSnapshotDto = {
+  domain: GraphDomainDto;
+  nodes: GraphNodeDto[];
+  edges: GraphEdgeDto[];
+  truncated: boolean;
+};
+```
+
+Graph refs use the approved opaque-ref schema and are purpose-derived under `CE_GRAPH_REF_KEY`; they grant no access by themselves. Every vendor-derived label/kind passes one shared bounded SafeLabel sanitizer before DTO validation; when sanitization yields no safe label, `kind` or edge `label` may be null while node `label` remains a required SafeLabel after projection rules in the owning service slice. `degree` is a non-negative integer. Snapshots and label-search results never include raw `id`, `properties`, source/chunk IDs, paths, URLs, prompts, provider payloads, weights, or coordinates. `truncated: true` means the mapper retained at most the server-owned node/edge caps.
+
 ## Internal operational records
 
 Phase 1 audit rows, structured log records, service metrics, and dependency checks are internal operational data and have no public/browser DTO. Candidate Logs, Usage, Server, audit-review, and diagnostic-review DTOs belong to the Phase 2 contract described in `../future/observability-layer.md`.
@@ -246,9 +290,11 @@ Phase 1 audit rows, structured log records, service metrics, and dependency chec
 | conversation create/rename | optional/title 1..120 |
 | turn start | `clientRequestId` 1..80, `message` 1..4000, `domainId?`, ordered `composerRefTokens?` max 25 |
 | stateless evidence retrieval | `question` trimmed 1..2000; no other fields |
-| domain create | `displayName` 1..120, `embeddingProfileId` |
+| domain create | `displayName` 1..120, `embeddingProfileId`, `graphExtractionProfileId` |
 | upload | one multipart `file`; no browser-supplied domain/parser/storage fields |
 | list | only filters listed in `http-api-catalog.md`; `limit` 1..100; one opaque cursor |
+| graph snapshot | optional `label` focus; depth/node/edge/byte/time bounds are server-owned and not request fields |
+| graph label search | trimmed `q` 2..160; `limit` 1..50 |
 
 The server computes the normalized turn request fingerprint; it is not a public request field.
 
@@ -263,6 +309,7 @@ The server computes the normalized turn request fingerprint; it is not a public 
 | source/index | `duplicate_source`, `source_not_ready`, `operation_conflict`, `content_rejected` |
 | chat | `domain_required`, `idempotency_conflict`, `cursor_expired`, `turn_not_cancellable` |
 | document/evidence | `evidence_not_found`, `document_not_found`, `evidence_unavailable`, `document_preview_unavailable`, `document_content_unavailable`, `range_not_satisfiable` |
+| graph | `graph_refreshing` |
 | capacity/dependency | `rate_limited`, `capacity_unavailable`, `dependency_unavailable`, `audit_unavailable` |
 
 The union of these rows is the Phase 1 HTTP `ErrorCode` vocabulary. Adding or renaming a code is a contract change. Operation-row failure codes and SSE terminal reason codes are separately closed by their owning DTO/event schemas and do not silently become HTTP error codes.

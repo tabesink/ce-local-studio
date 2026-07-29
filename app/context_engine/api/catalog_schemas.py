@@ -56,6 +56,7 @@ class ModelProfileDto(PublicDto):
     provider_kind: Literal["openai", "bedrock", "ollama"] = Field(alias="providerKind")
     model_name: str = Field(alias="modelName", min_length=1, max_length=200)
     vector_dimensions: int | None = Field(alias="vectorDimensions", gt=0)
+    supports_graph_extraction: bool = Field(alias="supportsGraphExtraction")
     in_use: bool = Field(alias="inUse")
     version: Version
 
@@ -79,8 +80,14 @@ class EmbeddingProfileSummaryDto(PublicDto):
     vector_dimensions: int = Field(alias="vectorDimensions", gt=0)
 
 
+class GraphExtractionProfileSummaryDto(PublicDto):
+    id: OpaqueRef
+    name: SafeLabel
+
+
 class AdminDomainDto(DomainSummaryDto):
     embedding_profile: EmbeddingProfileSummaryDto = Field(alias="embeddingProfile")
+    graph_extraction_profile: GraphExtractionProfileSummaryDto | None = Field(alias="graphExtractionProfile")
     runtime_ready: bool = Field(alias="runtimeReady")
     control_generation: int = Field(alias="controlGeneration", ge=0)
     active_operation_id: OpaqueRef | None = Field(alias="activeOperationId")
@@ -303,6 +310,42 @@ class ComposerRefDto(PublicDto):
     expires_at: UtcTimestamp = Field(alias="expiresAt")
 
 
+class GraphDomainDto(PublicDto):
+    ref: OpaqueRef
+    name: SafeLabel
+
+
+class GraphNodeDto(PublicDto):
+    ref: OpaqueRef
+    label: SafeLabel
+    kind: SafeLabel | None
+    degree: int = Field(ge=0)
+
+
+class GraphEdgeDto(PublicDto):
+    ref: OpaqueRef
+    source_ref: OpaqueRef = Field(alias="sourceRef")
+    target_ref: OpaqueRef = Field(alias="targetRef")
+    label: SafeLabel | None
+
+
+class GraphLabelDto(PublicDto):
+    node_ref: OpaqueRef = Field(alias="nodeRef")
+    label: SafeLabel
+    kind: SafeLabel | None
+
+
+class GraphLabelSearchDto(PublicDto):
+    items: list[GraphLabelDto]
+
+
+class GraphSnapshotDto(PublicDto):
+    domain: GraphDomainDto
+    nodes: list[GraphNodeDto]
+    edges: list[GraphEdgeDto]
+    truncated: bool
+
+
 AUTHORITATIVE_PUBLIC_DTOS = (
     AcceptedRefDto,
     AdminDomainDto,
@@ -314,6 +357,13 @@ AUTHORITATIVE_PUBLIC_DTOS = (
     CurrentUserDto,
     DocumentSummaryDto,
     EmbeddingProfileSummaryDto,
+    GraphDomainDto,
+    GraphEdgeDto,
+    GraphExtractionProfileSummaryDto,
+    GraphLabelDto,
+    GraphLabelSearchDto,
+    GraphNodeDto,
+    GraphSnapshotDto,
     EvidenceAnchorDto,
     EvidenceItemDto,
     EvidenceLocationDocumentDto,

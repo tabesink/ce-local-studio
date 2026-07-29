@@ -66,7 +66,7 @@ At viewport widths of 1024 px and above, authenticated routes use:
 | /login | centered compact card | team credentials, generic auth errors, no app rail |
 | /chat | workbench thread, lifted composer, right tool pane | domains, durable conversations, governed refs, turn evidence |
 | /documents | dense resource list plus detail pane | source lifecycle, safe PDF viewer, semantic evidence anchors |
-| /database-visualize | compact full-height unavailable surface until enabled | reserved route; no canvas or LightRAG request until an approved graph DTO exists |
+| /database-visualize | compact full-height read-only graph workbench | approved graph DTO only; canvas plus searchable list/detail; no LightRAG/runtime request |
 | /settings | section navigation plus compact rows | preferences for members; runtime, domains, users for admins |
 
 No route may introduce a generic card grid when the equivalent information fits a Local Studio list, table, pane, or settings row.
@@ -132,7 +132,7 @@ Each target has `layer`: `primitive` | `shared` | `feature`.
 
 Catalog states are `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED_CONTRACT`, and `FACTORY_READY`. `FACTORY_READY` is earned after all applicable shared, HTML-static, React (Vitest/Testing Library), and accessibility assertions pass. Playwright route-level visual matrix and production-boundary Settings domains acceptance remain P12-07 and are not required to mark a target factory-ready.
 
-Contracted-but-unused residuals may stay `NOT_STARTED` while listed. Agents must not invent replacements for listed roles. P11-04 Evidence attach/suggest UI must not appear as a gallery target while DEFERRED. Graph gallery covers only the deliberate unavailable surface until an approved graph DTO exists.
+Contracted-but-unused residuals may stay `NOT_STARTED` while listed. Agents must not invent replacements for listed roles. P11-04 Evidence attach/suggest UI must not appear as a gallery target while DEFERRED. Graph gallery follows the approved read-only graph contract; P12-07 U10 replaces `graph-unavailable` with enabled workbench target(s) that keep list/detail parity.
 
 ### Starter subset (already FACTORY_READY)
 
@@ -173,7 +173,7 @@ Contracted-but-unused residuals may stay `NOT_STARTED` while listed. Agents must
 | settings-nav | feature | `src/features/settings-panel` | FACTORY_READY | P9-06 U5 |
 | settings-group | feature | `src/features/settings-panel` | FACTORY_READY | P9-06 U5 |
 | login | feature | `src/features/auth` | FACTORY_READY | P9-06 U5 |
-| graph-unavailable | feature | `src/features/graph` | FACTORY_READY | P9-06 U5 |
+| graph-workbench | feature | `src/features/graph` | FACTORY_READY | P12-07 U10 enabled read-only workbench (replaces graph-unavailable) |
 | textarea | primitive | `src/_shared/ui` (migrate later) | FACTORY_READY | P9-06 U6 |
 | checkbox | primitive | `src/_shared/ui` (migrate later) | FACTORY_READY | P9-06 U6 |
 | segmented-control | primitive | `src/_shared/ui` (migrate later) | FACTORY_READY | P9-06 U6 |
@@ -214,7 +214,7 @@ HTML assets are excluded from production bundles and may contain only synthetic 
 
 ## Visual acceptance
 
-Capture deterministic fixtures at 390x844, 768x1024, 1280x800, 1440x900, and 1920x1080 in dark theme; also capture 1440x900 in light theme. Capture reflow at 320x640 and 1280x800 at 400% zoom. Each enabled route must cover ready, loading, empty, safe error, and inspector-open states where applicable. `/database-visualize` covers only its deliberate unavailable state until graph enablement.
+Capture deterministic fixtures at 390x844, 768x1024, 1280x800, 1440x900, and 1920x1080 in dark theme; also capture 1440x900 in light theme. Capture reflow at 320x640 and 1280x800 at 400% zoom. Each enabled route must cover ready, loading, empty, safe error, and inspector-open states where applicable. `/database-visualize` covers ready, loading, empty, truncated, selected-node, and safe error states with canvas regions masked.
 
 Automated comparison rules:
 

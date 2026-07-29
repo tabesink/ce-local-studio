@@ -32,6 +32,7 @@ from context_engine.models import (
     AUDIT_EVENT_DOMAIN_DELETE_FAILED,
     AUDIT_EVENT_DOMAIN_DELETE_QUEUED,
     AUDIT_EVENT_DOMAIN_DELETE_SUCCEEDED,
+    AUDIT_EVENT_DOMAIN_GRAPH_EXTRACTION_ASSIGNED,
     AUDIT_EVENT_DOMAIN_STARTED,
     AUDIT_EVENT_DOMAIN_STOPPED,
     AUDIT_OUTCOME_FAILED,
@@ -378,6 +379,7 @@ def create_domain(
     domain_id: str,
     display_name: str | None,
     embedding_profile_id: str,
+    graph_extraction_profile_id: str,
     requested_by_user: User,
     controller: DomainRuntimeController | None = None,
     audit_context: AuditContext | None = None,
@@ -386,15 +388,24 @@ def create_domain(
     if db.get(Domain, domain_id) is not None:
         raise DomainError(409, "operation_conflict", "Domain id already exists.")
 
-    from context_engine.services.runtime_config import SecretCrypto, TrustedRuntimeResolver
+    from context_engine.services.runtime_config import RuntimeConfigError, SecretCrypto, TrustedRuntimeResolver
 
-    TrustedRuntimeResolver(db, SecretCrypto.from_settings(settings)).resolve_embedding_profile(embedding_profile_id)
+    resolver = TrustedRuntimeResolver(db, SecretCrypto.from_settings(settings))
+    try:
+        resolver.resolve_embedding_profile(embedding_profile_id)
+        resolver.resolve_extraction_profile(graph_extraction_profile_id)
+    except RuntimeConfigError as exc:
+        raise DomainError(exc.status_code, exc.code, exc.message) from exc
     now = utc_now()
     domain = Domain(
         id=domain_id,
         display_name=display_name or domain_id,
         state=DOMAIN_STATE_STOPPED,
         embedding_profile_id=embedding_profile_id,
+        graph_extraction_profile_id=graph_extraction_profile_id,
+        indexing_ever_started=False,
+        graph_desired_generation=0,
+        graph_applied_generation=0,
         runtime_instance_id=str(uuid.uuid4()),
         control_generation=1,
         version=1,
@@ -448,6 +459,25 @@ def start_domain(
     _ensure_no_active_operation(db, domain.id)
     if domain.state != DOMAIN_STATE_STOPPED:
         raise DomainError(409, "domain_state_conflict", "Domain lifecycle state does not allow this operation.")
+    from context_engine.services.indexing import seal_domain_runtime_provider_env
+    from context_engine.services.runtime_config import RuntimeConfigError, SecretCrypto, TrustedRuntimeResolver
+
+    resolver = TrustedRuntimeResolver(db, SecretCrypto.from_settings(settings))
+    try:
+        resolver.resolve_embedding_profile(domain.embedding_profile_id)
+        if not domain.graph_extraction_profile_id:
+            raise DomainError(
+                400,
+                "graph_extraction_profile_invalid",
+                "Graph extraction profile is invalid.",
+            )
+        resolver.resolve_extraction_profile(domain.graph_extraction_profile_id)
+    except RuntimeConfigError as exc:
+        raise DomainError(exc.status_code, exc.code, exc.message) from exc
+    try:
+        seal_domain_runtime_provider_env(db, settings, domain)
+    except Exception as exc:  # noqa: BLE001 — fail closed before lifecycle start
+        raise DomainError(502, "dependency_unavailable", "Domain runtime is unavailable.") from exc
     now = utc_now()
     domain.control_generation += 1
     domain.version += 1
@@ -772,6 +802,86 @@ def _embedding_profile_summary(db: Session, domain: Domain) -> dict[str, Any]:
     }
 
 
+def _graph_extraction_profile_summary(db: Session, domain: Domain) -> dict[str, Any] | None:
+    if not domain.graph_extraction_profile_id:
+        return None
+    profile = domain.graph_extraction_profile
+    if profile is None:
+        profile = db.get(ModelProfile, domain.graph_extraction_profile_id)
+    if profile is None:
+        raise DomainError(503, "dependency_unavailable", "Graph extraction profile is unavailable.")
+    return {
+        "id": profile.id,
+        "name": profile.name,
+    }
+
+
+def assign_graph_extraction_profile(
+    db: Session,
+    *,
+    settings: Settings,
+    domain_id: str,
+    graph_extraction_profile_id: str,
+    expected_version: int,
+    audit_context: AuditContext | None = None,
+) -> Domain:
+    """One-time audited assignment for stopped never-indexed legacy domains."""
+    domain = _domain_or_404(db, domain_id)
+    _require_domain_version(domain, expected_version)
+    if domain.state != DOMAIN_STATE_STOPPED:
+        raise DomainError(409, "domain_state_conflict", "Domain lifecycle state does not allow this operation.")
+    if domain.indexing_ever_started or domain.graph_extraction_profile_id is not None:
+        raise DomainError(
+            409,
+            "graph_extraction_assignment_ineligible",
+            "Graph extraction profile cannot be assigned.",
+        )
+
+    from context_engine.services.runtime_config import RuntimeConfigError, SecretCrypto, TrustedRuntimeResolver
+
+    try:
+        TrustedRuntimeResolver(db, SecretCrypto.from_settings(settings)).resolve_extraction_profile(
+            graph_extraction_profile_id
+        )
+    except RuntimeConfigError as exc:
+        raise DomainError(exc.status_code, exc.code, exc.message) from exc
+
+    def mutate() -> Domain:
+        locked = db.scalars(select(Domain).where(Domain.id == domain_id).with_for_update()).first()
+        if locked is None:
+            raise DomainError(404, "not_found", "Domain not found.")
+        _require_domain_version(locked, expected_version)
+        if (
+            locked.state != DOMAIN_STATE_STOPPED
+            or locked.indexing_ever_started
+            or locked.graph_extraction_profile_id is not None
+        ):
+            raise DomainError(
+                409,
+                "graph_extraction_assignment_ineligible",
+                "Graph extraction profile cannot be assigned.",
+            )
+        locked.graph_extraction_profile_id = graph_extraction_profile_id
+        locked.version += 1
+        locked.updated_at = utc_now()
+        return locked
+
+    if audit_context is not None:
+        return commit_protected_mutation(
+            db,
+            mutate,
+            event_name=AUDIT_EVENT_DOMAIN_GRAPH_EXTRACTION_ASSIGNED,
+            context=audit_context,
+            target_kind="domain",
+            target_id=domain_id,
+            metadata={"graphExtractionProfileId": graph_extraction_profile_id},
+        )
+    domain = mutate()
+    db.commit()
+    db.refresh(domain)
+    return domain
+
+
 def _domain_allowed_actions(domain: Domain, active: DomainOperation | None) -> list[dict[str, Any]]:
     busy = active is not None
     deleting = domain.state == DOMAIN_STATE_DELETING
@@ -812,6 +922,7 @@ def safe_domain_admin(db: Session, settings: Settings, domain: Domain, controlle
         "state": domain.state,
         "queryEligible": domain_available(db, domain, controller),
         "embeddingProfile": _embedding_profile_summary(db, domain),
+        "graphExtractionProfile": _graph_extraction_profile_summary(db, domain),
         "runtimeReady": controller.health(domain).healthy,
         "controlGeneration": domain.control_generation,
         "activeOperationId": active.id if active is not None else None,

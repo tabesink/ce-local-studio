@@ -1,9 +1,17 @@
 import type { FullConfig } from "@playwright/test";
 import { request } from "@playwright/test";
+import { ensureFixtureActors } from "./helpers/actors";
 import { seedIndexedDomain } from "./helpers/stack-seed";
 
 async function globalSetup(config: FullConfig) {
   const baseURL = config.projects[0]?.use?.baseURL ?? "http://127.0.0.1:3000";
+
+  if (!baseURL.includes("127.0.0.1")) {
+    throw new Error(
+      `Playwright global setup: public origin must use 127.0.0.1 (got ${baseURL}). ` +
+        "Align PLAYWRIGHT_BASE_URL with CE_STACK_PUBLIC_ORIGIN.",
+    );
+  }
 
   const probe = await request.newContext({ baseURL });
   try {
@@ -11,7 +19,7 @@ async function globalSetup(config: FullConfig) {
     if (!loginPage.ok()) {
       throw new Error(
         `Playwright global setup: ${baseURL}/login returned HTTP ${loginPage.status()}. ` +
-          "Start the stack first: docker compose --env-file .env.stack.local -f compose.stack.yml up --build -d",
+          "Start the stack first: bash scripts/dev.sh (or compose.stack.yml).",
       );
     }
   } catch (error) {
@@ -20,13 +28,14 @@ async function globalSetup(config: FullConfig) {
     }
     throw new Error(
       `Playwright global setup: ${baseURL}/login is unreachable. ` +
-        "Start the stack first: docker compose --env-file .env.stack.local -f compose.stack.yml up --build -d",
+        "Start the stack first: bash scripts/dev.sh (or compose.stack.yml).",
       { cause: error },
     );
   } finally {
     await probe.dispose();
   }
 
+  ensureFixtureActors();
   await seedIndexedDomain(baseURL);
 }
 

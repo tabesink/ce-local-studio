@@ -1,0 +1,50 @@
+{
+  "figure_answer": "The relief valve is downstream of the pump [1].",
+  "graph_label_relief_valve": {
+    "items": [
+      {
+        "kind": "equipment",
+        "label": "Relief valve",
+        "nodeRef": "gn_fixture_relief_manuals_0001"
+      }
+    ]
+  },
+  "graph_manuals_empty": {
+    "domain": {
+      "name": "Equipment Manuals",
+      "ref": "domain_manuals"
+    },
+    "edges": [],
+    "nodes": [],
+    "truncated": false
+  },
+  "graph_manuals_snapshot": {
+    "domain": {
+      "name": "Equipment Manuals",
+      "ref": "domain_manuals"
+    },
+    "edges": [
+      {
+        "label": "feeds",
+        "ref": "ge_fixture_pump_relief_0001",
+        "sourceRef": "gn_fixture_pump_manuals_0001",
+        "targetRef": "gn_fixture_relief_manuals_0001"
+      }
+    ],
+    "nodes": [
+      {
+        "degree": 1,
+        "kind": "equipment",
+        "label": "Pump",
+        "ref": "gn_fixture_pump_manuals_0001"
+      },
+      {
+        "degree": 1,
+        "kind": "equipment",
+        "label": "Relief valve",
+        "ref": "gn_fixture_relief_manuals_0001"
+      }
+    ],
+    "truncated": false
+  }
+}

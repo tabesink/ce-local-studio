@@ -1,0 +1,128 @@
+{
+  "artifacts": [
+    {
+      "byteSize": 8178,
+      "dependentCaseIds": [
+        "M-04",
+        "M-05",
+        "M-15"
+      ],
+      "fixtureKey": "doc_pump_manual",
+      "mediaType": "application/pdf",
+      "pageCount": 24,
+      "path": "documents/doc_pump_manual.pdf",
+      "preview": {
+        "byteSize": 8178,
+        "mediaType": "application/pdf",
+        "path": "previews/doc_pump_manual.pdf",
+        "sha256": "2340d56273a560fa586f2a61dc3b9b105100d558ffaf47cf14ae691a0de03662"
+      },
+      "sha256": "2340d56273a560fa586f2a61dc3b9b105100d558ffaf47cf14ae691a0de03662"
+    },
+    {
+      "byteSize": 1285,
+      "dependentCaseIds": [
+        "M-04"
+      ],
+      "fixtureKey": "doc_safety_bulletin",
+      "mediaType": "application/pdf",
+      "pageCount": 3,
+      "path": "documents/doc_safety_bulletin.pdf",
+      "preview": {
+        "byteSize": 1285,
+        "mediaType": "application/pdf",
+        "path": "previews/doc_safety_bulletin.pdf",
+        "sha256": "5031ec8c5499fbcf12cedaa3db670903f2d0ec0007a325f919870c47a5ecdd39"
+      },
+      "sha256": "5031ec8c5499fbcf12cedaa3db670903f2d0ec0007a325f919870c47a5ecdd39"
+    },
+    {
+      "byteSize": 942,
+      "dependentCaseIds": [
+        "A-07"
+      ],
+      "fixtureKey": "doc_service_notes",
+      "mediaType": "application/pdf",
+      "pageCount": 2,
+      "path": "documents/doc_service_notes.pdf",
+      "preview": {
+        "byteSize": 942,
+        "mediaType": "application/pdf",
+        "path": "previews/doc_service_notes.pdf",
+        "sha256": "ca6881382eae922dc2b773f56192cd6f2608821e9d6e0c130f9546030960fe23"
+      },
+      "sha256": "ca6881382eae922dc2b773f56192cd6f2608821e9d6e0c130f9546030960fe23"
+    },
+    {
+      "byteSize": 1914,
+      "dependentCaseIds": [
+        "M-02"
+      ],
+      "fixtureKey": "doc_leave_policy",
+      "mediaType": "application/pdf",
+      "pageCount": 5,
+      "path": "documents/doc_leave_policy.pdf",
+      "preview": {
+        "byteSize": 1914,
+        "mediaType": "application/pdf",
+        "path": "previews/doc_leave_policy.pdf",
+        "sha256": "1e7292149cb55ad10d20b6a5bbbd4794e769df43ede72f9071b35088014479e5"
+      },
+      "sha256": "1e7292149cb55ad10d20b6a5bbbd4794e769df43ede72f9071b35088014479e5"
+    },
+    {
+      "byteSize": 653,
+      "dependentCaseIds": [
+        "A-10"
+      ],
+      "fixtureKey": "doc_legacy_delete",
+      "mediaType": "application/pdf",
+      "pageCount": 1,
+      "path": "documents/doc_legacy_delete.pdf",
+      "preview": {
+        "byteSize": 653,
+        "mediaType": "application/pdf",
+        "path": "previews/doc_legacy_delete.pdf",
+        "sha256": "c98ddd813b94d5c534b771a1067ffe2ae13230cae6680442e48edabe4d68bd16"
+      },
+      "sha256": "c98ddd813b94d5c534b771a1067ffe2ae13230cae6680442e48edabe4d68bd16"
+    },
+    {
+      "byteSize": 87,
+      "dependentCaseIds": [
+        "R9"
+      ],
+      "fixtureKey": "doc_service_notes_md",
+      "mediaType": "text/markdown",
+      "pageCount": null,
+      "path": "documents/doc_service_notes.md",
+      "sha256": "1367a56b061a7c4e14d1c723fd686d3093af2139f76dd2a7db44ecec607153fd"
+    }
+  ],
+  "clock": "2026-07-17T12:00:00Z",
+  "expected": [
+    {
+      "byteSize": 1108,
+      "dependentCaseIds": [
+        "M-14",
+        "M-15",
+        "E2E-M15"
+      ],
+      "fixtureKey": "graph_manuals_expected",
+      "path": "expected/graph/manuals.json",
+      "sha256": "6c4320e70f49e0800a05d5f939926ef319eb251419946e4849d9b827584e0d23"
+    },
+    {
+      "byteSize": 170,
+      "dependentCaseIds": [
+        "M-04",
+        "M-05"
+      ],
+      "fixtureKey": "turn_mina_figure_expected",
+      "path": "expected/turn_mina_figure.json",
+      "sha256": "3efe953371bce6c3a238ac426489a6d427be36a0225ac280c3fdeccab6048874"
+    }
+  ],
+  "generator": "app/tests/fixtures/build_fixtures.py",
+  "schemaVersion": 1
+}

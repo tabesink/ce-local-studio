@@ -105,6 +105,62 @@ For junior developers: do not infer a missing transition. Example: disabling a b
 - **Then:** T becomes `redacted`; assistant answer and public citations disappear on refresh/replay and the UI shows a redaction state while preserving the user question.
 - **Race/failure:** an already open Evidence/PDF panel loses access on its next authorized fetch/event and closes with a safe message. Browser cache must not continue serving protected source content.
 
+### M-14 Open an authorized domain graph
+
+- **Given:** member Mina is authorized for running, runtime-ready Knowledge Domain Equipment Manuals whose applied corpus generation matches the desired generation and whose private graph snapshot is non-empty.
+- **When:** she opens `/database-visualize` with the opaque domain ref and the workbench loads the snapshot through the same-origin BFF.
+- **Then:** the UI receives only `GraphSnapshotDto` allowlisted fields (`domain`, `nodes`, `edges`, `truncated`); no browser request targets LightRAG, a runtime port, or a private graph path; refs are opaque purpose-derived values, not bearer grants.
+- **Race/failure:** a stale selection/generation response is discarded. Loading, empty, ready, truncated, and safe-failure states remain reachable without scaffolding fixture-only loaded content.
+
+### M-15 Search and select a graph node
+
+- **Given:** Mina has an authorized ready graph containing the synthetic relief-valve node.
+- **When:** she searches labels with a bounded query and selects that node from the accessible list (or equivalent canvas selection).
+- **Then:** list/detail and canvas converge on the same opaque node ref; URL state retains only opaque `domain` and `node` refs; label-search results are `GraphLabelSearchDto` items with safe labels/kinds only.
+- **Race/failure:** an unknown, stale, or unauthorized node ref is dropped with `router.replace` and does not invent another selection. Local layout/coordinates remain presentation state only.
+
+### M-16 Unknown or unauthorized domain graph access
+
+- **Given:** Mina requests a graph for an unknown domain ref, or Noah requests Mina’s authorized domain without access.
+- **When:** snapshot or label-search is called.
+- **Then:** both callers receive the same `404` shape; the UI shows a safe failure with request ID and does not disclose whether the domain exists.
+- **Race/failure:** timing, headers, and bodies must not distinguish unknown from unauthorized. No raw vendor identifiers appear in URL, DOM, network, or console artifacts.
+
+### M-17 Graph request against a non-ready domain
+
+- **Given:** the selected domain is stopped, transitioning, runtime-not-ready, deleting, or otherwise not graph/query eligible.
+- **When:** Mina requests a snapshot or label search.
+- **Then:** the server returns the approved safe conflict or dependency state (not an empty success graph), and the UI renders the contracted recovery copy with request ID.
+- **Race/failure:** the client may retain a safe domain label but must not keep showing a prior ready snapshot as current truth after the conflict.
+
+### M-18 Graph refresh during deletion rebuild
+
+- **Given:** an admin deletes an indexed source so the domain’s desired generation advances ahead of the applied private graph generation.
+- **When:** Mina refreshes the graph before reconciliation completes.
+- **Then:** the server returns retryable `409 graph_refreshing`; the UI shows a recoverable refreshing/conflict state rather than deleted nodes.
+- **Race/failure:** browser cache and in-memory projections must not continue presenting nodes removed by the fenced cleanup once a successful post-rebuild snapshot arrives.
+
+### M-19 Graph admission shedding
+
+- **Given:** configured per-principal or global graph-read in-flight permits are exhausted.
+- **When:** an additional snapshot or label-search arrives.
+- **Then:** the server sheds before any private runtime call with `429` plus `Retry-After` or `503 capacity_unavailable`; the wait queue length is zero.
+- **Race/failure:** abort or timeout returns the permit promptly; a later probe within policy succeeds without mixing another user’s graph bytes.
+
+### M-20 Truncated and oversized private graph payloads
+
+- **Given:** the private runtime returns a graph larger than the server-owned projection budget, or larger than the 2 MiB upstream byte limit.
+- **When:** the authorized snapshot is projected.
+- **Then:** payloads above 2 MiB become `503 dependency_unavailable`; otherwise the mapper retains at most 500 ordered nodes and 2,000 valid in-snapshot edges and sets `truncated: true`. Callers cannot raise the fixed depth of 3.
+- **Race/failure:** bounded label search remains available to discover nodes beyond the truncated snapshot without exposing raw properties or coordinates.
+
+### M-21 Accessible graph without relying on the canvas
+
+- **Given:** Mina uses keyboard-only, touch/coarse pointer, narrow 320 CSS px, 200%/400% zoom, forced colors, reduced motion, or either theme.
+- **When:** she opens a ready domain graph and selects a node.
+- **Then:** the searchable list/detail provides full selection and detail parity with the canvas; no graph-only data is canvas-exclusive; focus moves and returns according to the accessibility contract.
+- **Race/failure:** an inert or unavailable canvas must not block list/detail use. Screen-reader announcements remain bounded and do not echo private identifiers.
+
 ## Administrator role-play
 
 ### A-01 Provider credential update

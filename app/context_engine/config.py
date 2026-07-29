@@ -121,6 +121,15 @@ class Settings:
     retrieval_max_aggregate_bytes: int = field(
         default_factory=lambda: _env_int("CE_RETRIEVAL_MAX_AGGREGATE_BYTES", 1024 * 1024)
     )
+    graph_ref_key: str | None = field(default_factory=lambda: _env("CE_GRAPH_REF_KEY"), repr=False)
+    graph_timeout_seconds: int = field(default_factory=lambda: _env_int("CE_GRAPH_TIMEOUT_SECONDS", 10))
+    graph_global_concurrency: int = field(default_factory=lambda: _env_int("CE_GRAPH_GLOBAL_CONCURRENCY", 8))
+    graph_per_domain_concurrency: int = field(
+        default_factory=lambda: _env_int("CE_GRAPH_PER_DOMAIN_CONCURRENCY", 2)
+    )
+    graph_per_principal_concurrency: int = field(
+        default_factory=lambda: _env_int("CE_GRAPH_PER_PRINCIPAL_CONCURRENCY", 2)
+    )
     synthesis_timeout_seconds: int = field(default_factory=lambda: _env_int("CE_SYNTHESIS_TIMEOUT_SECONDS", 60))
     synthesis_max_output_tokens: int = field(default_factory=lambda: _env_int("CE_SYNTHESIS_MAX_OUTPUT_TOKENS", 4096))
     turn_worker_id: str = field(default_factory=lambda: _env("CE_TURN_WORKER_ID", "turn-worker") or "turn-worker")
@@ -205,6 +214,17 @@ class Settings:
             raise ValueError("retrieval_max_candidate_bytes must be positive.")
         if self.retrieval_max_aggregate_bytes < self.retrieval_max_candidate_bytes:
             raise ValueError("retrieval_max_aggregate_bytes must cover at least one candidate.")
+        if self.graph_timeout_seconds <= 0:
+            raise ValueError("graph_timeout_seconds must be positive.")
+        if self.graph_global_concurrency <= 0:
+            raise ValueError("graph_global_concurrency must be positive.")
+        if self.graph_per_domain_concurrency <= 0:
+            raise ValueError("graph_per_domain_concurrency must be positive.")
+        if self.graph_per_principal_concurrency <= 0:
+            raise ValueError("graph_per_principal_concurrency must be positive.")
+        graph_key = (self.graph_ref_key or "").strip()
+        if not self.testing and (not graph_key or len(graph_key.encode("utf-8")) < 32):
+            raise ValueError("graph_ref_key must be configured with at least 32 bytes outside testing.")
         if self.synthesis_timeout_seconds <= 0:
             raise ValueError("synthesis_timeout_seconds must be positive.")
         if self.synthesis_max_output_tokens <= 0:

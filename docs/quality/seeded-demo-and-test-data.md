@@ -51,12 +51,12 @@ All provider adapters are deterministic fakes. Provider status exposes only conf
 
 | Fixture | State | Corpus/result | Cases |
 | --- | --- | --- | --- |
-| `domain_manuals` / Equipment Manuals | running, ready | three eligible documents | M-02–M-06, C-01/C-03 |
+| `domain_manuals` / Equipment Manuals | running, ready | three eligible documents; non-empty bounded graph | M-02–M-06, M-14–M-21, C-01/C-03 |
 | `domain_policies` / Workplace Policies | running, ready | eligible document, query fixture returns no hit for `NO_HIT_QUERY` | no-grounded behavior |
-| `domain_research` / Research Drafts | stopped | prepared source, no query access | M-02 failure, A-03 |
-| `domain_deleting` / Legacy Procedures | deleting | fenced source + failed cleanup op | A-10 recovery, C-02 |
+| `domain_research` / Research Drafts | stopped | prepared source, no query access | M-02 failure, A-03, M-17 |
+| `domain_deleting` / Legacy Procedures | deleting | fenced source + failed cleanup op | A-10 recovery, C-02, M-17/M-18 |
 
-Use embedding fixture `embed_384_v1` with dimension 384 and synthesis fixture `synth_deterministic_v1`. A second embedding profile `embed_768_unused` supports creation tests. Attempts to mutate `embed_384_v1` exercise A-02.
+Use embedding fixture `embed_384_v1` with dimension 384 and synthesis fixture `synth_deterministic_v1`. Bind Equipment Manuals to extraction-capable synthesis fixture `synth_extract_deterministic_v1` in addition to the embedding profile. A second embedding profile `embed_768_unused` supports creation tests. Attempts to mutate `embed_384_v1` exercise A-02.
 
 ## Documents and canonical anchors
 
@@ -80,6 +80,22 @@ Canonical Pump Manual fixtures:
 | `ev_mina_page_only` | figure | page 20, no region/section, fallback `page` | `The inspection diagram is shown on this page.` |
 
 All excerpts are synthetic and <=500 characters. Tests assert normalized coordinates, one-based pages, safe labels, document refs, citation order, PDF ranges, and semantic fallback. A malicious upload fixture includes path-like filename/control characters, MIME mismatch, oversized metadata, and decompression-bomb signature; it must never become usable content.
+
+## Domain graph fixtures
+
+Deterministic graph projections for Equipment Manuals live under `tests/fixtures/expected/graph/` and are keyed by domain fixture plus optional label focus. Public refs are opaque fixture tokens, never vendor LightRAG IDs.
+
+| Fixture key | Kind | Domain | Required projection |
+| --- | --- | --- | --- |
+| `graph_manuals_snapshot` | snapshot | `domain_manuals` | non-empty `GraphSnapshotDto` with pump and relief-valve nodes, at least one connecting edge, `truncated:false` |
+| `graph_node_pump` | node | `domain_manuals` | safe label `Pump`; kind `Equipment` or null after sanitizer; non-negative degree |
+| `graph_node_relief_valve` | node | `domain_manuals` | safe label `Relief valve`; selectable via label search `relief`; drives M-15/E2E-M15 |
+| `graph_edge_pump_relief` | edge | `domain_manuals` | `sourceRef`/`targetRef` resolve only to the pump and relief-valve opaque node refs; safe relation label or null |
+| `graph_label_relief_valve` | label-search hit | `domain_manuals` | `GraphLabelDto` for `q=relief` within limit 1..50 |
+| `graph_manuals_empty` | snapshot | ready domain without indexed entities | empty nodes/edges, `truncated:false` |
+| `graph_manuals_truncated` | snapshot | capacity/truncation tests | `truncated:true` at server caps without raw properties |
+
+Expected browser assertions use only closed Graph DTO fields. Fixture internals may retain private runtime identities for mapper tests, but those values never appear in URL, DOM, network, or visual baselines.
 
 ## Conversations and turns
 

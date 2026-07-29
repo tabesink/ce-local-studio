@@ -45,10 +45,17 @@ describe("Domain settings helpers (F-009 deploy)", () => {
   });
 
   it("filters embedding profiles and prefers isDefault", async () => {
-    const { filterEmbeddingProfiles, defaultEmbeddingProfileId, canDeployDomain } = await loadHelpers();
+    const {
+      filterEmbeddingProfiles,
+      filterGraphExtractionProfiles,
+      defaultEmbeddingProfileId,
+      defaultGraphExtractionProfileId,
+      canDeployDomain,
+    } = await loadHelpers();
 
     const profiles = [
-      { id: "syn", name: "Synth", profileKind: "synthesis", isDefault: true },
+      { id: "syn", name: "Synth", profileKind: "synthesis", isDefault: true, supportsGraphExtraction: true },
+      { id: "nano", name: "Nano", profileKind: "synthesis", supportsGraphExtraction: false },
       { id: "emb-a", name: "Emb A", profileKind: "embedding", isDefault: false },
       { id: "emb-b", name: "Emb B", profileKind: "embedding", isDefault: true },
     ];
@@ -58,7 +65,12 @@ describe("Domain settings helpers (F-009 deploy)", () => {
       embedding.map((p) => p.id),
       ["emb-a", "emb-b"],
     );
+    assert.deepEqual(
+      filterGraphExtractionProfiles(profiles).map((p) => p.id),
+      ["syn"],
+    );
     assert.equal(defaultEmbeddingProfileId(profiles), "emb-b");
+    assert.equal(defaultGraphExtractionProfileId(profiles), "syn");
     assert.equal(defaultEmbeddingProfileId([{ id: "x", profileKind: "synthesis", isDefault: true }]), null);
 
     assert.equal(
@@ -66,7 +78,9 @@ describe("Domain settings helpers (F-009 deploy)", () => {
         id: "ops-notes",
         displayName: "Ops",
         embeddingProfileId: "emb-b",
+        graphExtractionProfileId: "syn",
         hasEmbeddingProfiles: true,
+        hasGraphExtractionProfiles: true,
       }),
       true,
     );
@@ -75,7 +89,9 @@ describe("Domain settings helpers (F-009 deploy)", () => {
         id: "ops-notes",
         displayName: "Ops",
         embeddingProfileId: "emb-b",
+        graphExtractionProfileId: "syn",
         hasEmbeddingProfiles: false,
+        hasGraphExtractionProfiles: true,
       }),
       false,
     );
@@ -84,7 +100,9 @@ describe("Domain settings helpers (F-009 deploy)", () => {
         id: "X",
         displayName: "Ops",
         embeddingProfileId: "emb-b",
+        graphExtractionProfileId: "syn",
         hasEmbeddingProfiles: true,
+        hasGraphExtractionProfiles: true,
       }),
       false,
     );
@@ -93,7 +111,9 @@ describe("Domain settings helpers (F-009 deploy)", () => {
         id: "ops-notes",
         displayName: "  ",
         embeddingProfileId: "emb-b",
+        graphExtractionProfileId: "syn",
         hasEmbeddingProfiles: true,
+        hasGraphExtractionProfiles: true,
       }),
       false,
     );
@@ -104,11 +124,17 @@ describe("Domain settings helpers (F-009 deploy)", () => {
 
     const successCalls = { create: 0, start: 0, delete: 0 };
     const success = await deployDomain(
-      { id: "ops-notes", displayName: "Ops Notes", embeddingProfileId: "emb-1" },
+      {
+        id: "ops-notes",
+        displayName: "Ops Notes",
+        embeddingProfileId: "emb-1",
+        graphExtractionProfileId: "syn-1",
+      },
       {
         createDomain: async (input) => {
           successCalls.create += 1;
           assert.equal(input.id, "ops-notes");
+          assert.equal(input.graphExtractionProfileId, "syn-1");
           return { id: input.id };
         },
         startDomain: async (domainId) => {
@@ -121,7 +147,12 @@ describe("Domain settings helpers (F-009 deploy)", () => {
     assert.deepEqual(successCalls, { create: 1, start: 1, delete: 0 });
 
     const createFail = await deployDomain(
-      { id: "ops-notes", displayName: "Ops", embeddingProfileId: "emb-1" },
+      {
+        id: "ops-notes",
+        displayName: "Ops",
+        embeddingProfileId: "emb-1",
+        graphExtractionProfileId: "syn-1",
+      },
       {
         createDomain: async () => {
           throw new Error("create blocked");
@@ -136,7 +167,12 @@ describe("Domain settings helpers (F-009 deploy)", () => {
 
     let startCalled = false;
     const startFail = await deployDomain(
-      { id: "kept", displayName: "Kept", embeddingProfileId: "emb-1" },
+      {
+        id: "kept",
+        displayName: "Kept",
+        embeddingProfileId: "emb-1",
+        graphExtractionProfileId: "syn-1",
+      },
       {
         createDomain: async () => ({ id: "kept" }),
         startDomain: async () => {

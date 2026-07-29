@@ -351,7 +351,7 @@ assert_ordered_numbered_list "$docs_precedence" 'authority precedence is missing
 product_scope="$(markdown_section AGENTS.md '## Product Identity and Scope')"
 [[ "$(grep -Ec '^- ' <<< "$product_scope" || true)" -eq 5 ]] || fail "canonical product vocabulary list is incomplete or duplicated"
 declare -a required_vocabulary=(
-  '- A **Knowledge Domain** is the isolated retrieval boundary. It owns one private LightRAG runtime, one immutable embedding profile, its corpus, lifecycle, and query eligibility.'
+  '- A **Knowledge Domain** is the isolated retrieval boundary. It owns one private LightRAG runtime, one immutable embedding profile, one immutable graph-extraction-capable synthesis profile, its corpus, lifecycle, and query eligibility.'
   '- A **Source Document** belongs to exactly one domain. Canonical Source Blocks are parser-independent, ordered, stable citable units.'
   '- **Evidence** is a safe, authorized projection from private retrieval results to source labels, excerpts, document references, and semantic anchors.'
   '- A **Conversation** belongs to one member. A turn is either `domain_rag` with exactly one domain or `direct_llm` with none.'

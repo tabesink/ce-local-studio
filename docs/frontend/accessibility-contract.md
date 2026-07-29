@@ -26,7 +26,7 @@ Context Engine targets WCAG 2.2 AA for authenticated and anonymous surfaces. Acc
 | Settings Domain accordion | named expand/collapse control with `aria-expanded` / `aria-controls`; keyboard operable without pointer; one-open (opening another row collapses the prior); lifecycle `ToggleSwitch` / busy controls expose `aria-busy` and retain accessible names; delete modal follows dialogs row (Cancel-first, opener restore); reduced motion skips chevron animation |
 | Settings Model Provider | provider status is not color-only; credential replace controls and synthesis select are keyboard operable; credential busy state retains cancel; no secret rehydration into the DOM |
 | tables | real table headers; row actions are controls, not click-only rows |
-| graph route | until an approved graph DTO exists, expose a named unavailable region and no inert canvas; once enabled, canvas data requires an equivalent searchable node list/detail |
+| graph route | named graph region; canvas pan/zoom/select is optional presentation; every canvas datum has an equivalent searchable node list/detail path; selection exposes `aria-current`/`aria-pressed` and is not color-only |
 | toasts | no focus steal; persistent actionable errors also appear in route/form content |
 
 Opening evidence focuses the viewer heading, then the resolved figure/table/text anchor. Closing returns to the originating evidence card when it still exists; otherwise to the selected assistant turn. This is required for M-04/M-05.
@@ -70,9 +70,9 @@ Minimum target size is 24x24 CSS px with adequate separation; primary touch acti
 ## Verification
 
 - Automated axe checks on every golden route/state for member and admin.
-- Playwright keyboard-only flows for login, chat submit, evidence deep-link, viewer close/return, upload, settings, and logout.
-- Screen-reader manual pass with NVDA/Firefox or VoiceOver/Safari for chat stream, evidence/PDF, dialogs, tables, and role-revocation failure.
+- Playwright keyboard-only flows for login, chat submit, evidence deep-link, viewer close/return, upload, settings, graph list/detail selection, and logout.
+- Screen-reader manual pass with NVDA/Firefox or VoiceOver/Safari for chat stream, evidence/PDF, graph workbench list/detail, dialogs, tables, and role-revocation failure.
 - Zoom/reflow at 200%, 400%, and 320x640, including 400% in a 1280 px-wide browser window (approximately 320 CSS px), plus high-contrast/forced-colors mode.
-- Tests fail for unnamed icon buttons, focus loss, duplicate live announcements, or, after graph enablement, graph-only data without the equivalent list/detail view.
+- Tests fail for unnamed icon buttons, focus loss, duplicate live announcements, or graph-only data without the equivalent list/detail view.
 
-Traceability: M-01 through M-07, M-11, A-03 through A-10, A-13, C-02, and C-05.
+Traceability: M-01 through M-07, M-11, M-14 through M-21, A-03 through A-10, A-13, C-02, and C-05.

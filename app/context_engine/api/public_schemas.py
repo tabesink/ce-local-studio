@@ -26,6 +26,7 @@ APPROVED_HTTP_ERROR_CODES = (
     "evidence_not_found",
     "evidence_unavailable",
     "forbidden",
+    "graph_refreshing",
     "http_error",
     "idempotency_conflict",
     "internal_error",

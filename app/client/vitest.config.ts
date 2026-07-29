@@ -16,6 +16,7 @@ export default defineConfig({
       "tests/chat-inspector.test.tsx",
       "tests/documentsDeepLink.test.ts",
       "tests/pdfAnchorFocus.test.ts",
+      "tests/graph-state.test.ts",
     ],
     setupFiles: ["tests/parity/react/setup.ts"],
   },

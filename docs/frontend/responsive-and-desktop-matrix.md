@@ -35,7 +35,7 @@ The desktop rail never collapses automatically after the user explicitly pinned 
 | /login | 24 px page gutter; full-width 360 px max card | same | centered card |
 | /chat | transcript; composer fixed; evidence drawer | transcript plus evidence drawer | transcript plus adjacent inspector where width permits |
 | /documents | library or viewer, explicit Back | list/detail, one dominant pane | resizable library/viewer split |
-| /database-visualize | deliberate unavailable state | deliberate unavailable state | deliberate unavailable state until graph DTO approval |
+| /database-visualize | canvas or list primary; detail drawer | list/detail with optional canvas | canvas plus adjacent searchable list/detail |
 | /settings | section list then section page | section list/detail | 220 px section nav plus content |
 
 Hiding a secondary pane must create an explicit control to open it. Do not omit evidence, filters, operation status, or admin consequences.
@@ -72,7 +72,7 @@ The rail header/footer remain visible; its middle region scrolls. Pane headers a
 
 - Support browser zoom at 100, 125, 150, 200, and 400%.
 - At 400% in a 1280 px-wide browser window, the approximately 320 CSS px layout must reflow without losing content or actions.
-- No two-dimensional page scroll except the PDF viewer, data tables with an accessible alternative, and a future graph canvas only after its DTO is approved.
+- No two-dimensional page scroll except the PDF viewer, data tables with an accessible alternative, and the graph canvas inside its own region with an accessible list/detail alternative.
 - Text must not be clipped by fixed-height controls; one-line resource rows may grow when system text metrics require it.
 - Do not set user-scalable=no in the production web viewport.
 

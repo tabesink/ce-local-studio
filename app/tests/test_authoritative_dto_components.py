@@ -28,6 +28,13 @@ EXPECTED_COMPONENTS = {
     "DocumentSummaryDto",
     "DomainSummaryDto",
     "EmbeddingProfileSummaryDto",
+    "GraphDomainDto",
+    "GraphEdgeDto",
+    "GraphExtractionProfileSummaryDto",
+    "GraphLabelDto",
+    "GraphLabelSearchDto",
+    "GraphNodeDto",
+    "GraphSnapshotDto",
     "EvidenceAnchorDto",
     "EvidenceItemDto",
     "EvidenceLocationDocumentDto",
@@ -68,6 +75,36 @@ def test_retrieval_evidence_operation_declares_canonical_error_envelopes() -> No
         assert operation["responses"][status_code]["content"]["application/json"]["schema"] == {
             "$ref": "#/components/schemas/ErrorEnvelope"
         }
+
+
+def test_graph_operations_declare_closed_schemas_and_error_envelopes() -> None:
+    document = _openapi()
+    snapshot = document["paths"]["/api/v1/domains/{domainId}/graph"]["get"]
+    labels = document["paths"]["/api/v1/domains/{domainId}/graph/labels"]["get"]
+    schemas = document["components"]["schemas"]
+
+    assert snapshot["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/GraphSnapshotDto"
+    }
+    assert labels["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/GraphLabelSearchDto"
+    }
+    for operation in (snapshot, labels):
+        assert set(operation["responses"]) == {"200", "404", "409", "422", "429", "503"}
+        for status_code in ("404", "409", "422", "429", "503"):
+            assert operation["responses"][status_code]["content"]["application/json"]["schema"] == {
+                "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+
+    graph_snapshot = schemas["GraphSnapshotDto"]
+    assert graph_snapshot["additionalProperties"] is False
+    assert set(graph_snapshot["properties"]) == {"domain", "nodes", "edges", "truncated"}
+    assert set(schemas["GraphNodeDto"]["properties"]) == {"ref", "label", "kind", "degree"}
+    assert set(schemas["GraphEdgeDto"]["properties"]) == {"ref", "sourceRef", "targetRef", "label"}
+    assert set(schemas["GraphLabelDto"]["properties"]) == {"nodeRef", "label", "kind"}
+    for name in ("GraphNodeDto", "GraphEdgeDto", "GraphLabelDto", "GraphSnapshotDto"):
+        assert "id" not in schemas[name]["properties"]
+        assert "properties" not in schemas[name]["properties"]
 
 
 def test_authoritative_components_are_closed_camel_case_contracts() -> None:

@@ -100,11 +100,22 @@ Conversation lists follow the global stable `(createdAt,id)` order. Their opaque
 
 For `POST /domains/{domainId}/evidence`, the server trims `question` before enforcing its 1..2,000-character bounds. Mapped candidates retain first-valid order after block deduplication and receive dense response-local citation labels. `evidence_found` always carries at least one Evidence item; a valid bounded retrieval with no surviving mapped Evidence returns only `200 {"result":"no_grounded_context","evidence":[]}`. The closed failures are: unknown domain `404 not_found`; stopped, deleting, transitioning, runtime-not-ready, or no-eligible-source domain `409 domain_not_query_eligible`; admission saturation `503 capacity_unavailable`; dependency timeout, unavailability, malformed output, or health exception `503 dependency_unavailable`; and invalid input `422 validation_error`. Success and failure are `private, no-store`.
 
+## Knowledge Domain graph
+
+| Method/path | Role | Success | Contract |
+| --- | --- | --- | --- |
+| `GET /domains/{domainId}/graph` | M | `200 GraphSnapshotDto` | optional bounded `label` focus; server-owned depth 3, max 500 nodes, 2,000 edges, 2 MiB upstream bytes, 10 s deadline; authenticated membership plus current domain authorization; `private, no-store` |
+| `GET /domains/{domainId}/graph/labels` | M | `200 GraphLabelSearchDto` | trimmed `q` 2..160; `limit` 1..50; same auth, deadline, generation, and cache rules; does not echo `q` |
+
+Graph reads are read-only. Depth, node/edge/byte/time limits are server-owned and cannot be raised by the caller. Public refs are opaque purpose-derived values under `CE_GRAPH_REF_KEY` and are not bearer grants; every response is meaningful only after a fresh authorized read. Responses reject raw properties, source/chunk IDs, paths, URLs, prompts, provider payloads, vendor weights, and coordinates.
+
+Unknown and unauthorized domains share the same `404` shape. Stopped, deleting, transitioning, runtime-not-ready, or otherwise ineligible domains return the approved safe conflict or dependency state (including `409 domain_not_query_eligible` where that eligibility fence applies). When desired corpus generation is ahead of the applied private graph generation, return retryable `409 graph_refreshing`. Admission uses per-domain and global in-flight permits with a zero-length wait queue: exhausted per-principal budget returns `429` plus `Retry-After`; global/runtime saturation returns `503 capacity_unavailable`, both before a private runtime call. Private adapter payloads above 2 MiB become `503 dependency_unavailable`; mapper truncation retains at most 500 ordered nodes and 2,000 valid in-snapshot edges and sets `truncated: true`.
+
+The browser must not call LightRAG, private runtimes, or a direct `/graphs` path. Graph entity/relation create, edit, rename, merge, and delete endpoints are not Phase 1 surfaces.
+
 ## Deferred operator surfaces
 
 Phase 1 exposes no audit-browser, diagnostic-browser, raw/runtime-log, log-session, usage/cost, analytics, Server-status, runtime-node dashboard, export, or storage-browser endpoint. Internal transactional audit writes, safe structured logs, service metrics, and health checks are operational-safety controls rather than browser capabilities. Candidate Phase 2 contracts are isolated in `../future/observability-layer.md`.
-
-There is no graph DTO in Phase 1. `/database-visualize` remains unavailable until a safe product-owned graph contract is approved; the frontend must show a deliberate unavailable state, not call LightRAG directly.
 
 ## Examples
 

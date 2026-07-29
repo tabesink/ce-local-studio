@@ -48,7 +48,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 ADMIN_URL_ENV = "CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL"
 OPT_IN_ENV = "CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS"
 DATABASE_NAME_PATTERN = re.compile(r"^ce_p404_[a-z0-9_]+$")
-HEAD_REVISION = "d4e7a1b92c80"
+HEAD_REVISION = "e5b8c1d94f20"
 
 pytestmark = pytest.mark.postgresql
 
@@ -160,6 +160,7 @@ def test_p4_04_outline_cancel_delete_apis_on_postgresql_16(tmp_path: Path) -> No
                         domain_id="domain-manuals",
                         display_name="Manuals",
                         embedding_profile_id="openai-embedding-default",
+                        graph_extraction_profile_id="openai-synthesis-default",
                         requested_by_user=admin,
                         audit_context=audit,
                     )

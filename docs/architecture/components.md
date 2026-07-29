@@ -19,6 +19,7 @@
 | `services/sources.py` | upload validation, storage, parser dispatch, canonical blocks/images, delete hooks |
 | `services/indexing.py` | LightRAG rendering, submit/poll/retry/cancel, eligibility |
 | `services/evidence.py` | scoped query, raw-hit mapping, authorization and safe Evidence projection |
+| `services/graphs.py` | authorized read-only domain graph snapshot and label search; opaque ref derivation; admission and safe projection |
 | `services/chat_intent.py` | server-owned direct-chat versus domain-seeking intent gate |
 | `services/chat_turns.py` | idempotent bounded orchestration, persistence, SSE projection/replay |
 | `services/conversations.py` | owner-scoped conversation CRUD and history |
@@ -27,7 +28,7 @@
 | `services/audit.py` | append-only allowlisted audit writes participating in protected transactions |
 | `services/structured_logging.py` | JSON logger with safe field policy |
 | `services/health.py` | aggregate liveness/readiness checks with no topology or diagnostic payload |
-| `services/lightrag_runtime.py` | private retrieval-runtime client/adaptation boundary |
+| `services/lightrag_runtime.py` | private retrieval-runtime client/adaptation boundary, including generation-fenced bounded graph extract/snapshot operations sealed inside the domain runtime |
 | `workers/*` | operation claims, heartbeats, cancellation, bounded retry and expired-lease recovery |
 | `adapters/domain_runtime_controller.py` | approved local/Docker/command lifecycle controller |
 
@@ -45,7 +46,7 @@
 | `features/navigation-sidebar/*` | role-aware compact navigation |
 | `features/chat-shell/*` | conversation, composer, streamed turn state, citations and Evidence Panel |
 | `features/documents/*` | administrator source/domain operations and document inspection |
-| `features/graph/*` | database/knowledge-graph visualization surface through approved APIs |
+| `features/graph/*` | read-only Knowledge Domain graph workbench through the approved graph HTTP/DTO contract only |
 | `features/settings-panel/*` | backend-owned runtime settings UI |
 | `features/user-preferences/*` | non-authoritative local presentation preferences |
 
@@ -53,7 +54,7 @@
 
 - Routes may call services; services may call repositories/models and outbound ports; integrations may not bypass service invariants.
 - Route dependencies enforce coarse roles; application services re-check ownership, domain eligibility, and mutable state inside the transaction.
-- Frontend features call the shared API client, not providers, LightRAG, storage, Docker, controllers, or PostgreSQL.
+- Frontend features call the shared API client, not providers, LightRAG, storage, Docker, controllers, or PostgreSQL. Graph UI may adapt Sigma/Graphology interaction patterns only against the generated graph client; it must not call private runtimes or mutate entities/relations.
 - Public DTO mapping strips private IDs and sensitive values at the backend boundary.
 - Cross-cutting audit/redaction hooks participate in the same transaction as protected state changes.
 - `app` composes features, features may import `ui` and browser-safe `lib`, and `ui` never imports product features or server modules.
