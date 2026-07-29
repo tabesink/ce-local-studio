@@ -9,7 +9,9 @@ Frontend state is a projection, never product authority. Every field must have e
 | identity, role, session validity | FastAPI | request-scoped auth snapshot | refetch on boot/401/role event; clear on logout |
 | conversations, turns, evidence | FastAPI/PostgreSQL | normalized in-memory resource cache | `no-store`; invalidate by response/event/version |
 | domain/source/operation lifecycle | FastAPI/PostgreSQL | read-only feature projection | reconcile after every mutation and operation event |
+| domain graph snapshot and label search | FastAPI graph endpoints | in-memory graph feature projection | `private, no-store`; invalidate on domain/generation/identity change; never persist DTOs |
 | active route and selected safe refs | URL | route parser/selectors | browser history; reauthorize on restore |
+| graph layout, hover, focus, local prune | browser presentation | graph feature store | memory only; coordinates are not product truth |
 | composer draft and pending ref chips | browser tab | chat external store keyed by conversation | memory only; clear after accepted submit/logout |
 | active stream and cursors | stream runtime | external store keyed by turn | memory only; rebuild from replay |
 | panel open/width, sidebar width/collapse | browser presentation | component/external store | allowlisted local preference only |
@@ -28,7 +30,7 @@ ce.evidencePanelWidth
 ce.motionPreference
 ```
 
-Validate enum/range and reset invalid values. Never store cookies, CSRF values, user DTOs, prompts, drafts, answers, evidence, safe refs, filenames, request IDs, operation data, provider settings, or server responses in `localStorage`, `sessionStorage`, IndexedDB, service-worker caches, or persisted Zustand state.
+Validate enum/range and reset invalid values. Never store cookies, CSRF values, user DTOs, prompts, drafts, answers, evidence, graph snapshots/labels, safe refs, filenames, request IDs, operation data, provider settings, or server responses in `localStorage`, `sessionStorage`, IndexedDB, service-worker caches, or persisted Zustand state.
 
 ## Store boundaries
 
@@ -96,4 +98,4 @@ The canonical reducer commits event effects and `appliedSequence` atomically. Re
 | BFCache test | protected view revalidates before display |
 | multi-tab logout test | all tabs clear without sharing content |
 
-Traceability: M-02, M-03, M-06, M-09 through M-11, A-01 through A-10, A-13, and C-01 through C-05.
+Traceability: M-02, M-03, M-06, M-09 through M-11, M-14 through M-21, A-01 through A-10, A-13, and C-01 through C-05.

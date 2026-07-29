@@ -49,12 +49,17 @@ webui/.env*.local
 next-env.d.ts
 *.tsbuildinfo
 
-# Playwright E2E (frontend/)
+# Playwright E2E (frontend/ legacy + app/client)
 frontend/test-results/
 frontend/playwright-report/
 frontend/blob-report/
 frontend/playwright/.cache/
 frontend/tests/e2e/artifacts/
+app/client/test-results/
+app/client/playwright-report/
+app/client/blob-report/
+app/client/playwright/.cache/
+app/client/tests/e2e/artifacts/
 .venv/
 __pycache__/
 .pytest_cache/

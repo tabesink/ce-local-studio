@@ -46,8 +46,10 @@ import {
 import {
   canDeployDomain,
   defaultEmbeddingProfileId,
+  defaultGraphExtractionProfileId,
   deployDomain,
   filterEmbeddingProfiles,
+  filterGraphExtractionProfiles,
   isValidDomainId,
   nextExpandedDomainId,
   primaryLifecycleAction,
@@ -461,9 +463,16 @@ function DomainsSection({
   reload: () => Promise<void>;
 }) {
   const embeddingProfiles = useMemo(() => filterEmbeddingProfiles(modelProfiles), [modelProfiles]);
+  const extractionProfiles = useMemo(
+    () => filterGraphExtractionProfiles(modelProfiles),
+    [modelProfiles],
+  );
   const [draftId, setDraftId] = useState("");
   const [draftName, setDraftName] = useState("");
   const [draftEmbeddingId, setDraftEmbeddingId] = useState(() => defaultEmbeddingProfileId(embeddingProfiles) ?? "");
+  const [draftExtractionId, setDraftExtractionId] = useState(
+    () => defaultGraphExtractionProfileId(extractionProfiles) ?? "",
+  );
   const [busy, setBusy] = useState<{ id: string; action: DomainBusyAction } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<AdminDomain | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -473,6 +482,12 @@ function DomainsSection({
       setDraftEmbeddingId(defaultEmbeddingProfileId(embeddingProfiles) ?? "");
     }
   }, [draftEmbeddingId, embeddingProfiles]);
+
+  useEffect(() => {
+    if (!draftExtractionId || !extractionProfiles.some((profile) => profile.id === draftExtractionId)) {
+      setDraftExtractionId(defaultGraphExtractionProfileId(extractionProfiles) ?? "");
+    }
+  }, [draftExtractionId, extractionProfiles]);
 
   useEffect(() => {
     if (expandedId && !domains.some((domain) => domain.id === expandedId)) {
@@ -487,7 +502,9 @@ function DomainsSection({
     id: draftId,
     displayName: draftName,
     embeddingProfileId: draftEmbeddingId,
+    graphExtractionProfileId: draftExtractionId,
     hasEmbeddingProfiles: embeddingProfiles.length > 0,
+    hasGraphExtractionProfiles: extractionProfiles.length > 0,
   });
 
   const run = async (
@@ -522,6 +539,7 @@ function DomainsSection({
           id: draftId,
           displayName: draftName,
           embeddingProfileId: draftEmbeddingId,
+          graphExtractionProfileId: draftExtractionId,
         },
         { createDomain, startDomain },
       );
@@ -529,6 +547,7 @@ function DomainsSection({
         setDraftId("");
         setDraftName("");
         setDraftEmbeddingId(defaultEmbeddingProfileId(embeddingProfiles) ?? "");
+        setDraftExtractionId(defaultGraphExtractionProfileId(extractionProfiles) ?? "");
         onChanged(`Knowledge Domain ${draftId.trim()}: deploy requested.`);
         await reload();
         return;
@@ -541,6 +560,7 @@ function DomainsSection({
       setDraftId("");
       setDraftName("");
       setDraftEmbeddingId(defaultEmbeddingProfileId(embeddingProfiles) ?? "");
+      setDraftExtractionId(defaultGraphExtractionProfileId(extractionProfiles) ?? "");
       onError(
         "The Knowledge Domain was created, but start did not finish. Try Start again. " +
           errorMessage(outcome.error),
@@ -699,12 +719,31 @@ function DomainsSection({
               className="h-7"
             />
           </div>
+          <div className="min-w-40 flex-1">
+            <Select
+              value={draftExtractionId}
+              onChange={(event) => setDraftExtractionId(event.target.value)}
+              disabled={extractionProfiles.length === 0 || anyBusy}
+              aria-label="Graph extraction model"
+              options={
+                extractionProfiles.length === 0
+                  ? [{ value: "", label: "No extraction profiles" }]
+                  : extractionProfiles.map((profile) => ({ value: profile.id, label: profile.name }))
+              }
+              className="h-7"
+            />
+          </div>
           <SettingsButton disabled={!deployEnabled || anyBusy} onClick={() => void onDeploy()}>
             {deployBusy ? "Deploying…" : "Deploy"}
           </SettingsButton>
           {embeddingProfiles.length === 0 ? (
             <span className="min-w-full text-[length:var(--fs-sm)] text-(--ui-muted)">
               Add an embedding model profile before deploying a Knowledge Domain.
+            </span>
+          ) : null}
+          {extractionProfiles.length === 0 ? (
+            <span className="min-w-full text-[length:var(--fs-sm)] text-(--ui-muted)">
+              Add a graph-extraction-capable synthesis profile before deploying a Knowledge Domain.
             </span>
           ) : null}
         </div>

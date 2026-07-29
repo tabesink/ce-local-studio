@@ -36,7 +36,7 @@ from context_engine.services.auth import create_user
 APP_ROOT = Path(__file__).resolve().parents[1]
 ADMIN_URL_ENV = "CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL"
 OPT_IN_ENV = "CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS"
-HEAD_REVISION = "d4e7a1b92c80"
+HEAD_REVISION = "e5b8c1d94f20"
 DATABASE_NAME_PATTERN = re.compile(r"^ce_p106_[a-z_]+_[0-9a-f]{32}$")
 
 pytestmark = pytest.mark.postgresql

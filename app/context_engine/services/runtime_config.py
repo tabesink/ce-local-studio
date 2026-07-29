@@ -59,6 +59,7 @@ class ModelCatalogEntry:
     model_name: str
     vector_dimensions: int | None
     is_default: bool = False
+    supports_graph_extraction: bool = False
 
 
 MODEL_CATALOG: tuple[ModelCatalogEntry, ...] = (
@@ -70,11 +71,20 @@ MODEL_CATALOG: tuple[ModelCatalogEntry, ...] = (
     ModelCatalogEntry("bedrock-cohere-embed-en-v3", "Bedrock Cohere Embed English v3", PROFILE_EMBEDDING, PROVIDER_BEDROCK, "cohere.embed-english-v3", 1024),
     ModelCatalogEntry("bedrock-cohere-embed-multi-v3", "Bedrock Cohere Embed Multilingual v3", PROFILE_EMBEDDING, PROVIDER_BEDROCK, "cohere.embed-multilingual-v3", 1024),
     ModelCatalogEntry("bedrock-titan-embed-v1", "Bedrock Titan Embed v1 (legacy)", PROFILE_EMBEDDING, PROVIDER_BEDROCK, "amazon.titan-embed-text-v1", 1536),
-    ModelCatalogEntry("openai-synthesis-default", "OpenAI Default Synthesis", PROFILE_SYNTHESIS, PROVIDER_OPENAI, "gpt-4.1-mini", None, True),
-    ModelCatalogEntry("openai-gpt-4-1", "OpenAI GPT-4.1", PROFILE_SYNTHESIS, PROVIDER_OPENAI, "gpt-4.1", None),
-    ModelCatalogEntry("openai-gpt-4-1-nano", "OpenAI GPT-4.1 Nano", PROFILE_SYNTHESIS, PROVIDER_OPENAI, "gpt-4.1-nano", None),
-    ModelCatalogEntry("openai-gpt-4o", "OpenAI GPT-4o", PROFILE_SYNTHESIS, PROVIDER_OPENAI, "gpt-4o", None),
-    ModelCatalogEntry("openai-gpt-4o-mini", "OpenAI GPT-4o Mini", PROFILE_SYNTHESIS, PROVIDER_OPENAI, "gpt-4o-mini", None),
+    ModelCatalogEntry(
+        "openai-synthesis-default",
+        "OpenAI Default Synthesis",
+        PROFILE_SYNTHESIS,
+        PROVIDER_OPENAI,
+        "gpt-4.1-mini",
+        None,
+        True,
+        True,
+    ),
+    ModelCatalogEntry("openai-gpt-4-1", "OpenAI GPT-4.1", PROFILE_SYNTHESIS, PROVIDER_OPENAI, "gpt-4.1", None, False, True),
+    ModelCatalogEntry("openai-gpt-4-1-nano", "OpenAI GPT-4.1 Nano", PROFILE_SYNTHESIS, PROVIDER_OPENAI, "gpt-4.1-nano", None, False, False),
+    ModelCatalogEntry("openai-gpt-4o", "OpenAI GPT-4o", PROFILE_SYNTHESIS, PROVIDER_OPENAI, "gpt-4o", None, False, True),
+    ModelCatalogEntry("openai-gpt-4o-mini", "OpenAI GPT-4o Mini", PROFILE_SYNTHESIS, PROVIDER_OPENAI, "gpt-4o-mini", None, False, True),
     ModelCatalogEntry("bedrock-claude-sonnet-4-5", "Bedrock Claude Sonnet 4.5", PROFILE_SYNTHESIS, PROVIDER_BEDROCK, "anthropic.claude-sonnet-4-5-20250929-v1:0", None),
     ModelCatalogEntry("bedrock-claude-35-sonnet-v2", "Bedrock Claude 3.5 Sonnet v2", PROFILE_SYNTHESIS, PROVIDER_BEDROCK, "anthropic.claude-3-5-sonnet-20241022-v2:0", None),
     ModelCatalogEntry("bedrock-claude-35-haiku", "Bedrock Claude 3.5 Haiku", PROFILE_SYNTHESIS, PROVIDER_BEDROCK, "anthropic.claude-3-5-haiku-20241022-v1:0", None),
@@ -86,6 +96,7 @@ MODEL_CATALOG: tuple[ModelCatalogEntry, ...] = (
 
 DEFAULT_MODEL_PROFILE_IDS = {entry.seed_id for entry in MODEL_CATALOG if entry.is_default}
 DEFAULT_SYNTHESIS_PROFILE_ID = "openai-synthesis-default"
+DEFAULT_GRAPH_EXTRACTION_PROFILE_ID = DEFAULT_SYNTHESIS_PROFILE_ID
 
 
 class RuntimeConfigError(Exception):
@@ -249,6 +260,16 @@ def safe_provider(provider: ProviderConfig) -> dict[str, Any]:
     }
 
 
+def catalog_supports_graph_extraction(profile: ModelProfile) -> bool:
+    entry = _catalog_entry_for(
+        profile.provider_kind,
+        profile.profile_kind,
+        profile.model_name,
+        profile.vector_dimensions,
+    )
+    return bool(entry is not None and entry.supports_graph_extraction)
+
+
 def safe_model_profile(db: Session, profile: ModelProfile) -> dict[str, Any]:
     return {
         "id": profile.id,
@@ -257,6 +278,7 @@ def safe_model_profile(db: Session, profile: ModelProfile) -> dict[str, Any]:
         "providerKind": profile.provider_kind,
         "modelName": profile.model_name,
         "vectorDimensions": profile.vector_dimensions,
+        "supportsGraphExtraction": catalog_supports_graph_extraction(profile),
         "inUse": model_profile_in_use(db, profile),
         "version": profile.version,
     }
@@ -441,14 +463,19 @@ def _validate_model_catalog(provider_kind: str, profile_kind: str, model_name: s
 def _domain_references_model_profile(db: Session, profile_id: str) -> bool:
     return (
         db.scalars(
-            select(Domain).where(Domain.embedding_profile_id == profile_id).limit(1)
+            select(Domain)
+            .where(
+                (Domain.embedding_profile_id == profile_id)
+                | (Domain.graph_extraction_profile_id == profile_id)
+            )
+            .limit(1)
         ).first()
         is not None
     )
 
 
-def _reject_if_embedding_profile_in_use(db: Session, profile: ModelProfile) -> None:
-    if profile.profile_kind == PROFILE_EMBEDDING and _domain_references_model_profile(db, profile.id):
+def _reject_if_domain_bound_profile_in_use(db: Session, profile: ModelProfile) -> None:
+    if _domain_references_model_profile(db, profile.id):
         raise RuntimeConfigError(409, "model_profile_in_use", "Model profile is in use.")
 
 
@@ -501,7 +528,7 @@ def update_model_profile(
     def mutate() -> ModelProfile:
         profile = _model_profile_or_error(db, profile_id, for_update=True)
         _require_expected_version(profile.version, expected_version)
-        _reject_if_embedding_profile_in_use(db, profile)
+        _reject_if_domain_bound_profile_in_use(db, profile)
         next_model_name = updates.get("model_name", profile.model_name)
         next_dimensions = updates.get("vector_dimensions", profile.vector_dimensions)
         if "model_name" in updates or "vector_dimensions" in updates:
@@ -536,7 +563,7 @@ def delete_model_profile(db: Session, profile_id: str, audit_context: AuditConte
     settings = ensure_runtime_settings(db)
     if settings.active_synthesis_profile_id == profile.id:
         raise RuntimeConfigError(409, "model_profile_in_use", "Model profile is in use.")
-    _reject_if_embedding_profile_in_use(db, profile)
+    _reject_if_domain_bound_profile_in_use(db, profile)
 
     def mutate() -> None:
         db.delete(profile)
@@ -628,6 +655,14 @@ class TrustedEmbeddingRuntimeConfig:
 
 
 @dataclass(frozen=True)
+class TrustedExtractionRuntimeConfig:
+    profile_id: str
+    provider_kind: str
+    model_name: str
+    credential: str | None
+
+
+@dataclass(frozen=True)
 class TrustedParserRuntimeConfig:
     parser_kind: str
     credential: str | None
@@ -683,6 +718,40 @@ class TrustedRuntimeResolver:
             provider_kind=provider.provider_kind,
             model_name=profile.model_name,
             vector_dimensions=profile.vector_dimensions,
+            credential=self._credential_for(provider),
+        )
+
+    def resolve_extraction_profile(self, extraction_profile_id: str) -> TrustedExtractionRuntimeConfig:
+        profile = self._db.get(ModelProfile, extraction_profile_id)
+        if profile is None:
+            raise RuntimeConfigError(
+                404,
+                "graph_extraction_profile_not_found",
+                "Graph extraction profile not found.",
+            )
+        if profile.profile_kind != PROFILE_SYNTHESIS:
+            raise RuntimeConfigError(
+                400,
+                "graph_extraction_profile_invalid",
+                "Graph extraction profile is invalid.",
+            )
+        if not catalog_supports_graph_extraction(profile):
+            raise RuntimeConfigError(
+                400,
+                "graph_extraction_profile_unsupported",
+                "Graph extraction profile is not supported.",
+            )
+        provider = _provider_or_error(self._db, profile.provider_kind)
+        if not is_provider_configured(provider):
+            raise RuntimeConfigError(
+                400,
+                "graph_extraction_profile_invalid",
+                "Graph extraction profile is invalid.",
+            )
+        return TrustedExtractionRuntimeConfig(
+            profile_id=profile.id,
+            provider_kind=provider.provider_kind,
+            model_name=profile.model_name,
             credential=self._credential_for(provider),
         )
 

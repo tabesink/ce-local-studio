@@ -138,6 +138,7 @@ def test_safe_member_and_admin_projections_drop_uncontracted_fields() -> None:
         "name": "OpenAI Default Embedding",
         "vectorDimensions": 1536,
     }
+    assert admin["graphExtractionProfile"] is None
     assert "storageSummary" not in admin
     assert "embeddingProfileId" not in admin
     assert "available" not in admin

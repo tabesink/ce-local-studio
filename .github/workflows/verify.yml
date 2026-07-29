@@ -85,3 +85,94 @@ jobs:
                   f"failures={failures} errors={errors})"
               )
           PY
+
+  # Named Playwright PR-fast lane (P12-07 U3). Production Next + BFF + API + worker + PG.
+  # Live Reducto/capacity stays in the gated @release lane (U4), not this job.
+  verify-playwright-pr-fast:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/client/package-lock.json
+      - name: Materialize stack env for Compose
+        working-directory: app
+        run: |
+          set -euo pipefail
+          FERNET="$(python -c 'import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')"
+          cat > .env.stack.local <<EOF
+          POSTGRES_DB=context_engine
+          POSTGRES_USER=context_engine
+          POSTGRES_PASSWORD=context_engine_ci
+          CE_ADMIN_USERNAME=admin.ava
+          CE_ADMIN_PASSWORD=CE-Test-Admin-2026!
+          CE_SESSION_COOKIE_SECURE=false
+          CONTEXT_ENGINE_TESTING=true
+          CE_STACK_PUBLIC_ORIGIN=http://127.0.0.1:3000
+          CE_INTERNAL_HOSTS=api
+          CE_TRUSTED_BFF_PEERS=172.30.55.10/32
+          CE_CSRF_SIGNING_KEY=local-dev-csrf-signing-key-min-32b!!
+          CE_GRAPH_REF_KEY=local-dev-graph-ref-key-min-32-bytes!!
+          CONFIG_ENCRYPTION_KEY=${FERNET}
+          STACK_API_PORT=8000
+          STACK_FRONTEND_PORT=3000
+          EOF
+          # Strip leading spaces introduced by the heredoc indent.
+          sed -i 's/^[[:space:]]*//' .env.stack.local
+          chmod 600 .env.stack.local
+      - name: Build and start Compose stack
+        working-directory: app
+        run: |
+          set -euo pipefail
+          docker compose --env-file .env.stack.local -f compose.stack.yml up --build -d
+      - name: Wait for frontend /login
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:3000/login >/dev/null; then
+              echo "frontend ready"
+              exit 0
+            fi
+            sleep 4
+          done
+          echo "frontend not ready" >&2
+          (cd app && docker compose --env-file .env.stack.local -f compose.stack.yml ps) || true
+          (cd app && docker compose --env-file .env.stack.local -f compose.stack.yml logs --tail=200) || true
+          exit 1
+      - name: Install client deps and Playwright Chromium
+        working-directory: app/client
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Build fixtures and run PR-fast Playwright
+        working-directory: app/client
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+          CE_ADMIN_USERNAME: admin.ava
+          CE_ADMIN_PASSWORD: CE-Test-Admin-2026!
+        run: |
+          set -euo pipefail
+          npm run fixtures:verify || npm run fixtures:build
+          npm run fixtures:verify
+          npm run test:e2e:pr-fast
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-pr-fast-artifacts
+          path: |
+            app/client/test-results/
+            app/client/playwright-report/
+            app/client/tests/e2e/artifacts/
+          if-no-files-found: ignore
+      - name: Compose down
+        if: always()
+        working-directory: app
+        run: docker compose --env-file .env.stack.local -f compose.stack.yml down -v || true

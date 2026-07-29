@@ -43,7 +43,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 ADMIN_URL_ENV = "CONTEXT_ENGINE_TEST_POSTGRES_ADMIN_URL"
 OPT_IN_ENV = "CONTEXT_ENGINE_ALLOW_DISPOSABLE_DATABASE_TESTS"
 DATABASE_NAME_PATTERN = re.compile(r"^ce_p705_[a-z0-9_]+$")
-HEAD_REVISION = "d4e7a1b92c80"
+HEAD_REVISION = "e5b8c1d94f20"
 
 pytestmark = pytest.mark.postgresql
 
@@ -136,6 +136,7 @@ def test_postgres_source_and_domain_delete_redact_at_enqueue_and_block_late_comp
                     domain_id=f"domain-{uuid4().hex[:8]}",
                     display_name="Redact Domain",
                     embedding_profile_id="openai-embedding-default",
+                    graph_extraction_profile_id="openai-synthesis-default",
                     requested_by_user=admin,
                     audit_context=audit,
                 )
@@ -218,6 +219,7 @@ def test_postgres_source_and_domain_delete_redact_at_enqueue_and_block_late_comp
                     domain_id=f"domain-{uuid4().hex[:8]}",
                     display_name="Domain Two",
                     embedding_profile_id="openai-embedding-default",
+                    graph_extraction_profile_id="openai-synthesis-default",
                     requested_by_user=admin,
                     audit_context=audit,
                 )

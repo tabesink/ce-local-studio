@@ -21,7 +21,7 @@ Every foundation stays `NOT_STARTED` until the targeted boundary proof in the br
 - **Tracing:** the optional tracer currently resolves to a disabled/no-op port and has no Langfuse dependency/configuration.
 - **Frontend chat layout:** current UI has a timeline/composer and one Evidence aside. The approved persistent left discovery plus right Evidence/Refs/Source tabbed three-region workbench is not fully present.
 - **Documents:** administrator source operations exist; member read-only library semantics and safe inline PDF preview remain unproven. Preview is disabled pending an opaque safe source-ref/content contract.
-- **Graph:** `/database-visualize` is a placeholder because no approved graph DTO/API is implemented.
+- **Graph:** Phase 1 authority now approves the read-only Knowledge Domain graph contract (`GET /domains/{domainId}/graph` and `.../graph/labels`, closed Graph* DTOs, M-14+). Private runtime extraction binding, safe API registration, and the accessible `/database-visualize` workbench remain implementation residuals owned by P12-07 U8–U10; do not treat the legacy client’s direct `/graphs` access, raw property bags, or mutation UI as product truth.
 - **Deferred scope in reviewed code:** capabilities excluded from the Phase 1 contract are not implementation gaps and must not be scaffolded. Logs/Usage/Server and audit/diagnostic browsing are isolated in `../future/observability-layer.md`; wiki intent is isolated in `../future/wiki-layer.md`.
 - **Reviewed observability screens:** existing log, usage/cost, Server-status, storage-summary, and node-dashboard code is reference evidence for Phase 2 only, even when locally functional.
 

@@ -5,7 +5,7 @@ This is the machine-read D0 boundary. The table is sorted bytewise by record cla
 | recordClass | subject | value | notes |
 | --- | --- | --- | --- |
 | active-route | /chat | phase-1 | durable grounded chat workbench |
-| active-route | /database-visualize | phase-1 | deliberate unavailable state only |
+| active-route | /database-visualize | phase-1 | read-only Knowledge Domain graph |
 | active-route | /documents | phase-1 | governed source library and viewer |
 | active-route | /login | phase-1 | authentication entry |
 | active-route | /settings | phase-1 | member and administrator settings |

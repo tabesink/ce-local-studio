@@ -89,6 +89,7 @@ DENY_SUBSTRINGS = (
     "BEGIN RSA PRIVATE KEY",
     "CONFIG_ENCRYPTION_KEY",
     "CE_CSRF",
+    "CE_GRAPH_REF_KEY",
     "password=",
     "secret=",
     "api_key",

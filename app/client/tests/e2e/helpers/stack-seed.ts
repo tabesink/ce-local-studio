@@ -33,6 +33,7 @@ export type SeedInfo = {
   displayName: string;
   markdownSourceId?: string;
   pdfSourceId?: string;
+  pumpSourceId?: string;
 };
 
 type DomainRow = {
@@ -192,32 +193,7 @@ async function ensureNamedSource(
   return sourceId;
 }
 
-/** Create the E2E member inside the API container (no public create-user route). */
-export function ensureE2EMemberUser() {
-  const env = loadStackEnv();
-  const username = env.CE_E2E_MEMBER_USERNAME || E2E_MEMBER_USERNAME;
-  const password = env.CE_E2E_MEMBER_PASSWORD || E2E_MEMBER_PASSWORD;
-  const script = `
-from context_engine.config import Settings
-from context_engine.db import create_db_engine, create_session_factory
-from context_engine.models import ROLE_MEMBER, User
-from context_engine.services.auth import create_user
-from sqlalchemy import select
-
-settings = Settings()
-engine = create_db_engine(settings)
-db = create_session_factory(engine)()
-try:
-    existing = db.scalar(select(User).where(User.username == ${JSON.stringify(username)}))
-    if existing is None:
-        create_user(db, ${JSON.stringify(username)}, ${JSON.stringify(password)}, role=ROLE_MEMBER)
-        print("created")
-    else:
-        print("exists")
-finally:
-    db.close()
-    engine.dispose()
-`;
+function composeExecApiPython(script: string, label: string) {
   const projectName =
     process.env.COMPOSE_PROJECT_NAME?.trim() || "context_engine_stack";
   try {
@@ -246,11 +222,48 @@ finally:
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `Failed to ensure E2E member user via docker compose exec api. ${message}`,
-    );
+    throw new Error(`Failed to ${label} via docker compose exec api. ${message}`);
   }
+}
+
+/** Create a named actor inside the API container (no public create-user route). */
+export function ensureNamedActorUser(
+  username: string,
+  password: string,
+  role: "member" | "administrator" = "member",
+) {
+  const roleConst = role === "administrator" ? "ROLE_ADMINISTRATOR" : "ROLE_MEMBER";
+  const script = `
+from context_engine.config import Settings
+from context_engine.db import create_db_engine, create_session_factory
+from context_engine.models import ROLE_ADMINISTRATOR, ROLE_MEMBER, User
+from context_engine.services.auth import create_user
+from sqlalchemy import select
+
+settings = Settings()
+engine = create_db_engine(settings)
+db = create_session_factory(engine)()
+try:
+    existing = db.scalar(select(User).where(User.username == ${JSON.stringify(username)}))
+    if existing is None:
+        create_user(db, ${JSON.stringify(username)}, ${JSON.stringify(password)}, role=${roleConst})
+        print("created")
+    else:
+        print("exists")
+finally:
+    db.close()
+    engine.dispose()
+`;
+  composeExecApiPython(script, `ensure actor ${username}`);
   return { username, password };
+}
+
+/** Create the E2E member inside the API container (no public create-user route). */
+export function ensureE2EMemberUser() {
+  const env = loadStackEnv();
+  const username = env.CE_E2E_MEMBER_USERNAME || E2E_MEMBER_USERNAME;
+  const password = env.CE_E2E_MEMBER_PASSWORD || E2E_MEMBER_PASSWORD;
+  return ensureNamedActorUser(username, password, "member");
 }
 
 export async function seedIndexedDomain(baseURL: string): Promise<SeedInfo> {
@@ -289,6 +302,7 @@ export async function seedIndexedDomain(baseURL: string): Promise<SeedInfo> {
           id: E2E_DOMAIN_ID,
           displayName: E2E_DOMAIN_DISPLAY_NAME,
           embeddingProfileId: "openai-embedding-default",
+          graphExtractionProfileId: "openai-synthesis-default",
         },
       });
       if (created.status() !== 201 && created.status() !== 200 && created.status() !== 409) {
@@ -320,11 +334,23 @@ export async function seedIndexedDomain(baseURL: string): Promise<SeedInfo> {
       waitReady: false,
     });
 
+    const pumpFixturePath = path.join(ROOT, "tests", "fixtures", "documents", "doc_pump_manual.pdf");
+    let pumpSourceId: string | undefined;
+    if (fs.existsSync(pumpFixturePath)) {
+      pumpSourceId = await ensureNamedSource(api, {
+        filename: "doc_pump_manual.pdf",
+        mimeType: "application/pdf",
+        buffer: fs.readFileSync(pumpFixturePath),
+        waitReady: true,
+      });
+    }
+
     const info: SeedInfo = {
       domainId: E2E_DOMAIN_ID,
       displayName: domain?.displayName ?? E2E_DOMAIN_DISPLAY_NAME,
       markdownSourceId,
       pdfSourceId,
+      pumpSourceId,
     };
     writeSeedInfo(info);
     return info;

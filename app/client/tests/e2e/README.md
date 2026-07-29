@@ -1,47 +1,64 @@
-# Playwright E2E (F-009 pilot happy path)
+# Playwright E2E (P12-07)
 
-Live-stack browser proof for login, direct chat, domain RAG + Evidence Panel, logout, documents PDF/text preview (admin + member read-only), and the DESIGN screenshot matrix.
+Production-boundary browser proofs against the Compose stack (Next production build / BFF / FastAPI / worker / PostgreSQL 16 / object store).
 
-Settings domains production-boundary acceptance (F3 / R12 / AE1) is **P12-07** (domains implementation **P9-04**). It is not a P9-01 exit gate. Do not add intercepted or mocked Settings-domains acceptance specs under this tree for factory readiness.
+## Lanes
+
+| Script | Tag | When |
+| --- | --- | --- |
+| `npm run test:e2e:pr-fast` | `@pr-fast` | Every PR (named CI job `verify-playwright-pr-fast`) |
+| `npm run test:e2e:release` | `@release` | Gated live/capacity lane (U4); requires `CE_P12_07_RELEASE=1` or specs skip |
+| `npm run release:capacity -- check\|unit` | n/a | Budget freeze + in-process L/L+1 (`CE_P12_07_RELEASE=1`) |
+| `npm run test:visual-gate -- check\|enforce` | n/a | Visual parity manifest schema / fail-closed approve+PNG gate (U6) |
+
+Default `npm run test:e2e` runs the PR-fast set (includes axe golden routes). `@release` and `visual-gate enforce` are never part of `scripts/verify.sh` until baselines are `approved`.
 
 ## Prerequisites
 
-1. Start the runnable stack and wait until healthy:
+1. Start the local demo stack and wait until healthy:
 
    ```bash
-   docker compose --env-file .env.stack.local -f compose.stack.yml up --build -d
+   bash scripts/dev.sh
+   # or:
+   cd app && docker compose --env-file .env.stack.local -f compose.stack.yml up --build -d
    ```
 
-   Recreate `.env.stack.local` from `app/.env.stack.example` for the ingress-wired HTTP profile: set `CE_STACK_PUBLIC_ORIGIN=http://127.0.0.1:<STACK_FRONTEND_PORT>` (use `127.0.0.1`, not `localhost`). Compose maps that value to both FastAPI `CE_PUBLIC_ORIGIN` and BFF `CONTEXT_ENGINE_PUBLIC_ORIGIN`. Frontend health on `/login` is not BFF trust-path proof — use `python app/scripts/stack_smoke_core.py --env-file app/.env.stack.local` for the P10-02 core path. Worker-leased path: set `CE_INLINE_TURN_WORKERS=false`, recreate api, then `python app/scripts/stack_smoke_worker.py --env-file app/.env.stack.local`. Operator steps: `docs/operations/compose-stack-runbook.md` (Compose-dev matrix only — not P12).
+   Recreate `.env.stack.local` from `app/.env.stack.example`. Set
+   `CE_STACK_PUBLIC_ORIGIN=http://127.0.0.1:<STACK_FRONTEND_PORT>` (use `127.0.0.1`, not `localhost`).
+   Include `CE_GRAPH_REF_KEY` (≥32 chars).
 
-2. Ensure `.env.stack.local` has `CE_ADMIN_USERNAME` / `CE_ADMIN_PASSWORD` (Compose `bootstrap` one-shot only; not api/worker env).
-3. Optional: `PLAYWRIGHT_BASE_URL` (default `http://127.0.0.1:3000`; must match `CE_STACK_PUBLIC_ORIGIN`).
-4. Optional member overrides: `CE_E2E_MEMBER_USERNAME` / `CE_E2E_MEMBER_PASSWORD` (defaults used by seed via `docker compose exec api`).
-5. One-time browser install: `npx playwright install chromium` from `app/client`.
+2. `CE_ADMIN_USERNAME` / `CE_ADMIN_PASSWORD` for bootstrap (Compose one-shot only).
+3. Optional: `PLAYWRIGHT_BASE_URL` (default `http://127.0.0.1:3000`; must match public origin).
+4. Optional actors: `CE_E2E_MEMBER_*`, `CE_E2E_NOAH_*`.
+5. One-time: `npx playwright install chromium` from `app/client`.
 
-Global setup fails fast if `/login` is unreachable, seeds one indexed Knowledge Domain plus a PDF preview fixture via the frontend `/api/v1` proxy, and ensures the E2E member user exists.
+Global setup fails fast if `/login` is unreachable, requires `127.0.0.1`, seeds fixture actors (Ava/Mina/Noah jars via separate contexts), and indexes the pilot domain (including `doc_pump_manual.pdf` when present under `app/tests/fixtures/documents/`).
+
+Settings domains F3 uses live server DTOs only — no intercepted product responses.
 
 ## Commands
 
 ```bash
 cd app/client
-npm run test:e2e
+npm run test:e2e:pr-fast
+npm run test:e2e:release
 npm run test:e2e:headed
-# focused documents preview:
-npx playwright test tests/e2e/documents-preview.spec.ts
+npx playwright test tests/e2e/graph-workbench.spec.ts --grep @pr-fast
 ```
+
+## Matrix ownership (inventory)
+
+PR-fast specs cover E2E-M01 (auth/CSRF/BFCache), isolation/C04, graph M14–M17 smoke, Settings domains F3, M-11 open-panel half, plus retained pilot/documents/evidence paths. Visual baseline comparison hardening is U6; capacity/live pipeline is U4 `@release`.
 
 ## Artifacts
 
 - Seed metadata: `tests/e2e/artifacts/seed.json` (no secrets)
 - Screenshots: `tests/e2e/artifacts/*.png`
-- Playwright output: `test-results/`, `playwright-report/`
+- Playwright output: `test-results/`, `playwright-report/` (gitignored; traces on failure)
 
-All of the above are gitignored. Review screenshots locally for AC-008; do not commit filled password fields or secrets.
-
-If host ports `8000`/`3000` are already taken, override when starting compose and point Playwright at the frontend port:
+## Port overrides
 
 ```bash
 STACK_API_PORT=8012 STACK_FRONTEND_PORT=3010 docker compose --env-file .env.stack.local -f compose.stack.yml up --build -d
-cd app/client && PLAYWRIGHT_BASE_URL=http://127.0.0.1:3010 npm run test:e2e
+cd app/client && PLAYWRIGHT_BASE_URL=http://127.0.0.1:3010 npm run test:e2e:pr-fast
 ```

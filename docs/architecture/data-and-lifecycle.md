@@ -21,6 +21,14 @@ any live source -> deleting -> redaction/invalidation -> remote/local removal
 
 Preparation produces stable ordered Source Blocks. Indexing renders a versioned handoff containing local provenance markers, then maps retrieval results back through those markers. Generation counters and content hashes make retry safe and prevent stale completions.
 
+## Domain graph lifecycle
+
+Each Knowledge Domain binds one immutable embedding profile and one immutable graph-extraction-capable synthesis profile at creation (or through the approved one-time legacy assignment rule). Private LightRAG entity/relation extraction runs inside the sealed per-domain runtime using that frozen extraction binding; chat synthesis defaults must not silently rebind it.
+
+A bounded read-only graph snapshot is eligible only when the domain is authorized and the applied private corpus/graph generation matches PostgreSQL’s current desired generation. Source or domain deletion fences retrieval first, then removes derived graph contribution through generation-fenced cleanup/reconciliation. While desired generation is ahead of applied, graph reads return retryable `graph_refreshing` rather than a stale success projection.
+
+Public graph refs are purpose-derived opaque HMAC values over domain-scoped private runtime identities using persisted `CE_GRAPH_REF_KEY`. Refs are not bearer grants and are meaningful only after a fresh authorized snapshot or label search. Layout coordinates, hover, focus, and client-side pruning of the current snapshot are presentation state only.
+
 ## Grounded turn lifecycle
 
 1. Authorize conversation ownership and validate `client_request_id`.
@@ -43,6 +51,7 @@ Deleting any cited source or the selected domain redacts the whole derived turn.
 | users and sessions | FastAPI/PostgreSQL; user identity | a user receives only the approved current-user projection; administrators receive only contracted safe user summaries and never session/token material |
 | runtime settings and model profiles | FastAPI/PostgreSQL; deployment singleton | administrators mutate through services; credentials remain write-only and encrypted |
 | domains, sources, blocks, images and index state | FastAPI/PostgreSQL plus governed object storage; `domain_id` | administrators curate; members receive only authorized, query-eligible safe projections |
+| domain graph projection | FastAPI authorization plus private per-domain LightRAG derivative; `domain_id` and generation | members/admins receive only closed read-only snapshot/label DTOs; mutation APIs are absent |
 | conversations, turns, Evidence and accepted refs | FastAPI/PostgreSQL; `owner_user_id` through conversation ownership | only the owning member; administrator role grants no implicit read access |
 | operations, leases and generations | FastAPI/PostgreSQL; target resource and generation | services/workers only; public DTOs expose only approved safe operation projections |
 | audit events | FastAPI/PostgreSQL; system-owned append-only history | transactional writes remain mandatory; Phase 1 has no product read/export surface |
@@ -73,6 +82,7 @@ Classification follows the value through copies, failures, fixtures and derived 
 | parser | source bytes plus frozen parser input -> canonical prepared result | typed normalized blocks/images only; bounded timeout; raw provider payload stays private |
 | domain runtime controller | start/stop/delete/readiness for one domain generation | stable operation key, bounded timeout, typed uncertain outcome and generation-aware reconciliation |
 | LightRAG index | submit/readiness/cancel/delete of a provenance-marked handoff | per-domain isolation, stable content identity, idempotency and mapped safe failures |
+| LightRAG graph | generation-fenced bounded extract/snapshot for one domain | sealed provider/model inputs; byte/time/node/edge bounds; no raw vendor payload crosses the public boundary |
 | scoped retrieval | one authorized domain/query -> private typed candidates | bounded result/time budget; no raw hit crosses the service/public boundary |
 | synthesis | approved model input -> bounded token/result stream | timeout/cancel semantics and typed safe failure; provider payload and assembled context stay private |
 | operational telemetry | allowlisted log/metric/trace emission | best-effort only where permitted, bounded cardinality, no product read API and no content/secret values |

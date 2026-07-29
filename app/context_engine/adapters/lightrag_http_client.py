@@ -125,7 +125,15 @@ class PrivateHttpLightRAGClient:
             raise _safe_error("source_index_unavailable", "Source index runtime unavailable.")
         return payload
 
-    def submit(self, domain: Domain, *, request_id: str, content_hash: str, rendered_text: str) -> IndexSubmitResult:
+    def submit(
+        self,
+        domain: Domain,
+        *,
+        request_id: str,
+        content_hash: str,
+        rendered_text: str,
+        corpus_generation: int = 0,
+    ) -> IndexSubmitResult:
         from context_engine.services.indexing import (
             IndexSubmitResult,
             SourceIndexError,
@@ -150,6 +158,7 @@ class PrivateHttpLightRAGClient:
                 "request_id": request_id,
                 "content_hash": content_hash,
                 "rendered_text": rendered_text,
+                "corpus_generation": int(corpus_generation),
             },
         )
         if response.status_code == 409:
@@ -194,13 +203,70 @@ class PrivateHttpLightRAGClient:
             error_message=payload.get("error_message") if isinstance(payload.get("error_message"), str) else None,
         )
 
-    def delete(self, domain: Domain, *, request_id: str) -> None:
+    def delete(self, domain: Domain, *, request_id: str, corpus_generation: int = 0) -> None:
         from context_engine.services.indexing import _safe_error, _safe_request_id
 
         _safe_request_id(request_id)
-        response = self._call(domain, "DELETE", f"/v1/index/{request_id}")
+        response = self._call(
+            domain,
+            "DELETE",
+            f"/v1/index/{request_id}?corpus_generation={int(corpus_generation)}",
+        )
         if response.status_code >= 400:
             raise _safe_error("source_index_delete_failed", "Source index content could not be removed.")
+
+    def graph_snapshot(
+        self,
+        domain: Domain,
+        *,
+        label: str | None = None,
+        max_nodes: int = 500,
+        max_edges: int = 2000,
+        deadline: float | None = None,
+    ) -> dict[str, Any]:
+        from context_engine.services.indexing import _safe_error
+        from urllib.parse import urlencode
+
+        params: dict[str, str] = {
+            "max_nodes": str(max_nodes),
+            "max_edges": str(max_edges),
+        }
+        if label:
+            params["label"] = label
+        response = self._call(
+            domain,
+            "GET",
+            f"/v1/graph/snapshot?{urlencode(params)}",
+            deadline=deadline,
+        )
+        if response.status_code >= 400:
+            raise _safe_error("source_index_unavailable", "Source index runtime unavailable.")
+        if len(response.body) > 2 * 1024 * 1024:
+            raise _safe_error("source_index_unavailable", "Source index runtime unavailable.")
+        return self._parse_json(response.body)
+
+    def graph_label_search(
+        self,
+        domain: Domain,
+        *,
+        q: str,
+        limit: int = 50,
+        deadline: float | None = None,
+    ) -> dict[str, Any]:
+        from context_engine.services.indexing import _safe_error
+        from urllib.parse import urlencode
+
+        response = self._call(
+            domain,
+            "GET",
+            f"/v1/graph/labels?{urlencode({'q': q, 'limit': str(limit)})}",
+            deadline=deadline,
+        )
+        if response.status_code >= 400:
+            raise _safe_error("source_index_unavailable", "Source index runtime unavailable.")
+        if len(response.body) > 2 * 1024 * 1024:
+            raise _safe_error("source_index_unavailable", "Source index runtime unavailable.")
+        return self._parse_json(response.body)
 
     def is_absent(self, domain: Domain, *, request_id: str) -> bool:
         from context_engine.services.indexing import _safe_error, _safe_request_id

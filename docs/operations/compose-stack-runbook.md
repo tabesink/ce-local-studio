@@ -37,12 +37,22 @@ Closed stderr reason → action. Do **not** run bare `alembic upgrade head` on a
 
 Path 2 supported legacy upgrade is **not** available. Backup/restore drills: [`backup-restore-incident-runbook.md`](./backup-restore-incident-runbook.md).
 
+### One-command local demo (P12-07 U11)
+
+Prefer the repository entrypoint for the full local-demo matrix (base + MinIO + live runtime):
+
+```bash
+bash scripts/dev.sh
+```
+
+This preflights Docker/Compose and env completeness, generates `CE_GRAPH_REF_KEY` into the gitignored env file when absent (mode 0600; value never printed), starts `compose.stack.yml` + `compose.stack.minio.yml` + `compose.stack.live.yml`, waits for API readiness, and prints only the public login URL, admin username, service roles, and status/log/stop commands. Host-native hot reload remains available as `CE_DEV_MODE=host bash scripts/dev.sh` and is not the full-stack demo path.
+
 ```bash
 cd app
 docker compose --env-file .env.stack.local -f compose.stack.yml up --build -d
 ```
 
-**MinIO local-production overlay (P10-04; not default CI):**
+**MinIO local-production overlay (P10-04; included by `scripts/dev.sh` demo path):**
 
 ```bash
 cd app
@@ -57,7 +67,7 @@ Recreate `.env.stack.local` from `.env.stack.example` for the ingress-wired HTTP
 | Probe | Meaning |
 | --- | --- |
 | `GET /health/live` | Process up only |
-| `GET /health/ready` (default) | DB + schema head + catalog match + enabled admin + filesystem store put+delete |
+| `GET /health/ready` (default) | DB + schema head + catalog match + enabled admin + filesystem store put+delete; outside testing also requires `CE_GRAPH_REF_KEY` (≥32 bytes) |
 | `GET /health/ready` (MinIO overlay) | Same aggregate, but object-store probe uses S3 adapter against MinIO |
 | Worker Compose `healthy` | Heartbeat file fresh **after** internal worker readiness |
 | Worker claim-ready | In-process gate before first claim (not the heartbeat alone) |
@@ -147,6 +157,28 @@ python scripts/stack_ingress_drain_proof.py --env-file .env.stack.local
 ```
 
 API drain-hold: `SIGUSR1` → `enter_drain_hold` / `api.stop_new_turns` while the process still serves; new `turns:stream` returns contracted `503 capacity_unavailable`. Unit altitude: `tests/test_api_shutdown_drain.py`. Lifespan teardown remains a backstop.
+
+## P12-07 @release capacity / pipeline lane (U4)
+
+Opt-in only. **Not** part of `scripts/verify.sh` or the PR job `verify-playwright-pr-fast`.
+
+```bash
+# 1) Freeze budgets + in-process graph L/L+1 shed (no Docker required for unit mode)
+CE_P12_07_RELEASE=1 python app/scripts/p12_07_release_capacity_probe.py check
+CE_P12_07_RELEASE=1 python app/scripts/p12_07_release_capacity_probe.py unit
+
+# 2) Full demo topology (base + MinIO + live) when claiming live graph/RAG
+bash scripts/dev.sh
+# or: docker compose --env-file .env.stack.local \
+#        -f compose.stack.yml -f compose.stack.minio.yml -f compose.stack.live.yml up --build -d
+
+# 3) Browser @release matrix (requires CE_P12_07_RELEASE=1 or specs skip)
+CE_P12_07_RELEASE=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 \
+  npm --prefix app/client run test:e2e:release
+```
+
+Evidence checklist: `docs/_scratch/p12-07-release-evidence-checklist.md`.  
+Credential-gated provider/parser live smoke remains `CE_PROVIDER_STAGING_SMOKE=1` / `CE_P5_04_LIVE=1` — do not conflate with the capacity unit probe.
 
 ## Residuals (do not claim from this runbook)
 

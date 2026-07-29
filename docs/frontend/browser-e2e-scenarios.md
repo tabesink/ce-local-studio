@@ -26,6 +26,14 @@ Use Playwright against the production Next build, BFF, FastAPI, worker, PostgreS
 | E2E-M09 | ordered ref chips submit; expired/unauthorized chip is identified without target leakage |
 | E2E-M10 | two tabs submit same request ID; one turn/provider invocation; changed fingerprint gets conflict |
 | E2E-M11 | admin deletes cited source while answer/PDF open; answer redacts and viewer closes safely |
+| E2E-M14 | open `/database-visualize` for authorized ready domain; snapshot fields are closed Graph DTOs only; no browser→LightRAG/runtime request |
+| E2E-M15 | label-search selects relief-valve node; list/detail, canvas, and opaque `domain`/`node` URL state converge |
+| E2E-M16 | unknown and unauthorized domain graph reads share one `404` shape; safe failure shows request ID |
+| E2E-M17 | stopped/unready/deleting domain graph reads render contracted conflict/dependency UI, not empty success |
+| E2E-M18 | during deletion rebuild, refresh shows retryable `graph_refreshing`; post-rebuild snapshot omits deleted nodes |
+| E2E-M19 | exhausted graph-read permits shed with `429`/`Retry-After` or `503 capacity_unavailable` before runtime call |
+| E2E-M20 | oversized/truncated snapshot surfaces `dependency_unavailable` or `truncated:true`; label search still works |
+| E2E-M21 | keyboard/touch/narrow/zoom/forced-colors/reduced-motion graph path uses list/detail without canvas dependence |
 
 ## Administrator scenarios
 
@@ -59,8 +67,8 @@ The harness must be able to pause/reorder safe API responses, sever SSE after a 
 
 ## Assertions common to every case
 
-- no browser request targets PostgreSQL, object storage, LightRAG, Docker, parser, model provider, or a configurable backend URL;
-- no console error, hydration mismatch, raw stack/upstream message, path, secret, or private identifier;
+- no browser request targets PostgreSQL, object storage, LightRAG, Docker, parser, model provider, a direct `/graphs` path, or a configurable backend URL;
+- no console error, hydration mismatch, raw stack/upstream message, path, secret, private identifier, or raw graph property bag;
 - unauthorized personalized responses are not served from cache;
 - keyboard path and focus outcome match the accessibility contract;
 - retry/refresh does not duplicate durable work.

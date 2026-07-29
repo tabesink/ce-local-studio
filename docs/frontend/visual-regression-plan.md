@@ -39,7 +39,7 @@ Fixtures include long titles, maximum safe excerpts, Unicode, wrapping citations
 | `/login` | default, validation error, submitting |
 | `/chat` | empty, loaded, streaming, reconnecting, evidence open, failed, redacted |
 | `/documents` | empty, table, upload, inline PDF/figure anchor, unavailable, deleting |
-| `/database-visualize` | deliberate unavailable state at each required viewport until graph DTO approval |
+| `/database-visualize` | ready, loading, empty, truncated, selected-node, safe error at each required viewport |
 | `/settings` | member, admin, secret configured, stale revision |
 | shell | expanded/collapsed sidebar, mobile drawers, forbidden, session loading |
 

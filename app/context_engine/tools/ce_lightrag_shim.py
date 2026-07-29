@@ -7,19 +7,23 @@ isolating vendored LightRAG module state inside one container per domain.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import sys
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
 RUNTIME_ROOT = Path(os.environ.get("CE_RUNTIME_ROOT", "/ce-runtime"))
 SECRETS_FILE = RUNTIME_ROOT / "secrets" / "provider.env"
 WORKING_DIR = Path(os.environ.get("WORKING_DIR", str(RUNTIME_ROOT / "lightrag")))
+GRAPH_STATE_PATH = WORKING_DIR / "graph_state.json"
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+_TUPLE_DELIMITER = "<|#|>"
+_COMPLETION_DELIMITER = "<|COMPLETE|>"
 
 
 def _load_sealed_env() -> None:
@@ -45,10 +49,87 @@ def _safe_request_id(request_id: str) -> str:
     return request_id
 
 
+def _truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes"}
+
+
+def _deterministic_extraction_response(prompt: str) -> str:
+    """Test-only synthetic extractor for pump/relief-valve fixture text."""
+    haystack = prompt.lower()
+    lines: list[str] = []
+    if "pump" in haystack:
+        lines.append(
+            f"entity{_TUPLE_DELIMITER}Pump{_TUPLE_DELIMITER}equipment{_TUPLE_DELIMITER}"
+            "Pump is equipment referenced in the source text."
+        )
+    if "relief valve" in haystack or "relief-valve" in haystack:
+        lines.append(
+            f"entity{_TUPLE_DELIMITER}Relief Valve{_TUPLE_DELIMITER}equipment{_TUPLE_DELIMITER}"
+            "Relief Valve is equipment referenced in the source text."
+        )
+    if "pump" in haystack and ("relief valve" in haystack or "relief-valve" in haystack):
+        lines.append(
+            f"relation{_TUPLE_DELIMITER}Relief Valve{_TUPLE_DELIMITER}Pump{_TUPLE_DELIMITER}"
+            f"downstream, flow{_TUPLE_DELIMITER}"
+            "The relief valve is downstream of the pump."
+        )
+    if not lines:
+        lines.append(
+            f"entity{_TUPLE_DELIMITER}Document{_TUPLE_DELIMITER}content{_TUPLE_DELIMITER}"
+            "Document content was indexed without specific entities."
+        )
+    lines.append(_COMPLETION_DELIMITER)
+    return "\n".join(lines)
+
+
+def _deterministic_graph_from_text(text: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    lower = text.lower()
+    nodes: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    if "pump" in lower:
+        nodes.append({"id": "pump", "label": "Pump", "kind": "equipment"})
+    if "relief valve" in lower or "relief-valve" in lower:
+        nodes.append({"id": "relief-valve", "label": "Relief Valve", "kind": "equipment"})
+    if any(n["id"] == "pump" for n in nodes) and any(n["id"] == "relief-valve" for n in nodes):
+        edges.append(
+            {
+                "id": "pump-relief-valve",
+                "source": "pump",
+                "target": "relief-valve",
+                "label": "downstream_of",
+            }
+        )
+    return nodes, edges
+
+
+def _write_graph_state(*, applied_generation: int, nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> None:
+    GRAPH_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    GRAPH_STATE_PATH.write_text(
+        json.dumps(
+            {"appliedGeneration": applied_generation, "nodes": nodes, "edges": edges},
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _read_graph_state() -> dict[str, Any]:
+    if not GRAPH_STATE_PATH.is_file():
+        return {"appliedGeneration": 0, "nodes": [], "edges": []}
+    try:
+        payload = json.loads(GRAPH_STATE_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="graph_unavailable") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=502, detail="graph_unavailable")
+    return payload
+
+
 class SubmitBody(BaseModel):
     request_id: str = Field(min_length=1, max_length=128)
     content_hash: str = Field(min_length=64, max_length=64)
     rendered_text: str = Field(min_length=1)
+    corpus_generation: int = Field(default=0, ge=0)
 
 
 class RetrieveBody(BaseModel):
@@ -76,11 +157,7 @@ def create_app() -> FastAPI:
     model_name = os.environ.get("CE_EMBEDDING_MODEL_NAME", "ce-domain-embedding")
     provider_kind = os.environ.get("CE_EMBEDDING_PROVIDER_KIND", "").strip().lower()
     credential = os.environ.get("CE_EMBEDDING_CREDENTIAL")
-    allow_synthetic = os.environ.get("CE_EMBEDDING_ALLOW_SYNTHETIC", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-    }
+    allow_synthetic = _truthy(os.environ.get("CE_EMBEDDING_ALLOW_SYNTHETIC"))
     from context_engine.adapters.embeddings import (
         EmbeddingAdapterError,
         EmbeddingRequest,
@@ -96,6 +173,25 @@ def create_app() -> FastAPI:
         embedding_adapter = resolve_embedding_adapter(provider_kind)
     else:
         raise RuntimeError("Embedding provider is not configured for this runtime.")
+
+    extraction_provider = os.environ.get("CE_EXTRACTION_PROVIDER_KIND", "").strip().lower()
+    extraction_model = os.environ.get("CE_EXTRACTION_MODEL_NAME", "").strip()
+    extraction_credential = os.environ.get("CE_EXTRACTION_CREDENTIAL")
+    extraction_synthetic = _truthy(os.environ.get("CE_EXTRACTION_ALLOW_SYNTHETIC"))
+    if extraction_synthetic:
+        extraction_mode = "synthetic"
+        extraction_adapter = None
+    elif extraction_provider and extraction_model:
+        from context_engine.adapters.synthesis import (
+            SynthesisAdapterError,
+            SynthesisRequest,
+            resolve_synthesis_adapter,
+        )
+
+        extraction_mode = "provider"
+        extraction_adapter = resolve_synthesis_adapter(extraction_provider)
+    else:
+        raise RuntimeError("Graph extraction provider is not configured for this runtime.")
 
     class _OfflineCharTokenizer:
         """Reversible char tokenizer — no tiktoken CDN (domain net is internal)."""
@@ -126,10 +222,37 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=exc.status_code, detail=exc.code) from None
         return np.array(vectors, dtype=np.float32)
 
-    async def llm(_prompt, system_prompt=None, history_messages=None, **_kwargs):
-        # Entity extraction stub: Phase 1 retrieval uses naive chunk mode;
-        # grounded synthesis stays in the API worker, not the LightRAG container.
-        return "entity"
+    async def llm(prompt, system_prompt=None, history_messages=None, **_kwargs):
+        combined = "\n".join(
+            part
+            for part in (
+                system_prompt or "",
+                prompt or "",
+                "\n".join(str(item) for item in (history_messages or [])),
+            )
+            if part
+        )
+        if extraction_mode == "synthetic":
+            return _deterministic_extraction_response(combined)
+        assert extraction_adapter is not None
+        from context_engine.adapters.synthesis import SynthesisAdapterError, SynthesisRequest
+
+        try:
+            chunks = list(
+                extraction_adapter.stream(
+                    SynthesisRequest(
+                        mode="direct",
+                        message=combined,
+                        model_name=extraction_model,
+                        credential=extraction_credential,
+                        timeout_seconds=float(os.environ.get("CE_EXTRACTION_TIMEOUT_SECONDS", "60")),
+                        max_output_tokens=int(os.environ.get("CE_EXTRACTION_MAX_OUTPUT_TOKENS", "2048")),
+                    )
+                )
+            )
+        except SynthesisAdapterError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=exc.code) from None
+        return "".join(chunks)
 
     rag = LightRAG(
         working_dir=str(WORKING_DIR),
@@ -168,6 +291,20 @@ def create_app() -> FastAPI:
         )
         if returned not in {None, request_id}:
             raise HTTPException(status_code=502, detail="source_index_unavailable")
+        # Private CE graph contribution: generation-fenced sidecar for snapshot eligibility.
+        # Production extraction still runs through llm_model_func above; synthetic mode also
+        # materializes the deterministic pump/relief-valve contribution for private reads.
+        if extraction_mode == "synthetic":
+            nodes, edges = _deterministic_graph_from_text(body.rendered_text)
+        else:
+            # Best-effort private projection from LightRAG labels when available.
+            try:
+                labels = await rag.get_graph_labels()
+            except Exception:  # noqa: BLE001
+                labels = []
+            nodes = [{"id": str(label).lower().replace(" ", "-"), "label": str(label), "kind": None} for label in labels]
+            edges = []
+        _write_graph_state(applied_generation=body.corpus_generation, nodes=nodes, edges=edges)
         return {"remote_document_id": f"lightrag:{request_id}"}
 
     @app.get("/v1/index/readiness/{request_id}")
@@ -194,10 +331,14 @@ def create_app() -> FastAPI:
         return {"ready": status_value == "processed", "failed": False}
 
     @app.delete("/v1/index/{request_id}")
-    async def delete(request_id: str) -> dict[str, bool]:
+    async def delete(
+        request_id: str,
+        corpus_generation: int = Query(default=0, ge=0),
+    ) -> dict[str, bool]:
         await _ensure_ready()
         request_id = _safe_request_id(request_id)
         await rag.adelete_by_doc_id(request_id)
+        _write_graph_state(applied_generation=corpus_generation, nodes=[], edges=[])
         return {"ok": True}
 
     @app.get("/v1/index/{request_id}/absent")
@@ -213,6 +354,52 @@ def create_app() -> FastAPI:
 
         result = await rag.aquery_data(body.question, QueryParam(mode="naive", top_k=10, chunk_top_k=10))
         return result if isinstance(result, dict) else {"status": "failure", "data": {"chunks": []}}
+
+    @app.get("/v1/graph/snapshot")
+    async def graph_snapshot(
+        label: str | None = Query(default=None, max_length=160),
+        max_nodes: int = Query(default=500, ge=1, le=500),
+        max_edges: int = Query(default=2000, ge=1, le=2000),
+    ) -> dict[str, Any]:
+        await _ensure_ready()
+        payload = _read_graph_state()
+        nodes = list(payload.get("nodes") or [])
+        edges = list(payload.get("edges") or [])
+        if label:
+            needle = label.strip().lower()
+            nodes = [n for n in nodes if isinstance(n, dict) and needle in str(n.get("label", "")).lower()]
+            keep = {str(n.get("id")) for n in nodes}
+            edges = [
+                e
+                for e in edges
+                if isinstance(e, dict) and str(e.get("source")) in keep and str(e.get("target")) in keep
+            ]
+        truncated = len(nodes) > max_nodes or len(edges) > max_edges
+        return {
+            "appliedGeneration": int(payload.get("appliedGeneration") or 0),
+            "nodes": nodes[:max_nodes],
+            "edges": edges[:max_edges],
+            "truncated": truncated,
+        }
+
+    @app.get("/v1/graph/labels")
+    async def graph_labels(
+        q: str = Query(min_length=2, max_length=160),
+        limit: int = Query(default=50, ge=1, le=50),
+    ) -> dict[str, Any]:
+        await _ensure_ready()
+        payload = _read_graph_state()
+        needle = q.strip().lower()
+        items: list[dict[str, Any]] = []
+        for node in payload.get("nodes") or []:
+            if not isinstance(node, dict):
+                continue
+            label_value = str(node.get("label") or "")
+            if needle in label_value.lower():
+                items.append({"id": node.get("id"), "label": label_value, "kind": node.get("kind")})
+            if len(items) >= limit:
+                break
+        return {"items": items}
 
     return app
 

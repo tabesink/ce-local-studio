@@ -4,8 +4,8 @@ import { E2E_DOMAIN_QUESTION, readSeedInfo } from "./helpers/stack-seed";
 
 test.describe.configure({ mode: "serial" });
 
-test.describe("Phase 1 evidence document-navigation boundary", () => {
-  test("Evidence inspector enables Open in Library with opaque deep links", async ({ page }) => {
+test.describe("Phase 1 evidence document-navigation boundary @pr-fast", () => {
+  test("Evidence inspector enables Open in Library with opaque deep links @pr-fast", async ({ page }) => {
     const seed = readSeedInfo();
     await loginAsAdmin(page);
     await page.getByLabel("Knowledge Domain").selectOption({ label: seed.displayName });

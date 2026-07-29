@@ -60,7 +60,7 @@ const U5_TARGETS = [
   "settings-nav",
   "settings-group",
   "login",
-  "graph-unavailable",
+  "graph-workbench",
 ] as const;
 
 function ThemeWrap({

@@ -44,6 +44,19 @@ P12-04 residual unless proven separately.
 | Bedrock | none | n/a | AWS egress | runtime provider config | fail-closed | no | fail-closed |
 | Ollama | none | n/a | local-only | runtime provider config | fail-closed | no | fail-closed |
 
+## Graph-extraction capability (domain-sealed LightRAG LLM)
+
+Extraction reuses a synthesis model profile that the closed catalog marks
+`supportsGraphExtraction=true`. Provider kind or synthesis role alone is not
+enough. New domains bind one immutable extraction-capable profile; the sealed
+per-domain runtime receives `CE_EXTRACTION_*` alongside `CE_EMBEDDING_*`.
+
+| Kind | Catalog capability | Runtime seal | Fixture proof | Live smoke | Full pipeline | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| OpenAI (selected synthesis models) | yes (`gpt-4.1`, `gpt-4.1-mini`, `gpt-4o`, `gpt-4o-mini`) | sealed `CE_EXTRACTION_*` | deterministic synthetic shim (test-only) | pending U8/U11 release | pending `@release` | packaged / fixture-proven (deterministic); live pending |
+| OpenAI nano / Bedrock / Ollama | no / fail-closed | rejected at assign/create/start/index | fail-closed | no | no | unsupported |
+| Synthetic | test-only `CE_EXTRACTION_ALLOW_SYNTHETIC=1` | explicit gate | yes | not production | not production | non-production only |
+
 ## Object-store altitude (orthogonal)
 
 | Profile | Store | When to claim |

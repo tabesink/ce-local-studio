@@ -19,15 +19,15 @@ async function waitForStreamSettled(page: import("@playwright/test").Page) {
   return assistant;
 }
 
-test.describe("F-009 pilot happy path", () => {
-  test("login, storage safety, and logout", async ({ page }) => {
+test.describe("F-009 pilot happy path @pr-fast", () => {
+  test("login, storage safety, and logout @pr-fast", async ({ page }) => {
     await loginAsAdmin(page);
     await assertNoAuthTokensInBrowserStorage(page);
     await logout(page);
     await expect(page.locator("#username")).toBeVisible();
   });
 
-  test("direct chat leaves Evidence Panel without rows", async ({ page }) => {
+  test("direct chat leaves Evidence Panel without rows @pr-fast", async ({ page }) => {
     await loginAsAdmin(page);
     await page.getByLabel("Knowledge Domain").selectOption({ label: "Direct chat" });
     await sendChatMessage(page, E2E_DIRECT_QUESTION);
@@ -42,7 +42,7 @@ test.describe("F-009 pilot happy path", () => {
     }
   });
 
-  test("domain RAG opens Evidence Panel with safe rows", async ({ page }) => {
+  test("domain RAG opens Evidence Panel with safe rows @pr-fast", async ({ page }) => {
     const seed = readSeedInfo();
     await loginAsAdmin(page);
     await page.getByLabel("Knowledge Domain").selectOption({ label: seed.displayName });

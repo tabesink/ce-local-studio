@@ -14,12 +14,14 @@ export type EmbeddingProfileLike = {
   profileKind: string;
   /** Optional; generated ModelProfileDto has no isDefault — first embedding wins when absent. */
   isDefault?: boolean;
+  supportsGraphExtraction?: boolean;
 };
 
 export type DeployDomainInput = {
   id: string;
   displayName: string;
   embeddingProfileId: string;
+  graphExtractionProfileId: string;
 };
 
 export type DeployDomainApi = {
@@ -71,11 +73,24 @@ export function filterEmbeddingProfiles<T extends EmbeddingProfileLike>(profiles
   return profiles.filter((profile) => profile.profileKind === "embedding");
 }
 
+export function filterGraphExtractionProfiles<T extends EmbeddingProfileLike>(profiles: T[]): T[] {
+  return profiles.filter(
+    (profile) => profile.profileKind === "synthesis" && profile.supportsGraphExtraction === true,
+  );
+}
+
 export function defaultEmbeddingProfileId(profiles: EmbeddingProfileLike[]): string | null {
   const embedding = filterEmbeddingProfiles(profiles);
   if (embedding.length === 0) return null;
   const preferred = embedding.find((profile) => profile.isDefault);
   return (preferred ?? embedding[0]).id;
+}
+
+export function defaultGraphExtractionProfileId(profiles: EmbeddingProfileLike[]): string | null {
+  const extraction = filterGraphExtractionProfiles(profiles);
+  if (extraction.length === 0) return null;
+  const preferred = extraction.find((profile) => profile.isDefault);
+  return (preferred ?? extraction[0]).id;
 }
 
 /** Safe expanded-row label — profile name when known, else id, else Locked. Never a URL. */
@@ -100,13 +115,17 @@ export function canDeployDomain(input: {
   id: string;
   displayName: string;
   embeddingProfileId: string;
+  graphExtractionProfileId: string;
   hasEmbeddingProfiles: boolean;
+  hasGraphExtractionProfiles: boolean;
 }): boolean {
   return (
     input.hasEmbeddingProfiles &&
+    input.hasGraphExtractionProfiles &&
     isValidDomainId(input.id) &&
     input.displayName.trim().length > 0 &&
-    input.embeddingProfileId.trim().length > 0
+    input.embeddingProfileId.trim().length > 0 &&
+    input.graphExtractionProfileId.trim().length > 0
   );
 }
 
@@ -124,6 +143,7 @@ export async function deployDomain(
       id: input.id.trim(),
       displayName: input.displayName.trim(),
       embeddingProfileId: input.embeddingProfileId.trim(),
+      graphExtractionProfileId: input.graphExtractionProfileId.trim(),
     });
   } catch (error) {
     return { kind: "create_failed", error };

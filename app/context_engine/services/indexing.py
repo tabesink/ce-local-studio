@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -93,13 +93,40 @@ class IndexReadiness:
 
 
 class LightRAGClientProtocol(Protocol):
-    def submit(self, domain: Domain, *, request_id: str, content_hash: str, rendered_text: str) -> IndexSubmitResult: ...
+    def submit(
+        self,
+        domain: Domain,
+        *,
+        request_id: str,
+        content_hash: str,
+        rendered_text: str,
+        corpus_generation: int = 0,
+    ) -> IndexSubmitResult: ...
 
     def readiness(self, domain: Domain, *, request_id: str) -> IndexReadiness: ...
 
-    def delete(self, domain: Domain, *, request_id: str) -> None: ...
+    def delete(self, domain: Domain, *, request_id: str, corpus_generation: int = 0) -> None: ...
 
     def is_absent(self, domain: Domain, *, request_id: str) -> bool: ...
+
+    def graph_snapshot(
+        self,
+        domain: Domain,
+        *,
+        label: str | None = None,
+        max_nodes: int = 500,
+        max_edges: int = 2000,
+        deadline: float | None = None,
+    ) -> dict[str, Any]: ...
+
+    def graph_label_search(
+        self,
+        domain: Domain,
+        *,
+        q: str,
+        limit: int = 50,
+        deadline: float | None = None,
+    ) -> dict[str, Any]: ...
 
 
 def _safe_error(code: str, message: str) -> SourceIndexError:
@@ -259,6 +286,27 @@ def _bounded_adapter_result(texts, settings: Settings):
     return result
 
 
+def _deterministic_private_graph_from_text(rendered_text: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Test/local deterministic graph contribution from handoff text (not production LLM)."""
+    lower = rendered_text.lower()
+    nodes: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    if "pump" in lower:
+        nodes.append({"id": "pump", "label": "Pump", "kind": "equipment"})
+    if "relief valve" in lower or "relief-valve" in lower:
+        nodes.append({"id": "relief-valve", "label": "Relief Valve", "kind": "equipment"})
+    if any(n["id"] == "pump" for n in nodes) and any(n["id"] == "relief-valve" for n in nodes):
+        edges.append(
+            {
+                "id": "pump-relief-valve",
+                "source": "pump",
+                "target": "relief-valve",
+                "label": "downstream_of",
+            }
+        )
+    return nodes, edges
+
+
 class LocalLightRAGIndexClient:
     def __init__(self, settings: Settings, controller: DomainRuntimeController | None = None) -> None:
         self._settings = settings
@@ -270,7 +318,29 @@ class LocalLightRAGIndexClient:
     def _record_path(self, domain: Domain, request_id: str) -> Path:
         return self._index_dir(domain) / f"{_safe_request_id(request_id)}.json"
 
-    def submit(self, domain: Domain, *, request_id: str, content_hash: str, rendered_text: str) -> IndexSubmitResult:
+    def _graph_state_path(self, domain: Domain) -> Path:
+        return self._index_dir(domain) / "graph_state.json"
+
+    def _write_local_graph_state(self, domain: Domain, *, corpus_generation: int, rendered_text: str) -> None:
+        nodes, edges = _deterministic_private_graph_from_text(rendered_text)
+        payload = {
+            "appliedGeneration": corpus_generation,
+            "nodes": nodes,
+            "edges": edges,
+        }
+        path = self._graph_state_path(domain)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+
+    def submit(
+        self,
+        domain: Domain,
+        *,
+        request_id: str,
+        content_hash: str,
+        rendered_text: str,
+        corpus_generation: int = 0,
+    ) -> IndexSubmitResult:
         if not self._controller.health(domain).healthy:
             raise _safe_error("source_index_unavailable", "Source index runtime unavailable.")
         block_ids = _rendered_block_ids(rendered_text)
@@ -297,6 +367,7 @@ class LocalLightRAGIndexClient:
         try:
             record_path.parent.mkdir(parents=True, exist_ok=True)
             record_path.write_text(json.dumps(record, sort_keys=True), encoding="utf-8")
+            self._write_local_graph_state(domain, corpus_generation=corpus_generation, rendered_text=rendered_text)
         except OSError as exc:
             raise _safe_error("source_index_unavailable", "Source index runtime unavailable.") from exc
         return IndexSubmitResult(remote_document_id=remote_id)
@@ -315,16 +386,81 @@ class LocalLightRAGIndexClient:
             return IndexReadiness(ready=False, failed=True, error_code="source_index_failed", error_message="Source index failed.")
         return IndexReadiness(ready=record.get("status") == "ready")
 
-    def delete(self, domain: Domain, *, request_id: str) -> None:
+    def delete(self, domain: Domain, *, request_id: str, corpus_generation: int = 0) -> None:
         record_path = self._record_path(domain, request_id)
         try:
             if record_path.exists():
                 record_path.unlink()
+            state_path = self._graph_state_path(domain)
+            if state_path.exists():
+                state = json.loads(state_path.read_text(encoding="utf-8"))
+                state["appliedGeneration"] = corpus_generation
+                state["nodes"] = []
+                state["edges"] = []
+                state_path.write_text(json.dumps(state, sort_keys=True), encoding="utf-8")
         except OSError as exc:
             raise _safe_error("source_index_delete_failed", "Source index content could not be removed.") from exc
 
     def is_absent(self, domain: Domain, *, request_id: str) -> bool:
         return not self._record_path(domain, request_id).exists()
+
+    def graph_snapshot(
+        self,
+        domain: Domain,
+        *,
+        label: str | None = None,
+        max_nodes: int = 500,
+        max_edges: int = 2000,
+        deadline: float | None = None,
+    ) -> dict[str, Any]:
+        del deadline
+        path = self._graph_state_path(domain)
+        if not path.exists():
+            return {"appliedGeneration": 0, "nodes": [], "edges": [], "truncated": False}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise _safe_error("source_index_unavailable", "Source index runtime unavailable.") from exc
+        nodes = list(payload.get("nodes") or [])
+        edges = list(payload.get("edges") or [])
+        if label:
+            needle = label.strip().lower()
+            nodes = [n for n in nodes if needle in str(n.get("label", "")).lower()]
+            keep = {str(n.get("id")) for n in nodes}
+            edges = [e for e in edges if str(e.get("source")) in keep and str(e.get("target")) in keep]
+        truncated = len(nodes) > max_nodes or len(edges) > max_edges
+        return {
+            "appliedGeneration": int(payload.get("appliedGeneration") or 0),
+            "nodes": nodes[:max_nodes],
+            "edges": edges[:max_edges],
+            "truncated": truncated,
+        }
+
+    def graph_label_search(
+        self,
+        domain: Domain,
+        *,
+        q: str,
+        limit: int = 50,
+        deadline: float | None = None,
+    ) -> dict[str, Any]:
+        del deadline
+        snapshot = self.graph_snapshot(domain)
+        needle = q.strip().lower()
+        items = []
+        for node in snapshot.get("nodes") or []:
+            label = str(node.get("label") or "")
+            if needle in label.lower():
+                items.append(
+                    {
+                        "id": node.get("id"),
+                        "label": label,
+                        "kind": node.get("kind"),
+                    }
+                )
+            if len(items) >= limit:
+                break
+        return {"items": items}
 
     def retrieve(self, domain: Domain, *, question: str, deadline: float | None = None):
         from context_engine.services.evidence import ScopedRetrievalError
@@ -497,13 +633,20 @@ class LightRAGClient:
         finally:
             runtime["finalize_share_data"]()
 
-    def submit(self, domain: Domain, *, request_id: str, content_hash: str, rendered_text: str) -> IndexSubmitResult:
+    def submit(
+        self,
+        domain: Domain,
+        *,
+        request_id: str,
+        content_hash: str,
+        rendered_text: str,
+        corpus_generation: int = 0,
+    ) -> IndexSubmitResult:
         _safe_request_id(request_id)
         if hashlib.sha256(rendered_text.encode("utf-8")).hexdigest() != content_hash:
             raise SourceIndexError(409, "source_index_conflict", "Source index request conflict.")
         if not _rendered_block_ids(rendered_text):
             raise SourceIndexError(422, "source_index_input_invalid", "Source cannot be indexed.")
-
         async def op() -> IndexSubmitResult:
             rag, runtime = await self._new_rag(domain)
             try:
@@ -517,6 +660,16 @@ class LightRAGClient:
                 await self._close_rag(rag, runtime)
             if returned not in {None, request_id}:
                 raise _safe_error("source_index_unavailable", "Source index runtime unavailable.")
+            nodes, edges = _deterministic_private_graph_from_text(rendered_text)
+            state_path = self._working_dir(domain) / "graph_state.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(
+                json.dumps(
+                    {"appliedGeneration": corpus_generation, "nodes": nodes, "edges": edges},
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
             return IndexSubmitResult(remote_document_id=_private_remote_id(request_id))
 
         try:
@@ -565,7 +718,7 @@ class LightRAGClient:
                 error_message="Source index runtime unavailable.",
             )
 
-    def delete(self, domain: Domain, *, request_id: str) -> None:
+    def delete(self, domain: Domain, *, request_id: str, corpus_generation: int = 0) -> None:
         _safe_request_id(request_id)
 
         async def op() -> None:
@@ -574,6 +727,15 @@ class LightRAGClient:
                 await rag.adelete_by_doc_id(request_id)
             finally:
                 await self._close_rag(rag, runtime)
+            state_path = self._working_dir(domain) / "graph_state.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(
+                json.dumps(
+                    {"appliedGeneration": corpus_generation, "nodes": [], "edges": []},
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
 
         try:
             self._run(op())
@@ -600,6 +762,58 @@ class LightRAGClient:
             # Surface verification failures instead of reporting "still present",
             # which callers would misread as a failed delete.
             raise _safe_error("source_index_unavailable", "Source index runtime unavailable.") from exc
+
+    def graph_snapshot(
+        self,
+        domain: Domain,
+        *,
+        label: str | None = None,
+        max_nodes: int = 500,
+        max_edges: int = 2000,
+        deadline: float | None = None,
+    ) -> dict[str, Any]:
+        del deadline
+        path = self._working_dir(domain) / "graph_state.json"
+        if not path.exists():
+            return {"appliedGeneration": 0, "nodes": [], "edges": [], "truncated": False}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise _safe_error("source_index_unavailable", "Source index runtime unavailable.") from exc
+        nodes = list(payload.get("nodes") or [])
+        edges = list(payload.get("edges") or [])
+        if label:
+            needle = label.strip().lower()
+            nodes = [n for n in nodes if needle in str(n.get("label", "")).lower()]
+            keep = {str(n.get("id")) for n in nodes}
+            edges = [e for e in edges if str(e.get("source")) in keep and str(e.get("target")) in keep]
+        truncated = len(nodes) > max_nodes or len(edges) > max_edges
+        return {
+            "appliedGeneration": int(payload.get("appliedGeneration") or 0),
+            "nodes": nodes[:max_nodes],
+            "edges": edges[:max_edges],
+            "truncated": truncated,
+        }
+
+    def graph_label_search(
+        self,
+        domain: Domain,
+        *,
+        q: str,
+        limit: int = 50,
+        deadline: float | None = None,
+    ) -> dict[str, Any]:
+        del deadline
+        snapshot = self.graph_snapshot(domain)
+        needle = q.strip().lower()
+        items = []
+        for node in snapshot.get("nodes") or []:
+            label_value = str(node.get("label") or "")
+            if needle in label_value.lower():
+                items.append({"id": node.get("id"), "label": label_value, "kind": node.get("kind")})
+            if len(items) >= limit:
+                break
+        return {"items": items}
 
     def retrieve(self, domain: Domain, *, question: str, deadline: float | None = None):
         from context_engine.services.evidence import ScopedRetrievalError
@@ -711,7 +925,16 @@ def seal_domain_embedding_runtime_env(
     settings: Settings,
     domain: Domain,
 ) -> Path | None:
-    """Write mode-600 sealed embedding env for the domain runtime mount (KTD5).
+    """Compatibility alias — seals embedding + extraction into the runtime mount."""
+    return seal_domain_runtime_provider_env(db, settings, domain)
+
+
+def seal_domain_runtime_provider_env(
+    db: Session,
+    settings: Settings,
+    domain: Domain,
+) -> Path | None:
+    """Write mode-600 sealed embedding + extraction env for the domain runtime.
 
     Returns None for local/stub clients that do not use a Docker runtime mount.
     Never logs credential material.
@@ -721,22 +944,61 @@ def seal_domain_embedding_runtime_env(
     from context_engine.services.runtime_config import SecretCrypto, TrustedRuntimeResolver
     from context_engine.tools.domain_runtime_controller import write_sealed_provider_env
 
-    resolved = TrustedRuntimeResolver(db, SecretCrypto.from_settings(settings)).resolve_embedding_profile(
-        domain.embedding_profile_id
-    )
+    from context_engine.services.runtime_config import RuntimeConfigError
+
+    resolver = TrustedRuntimeResolver(db, SecretCrypto.from_settings(settings))
+    try:
+        embedding = resolver.resolve_embedding_profile(domain.embedding_profile_id)
+        if not domain.graph_extraction_profile_id:
+            raise SourceIndexError(400, "graph_extraction_profile_invalid", "Graph extraction profile is invalid.")
+        extraction = resolver.resolve_extraction_profile(domain.graph_extraction_profile_id)
+    except RuntimeConfigError as exc:
+        raise SourceIndexError(exc.status_code, exc.code, exc.message) from exc
     runtime_dir = Path(settings.domain_runtime_root) / domain.id / domain.runtime_instance_id
     runtime_dir.mkdir(parents=True, exist_ok=True)
     lines = [
-        f"CE_EMBEDDING_DIMENSIONS={resolved.vector_dimensions}",
-        f"CE_EMBEDDING_MODEL_NAME={resolved.model_name}",
-        f"CE_EMBEDDING_PROVIDER_KIND={resolved.provider_kind}",
+        f"CE_EMBEDDING_DIMENSIONS={embedding.vector_dimensions}",
+        f"CE_EMBEDDING_MODEL_NAME={embedding.model_name}",
+        f"CE_EMBEDDING_PROVIDER_KIND={embedding.provider_kind}",
+        f"CE_EXTRACTION_PROVIDER_KIND={extraction.provider_kind}",
+        f"CE_EXTRACTION_MODEL_NAME={extraction.model_name}",
     ]
-    if resolved.credential:
-        lines.append(f"CE_EMBEDDING_CREDENTIAL={resolved.credential}")
+    if embedding.credential:
+        lines.append(f"CE_EMBEDDING_CREDENTIAL={embedding.credential}")
     else:
         # Explicit topology-only synthetic gate — never a silent production fallback.
         lines.append("CE_EMBEDDING_ALLOW_SYNTHETIC=1")
+    if extraction.credential:
+        lines.append(f"CE_EXTRACTION_CREDENTIAL={extraction.credential}")
+    else:
+        lines.append("CE_EXTRACTION_ALLOW_SYNTHETIC=1")
     return write_sealed_provider_env(runtime_dir, "\n".join(lines) + "\n")
+
+
+def advance_domain_graph_desired_generation(db: Session, domain: Domain) -> int:
+    """Advance desired graph corpus generation before external runtime work."""
+    domain.graph_desired_generation = int(domain.graph_desired_generation) + 1
+    domain.updated_at = utc_now()
+    return int(domain.graph_desired_generation)
+
+
+def mark_domain_indexing_ever_started(db: Session, domain: Domain) -> None:
+    """Durable latch: set once before first external index submit; never clear."""
+    if not domain.indexing_ever_started:
+        domain.indexing_ever_started = True
+        domain.updated_at = utc_now()
+
+
+def mark_domain_graph_applied_generation(db: Session, domain: Domain, generation: int) -> None:
+    """Record applied generation only after a successful runtime graph mutation."""
+    if generation < 0:
+        return
+    if generation < int(domain.graph_applied_generation):
+        return
+    if generation > int(domain.graph_desired_generation):
+        return
+    domain.graph_applied_generation = generation
+    domain.updated_at = utc_now()
 
 
 def _remote_delete_required(source: SourceDocument) -> bool:
@@ -752,13 +1014,18 @@ def _delete_remote_if_needed(
 ) -> None:
     if not request_id:
         return
-    domain = db.get(Domain, source.domain_id)
+    domain = db.scalars(select(Domain).where(Domain.id == source.domain_id).with_for_update()).first()
     if domain is None:
         return
+    corpus_generation = advance_domain_graph_desired_generation(db, domain)
+    db.commit()
+    db.refresh(domain)
     client = client or index_client_from_settings(settings)
-    client.delete(domain, request_id=request_id)
+    client.delete(domain, request_id=request_id, corpus_generation=corpus_generation)
     if not client.is_absent(domain, request_id=request_id):
         raise SourceIndexError(502, "source_index_delete_failed", "Source index content could not be removed.")
+    mark_domain_graph_applied_generation(db, domain, corpus_generation)
+    db.commit()
 
 
 def retry_source_index(
@@ -1171,7 +1438,12 @@ class SourceIndexWorker:
                 request_id=request_id,
                 remote_document_id=remote_id,
             ):
-                mark_index_ready_if_current(db, source_id=source.id, generation=generation, request_id=request_id)
+                if mark_index_ready_if_current(
+                    db, source_id=source.id, generation=generation, request_id=request_id
+                ):
+                    db.refresh(domain)
+                    mark_domain_graph_applied_generation(db, domain, int(domain.graph_desired_generation))
+                    db.commit()
             return True
         if not readiness.failed:
             remote_id = source.index_remote_document_id or _private_remote_id(request_id)
@@ -1206,7 +1478,17 @@ class SourceIndexWorker:
             return True
 
         try:
-            seal_domain_embedding_runtime_env(db, self._settings, domain)
+            seal_domain_runtime_provider_env(db, self._settings, domain)
+        except SourceIndexError as exc:
+            mark_index_failed_if_current(
+                db,
+                source_id=source.id,
+                generation=generation,
+                request_id=request_id,
+                code=exc.code,
+                message=exc.message,
+            )
+            return True
         except Exception:  # noqa: BLE001 -- fail closed with safe index error
             mark_index_failed_if_current(
                 db,
@@ -1218,6 +1500,16 @@ class SourceIndexWorker:
             )
             return True
 
+        # Latch + desired generation advance before any external index/graph work.
+        locked_domain = db.scalars(select(Domain).where(Domain.id == domain.id).with_for_update()).first()
+        if locked_domain is None:
+            return True
+        mark_domain_indexing_ever_started(db, locked_domain)
+        corpus_generation = advance_domain_graph_desired_generation(db, locked_domain)
+        db.commit()
+        db.refresh(locked_domain)
+        domain = locked_domain
+
         try:
             result = self._submit_with_lease_heartbeat(
                 db,
@@ -1226,6 +1518,7 @@ class SourceIndexWorker:
                 request_id=request_id,
                 owner=owner,
                 lease_seconds=lease_seconds,
+                corpus_generation=corpus_generation,
             )
         except SourceIndexError as exc:
             db.rollback()
@@ -1284,7 +1577,10 @@ class SourceIndexWorker:
                 message=readiness.error_message or "Source index failed.",
             )
         elif readiness.ready:
-            mark_index_ready_if_current(db, source_id=source.id, generation=generation, request_id=request_id)
+            if mark_index_ready_if_current(db, source_id=source.id, generation=generation, request_id=request_id):
+                db.refresh(domain)
+                mark_domain_graph_applied_generation(db, domain, int(domain.graph_desired_generation))
+                db.commit()
         else:
             schedule_index_poll_backoff(
                 db,
@@ -1304,6 +1600,7 @@ class SourceIndexWorker:
         request_id: str,
         owner: str,
         lease_seconds: int,
+        corpus_generation: int = 0,
     ) -> IndexSubmitResult | None:
         source = db.get(SourceDocument, source_id)
         if source is None:
@@ -1341,6 +1638,7 @@ class SourceIndexWorker:
                 request_id=request_id,
                 content_hash=rendered.content_hash,
                 rendered_text=rendered.text,
+                corpus_generation=corpus_generation,
             )
         finally:
             stop.set()

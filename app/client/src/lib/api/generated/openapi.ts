@@ -591,6 +591,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/domains/{domainId}/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Domain Graph */
+        get: operations["get_domain_graph_api_v1_domains__domainId__graph_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/domains/{domainId}/graph/labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Domain Graph Labels */
+        get: operations["get_domain_graph_labels_api_v1_domains__domainId__graph_labels_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/evidence/{evidenceRef}/location": {
         parameters: {
             query?: never;
@@ -675,6 +709,7 @@ export interface components {
             /** Displayname */
             displayName: string;
             embeddingProfile: components["schemas"]["EmbeddingProfileSummaryDto"];
+            graphExtractionProfile: components["schemas"]["GraphExtractionProfileSummaryDto"] | null;
             /** Id */
             id: string;
             /** Queryeligible */
@@ -934,6 +969,8 @@ export interface components {
             displayName?: string | null;
             /** Embeddingprofileid */
             embeddingProfileId: string;
+            /** Graphextractionprofileid */
+            graphExtractionProfileId: string;
             /** Id */
             id: string;
         };
@@ -970,7 +1007,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "account_unavailable" | "audit_unavailable" | "capacity_unavailable" | "content_rejected" | "csrf_invalid" | "cursor_expired" | "dependency_unavailable" | "document_content_unavailable" | "document_not_found" | "document_preview_unavailable" | "domain_not_query_eligible" | "domain_operation_in_progress" | "domain_required" | "domain_state_conflict" | "duplicate_source" | "evidence_not_found" | "evidence_unavailable" | "forbidden" | "http_error" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "not_found" | "operation_conflict" | "range_not_satisfiable" | "rate_limited" | "session_expired" | "source_not_ready" | "stale_revision" | "turn_not_cancellable" | "unauthenticated" | "validation_error";
+            code: "account_unavailable" | "audit_unavailable" | "capacity_unavailable" | "content_rejected" | "csrf_invalid" | "cursor_expired" | "dependency_unavailable" | "document_content_unavailable" | "document_not_found" | "document_preview_unavailable" | "domain_not_query_eligible" | "domain_operation_in_progress" | "domain_required" | "domain_state_conflict" | "duplicate_source" | "evidence_not_found" | "evidence_unavailable" | "forbidden" | "graph_refreshing" | "http_error" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "not_found" | "operation_conflict" | "range_not_satisfiable" | "rate_limited" | "session_expired" | "source_not_ready" | "stale_revision" | "turn_not_cancellable" | "unauthenticated" | "validation_error";
             /** Fields */
             fields: {
                 [key: string]: string;
@@ -1065,6 +1102,66 @@ export interface components {
             /** Y */
             y: number;
         };
+        /** GraphDomainDto */
+        GraphDomainDto: {
+            /** Name */
+            name: string;
+            /** Ref */
+            ref: string;
+        };
+        /** GraphEdgeDto */
+        GraphEdgeDto: {
+            /** Label */
+            label: string | null;
+            /** Ref */
+            ref: string;
+            /** Sourceref */
+            sourceRef: string;
+            /** Targetref */
+            targetRef: string;
+        };
+        /** GraphExtractionProfileSummaryDto */
+        GraphExtractionProfileSummaryDto: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** GraphLabelDto */
+        GraphLabelDto: {
+            /** Kind */
+            kind: string | null;
+            /** Label */
+            label: string;
+            /** Noderef */
+            nodeRef: string;
+        };
+        /** GraphLabelSearchDto */
+        GraphLabelSearchDto: {
+            /** Items */
+            items: components["schemas"]["GraphLabelDto"][];
+        };
+        /** GraphNodeDto */
+        GraphNodeDto: {
+            /** Degree */
+            degree: number;
+            /** Kind */
+            kind: string | null;
+            /** Label */
+            label: string;
+            /** Ref */
+            ref: string;
+        };
+        /** GraphSnapshotDto */
+        GraphSnapshotDto: {
+            domain: components["schemas"]["GraphDomainDto"];
+            /** Edges */
+            edges: components["schemas"]["GraphEdgeDto"][];
+            /** Nodes */
+            nodes: components["schemas"]["GraphNodeDto"][];
+            /** Truncated */
+            truncated: boolean;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1123,6 +1220,8 @@ export interface components {
              * @enum {string}
              */
             providerKind: "openai" | "bedrock" | "ollama";
+            /** Supportsgraphextraction */
+            supportsGraphExtraction: boolean;
             /** Vectordimensions */
             vectorDimensions: number | null;
             /** Version */
@@ -2922,6 +3021,145 @@ export interface operations {
                 };
             };
             /** @description Retrieval is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_domain_graph_api_v1_domains__domainId__graph_get: {
+        parameters: {
+            query?: {
+                label?: string | null;
+            };
+            header?: never;
+            path: {
+                domainId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphSnapshotDto"];
+                };
+            };
+            /** @description Domain not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Domain or graph not currently available. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Graph read capacity limited. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Graph runtime temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_domain_graph_labels_api_v1_domains__domainId__graph_labels_get: {
+        parameters: {
+            query: {
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                domainId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphLabelSearchDto"];
+                };
+            };
+            /** @description Domain not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Domain or graph not currently available. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Request validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Graph read capacity limited. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Graph runtime temporarily unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;

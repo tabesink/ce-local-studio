@@ -8,7 +8,7 @@ from context_engine.config import Settings
 from context_engine.models import ROLE_ADMINISTRATOR, User
 
 
-SUPPORTED_ALEMBIC_HEAD = "d4e7a1b92c80"
+SUPPORTED_ALEMBIC_HEAD = "e5b8c1d94f20"
 
 
 class ReadinessError(Exception):
@@ -68,6 +68,15 @@ def check_worker_readiness(db: Session, settings: Settings | None = None) -> Non
     check_object_store_ready(resolved)
 
 
+def check_graph_ref_key(settings: Settings) -> None:
+    """Fail closed when CE_GRAPH_REF_KEY is absent outside test composition."""
+    if settings.testing:
+        return
+    key = (settings.graph_ref_key or "").strip()
+    if not key or len(key.encode("utf-8")) < 32:
+        raise ReadinessError("graph_ref_key_unavailable")
+
+
 def check_readiness(db: Session, settings: Settings | None = None) -> None:
     resolved = settings if settings is not None else Settings()
     check_database_schema(db)
@@ -88,3 +97,4 @@ def check_readiness(db: Session, settings: Settings | None = None) -> None:
         raise ReadinessError("database_unavailable") from exc
 
     check_object_store_ready(resolved)
+    check_graph_ref_key(resolved)

@@ -98,6 +98,16 @@
           "embeddingProfile": {
             "$ref": "#/components/schemas/EmbeddingProfileSummaryDto"
           },
+          "graphExtractionProfile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GraphExtractionProfileSummaryDto"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "maxLength": 128,
             "minLength": 8,
@@ -139,6 +149,7 @@
           "state",
           "queryEligible",
           "embeddingProfile",
+          "graphExtractionProfile",
           "runtimeReady",
           "controlGeneration",
           "activeOperationId",
@@ -989,6 +1000,12 @@
             "title": "Embeddingprofileid",
             "type": "string"
           },
+          "graphExtractionProfileId": {
+            "maxLength": 36,
+            "minLength": 1,
+            "title": "Graphextractionprofileid",
+            "type": "string"
+          },
           "id": {
             "pattern": "^[a-z0-9][a-z0-9_-]{1,62}$",
             "title": "Id",
@@ -997,7 +1014,8 @@
         },
         "required": [
           "id",
-          "embeddingProfileId"
+          "embeddingProfileId",
+          "graphExtractionProfileId"
         ],
         "title": "DomainCreateRequest",
         "type": "object"
@@ -1107,6 +1125,7 @@
               "evidence_not_found",
               "evidence_unavailable",
               "forbidden",
+              "graph_refreshing",
               "http_error",
               "idempotency_conflict",
               "internal_error",
@@ -1420,6 +1439,234 @@
         "title": "EvidenceRegionDto",
         "type": "object"
       },
+      "GraphDomainDto": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "ref": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "name"
+        ],
+        "title": "GraphDomainDto",
+        "type": "object"
+      },
+      "GraphEdgeDto": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "ref": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Ref",
+            "type": "string"
+          },
+          "sourceRef": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Sourceref",
+            "type": "string"
+          },
+          "targetRef": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Targetref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "sourceRef",
+          "targetRef",
+          "label"
+        ],
+        "title": "GraphEdgeDto",
+        "type": "object"
+      },
+      "GraphExtractionProfileSummaryDto": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "GraphExtractionProfileSummaryDto",
+        "type": "object"
+      },
+      "GraphLabelDto": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "nodeRef": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Noderef",
+            "type": "string"
+          }
+        },
+        "required": [
+          "nodeRef",
+          "label",
+          "kind"
+        ],
+        "title": "GraphLabelDto",
+        "type": "object"
+      },
+      "GraphLabelSearchDto": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/GraphLabelDto"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "GraphLabelSearchDto",
+        "type": "object"
+      },
+      "GraphNodeDto": {
+        "additionalProperties": false,
+        "properties": {
+          "degree": {
+            "minimum": 0,
+            "title": "Degree",
+            "type": "integer"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "ref": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "label",
+          "kind",
+          "degree"
+        ],
+        "title": "GraphNodeDto",
+        "type": "object"
+      },
+      "GraphSnapshotDto": {
+        "additionalProperties": false,
+        "properties": {
+          "domain": {
+            "$ref": "#/components/schemas/GraphDomainDto"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/GraphEdgeDto"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNodeDto"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "domain",
+          "nodes",
+          "edges",
+          "truncated"
+        ],
+        "title": "GraphSnapshotDto",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1576,6 +1823,10 @@
             "title": "Providerkind",
             "type": "string"
           },
+          "supportsGraphExtraction": {
+            "title": "Supportsgraphextraction",
+            "type": "boolean"
+          },
           "vectorDimensions": {
             "anyOf": [
               {
@@ -1601,6 +1852,7 @@
           "providerKind",
           "modelName",
           "vectorDimensions",
+          "supportsGraphExtraction",
           "inUse",
           "version"
         ],
@@ -4995,6 +5247,206 @@
           }
         },
         "summary": "Retrieve Domain Evidence"
+      }
+    },
+    "/api/v1/domains/{domainId}/graph": {
+      "get": {
+        "operationId": "get_domain_graph_api_v1_domains__domainId__graph_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domainId",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z0-9][a-z0-9_-]{1,62}$",
+              "title": "Domainid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "label",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 160,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Label"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphSnapshotDto"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Domain not found."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Domain or graph not currently available."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Graph read capacity limited."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Graph runtime temporarily unavailable."
+          }
+        },
+        "summary": "Get Domain Graph"
+      }
+    },
+    "/api/v1/domains/{domainId}/graph/labels": {
+      "get": {
+        "operationId": "get_domain_graph_labels_api_v1_domains__domainId__graph_labels_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domainId",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z0-9][a-z0-9_-]{1,62}$",
+              "title": "Domainid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 160,
+              "minLength": 2,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphLabelSearchDto"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Domain not found."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Domain or graph not currently available."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Graph read capacity limited."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Graph runtime temporarily unavailable."
+          }
+        },
+        "summary": "Get Domain Graph Labels"
       }
     },
     "/api/v1/evidence/{evidenceRef}/location": {

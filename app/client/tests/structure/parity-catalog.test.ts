@@ -23,7 +23,7 @@ const REQUIRED_TARGETS = [
   "drawer",
   "error-box",
   "evidence-inspector",
-  "graph-unavailable",
+  "graph-workbench",
   "input",
   "list-row",
   "login",

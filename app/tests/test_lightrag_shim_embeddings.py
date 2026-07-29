@@ -15,6 +15,7 @@ def test_shim_uses_provider_adapter_when_synthetic_not_allowed(monkeypatch: pyte
     monkeypatch.setenv("CE_EMBEDDING_PROVIDER_KIND", "openai")
     monkeypatch.setenv("CE_EMBEDDING_CREDENTIAL", "sk-test")
     monkeypatch.delenv("CE_EMBEDDING_ALLOW_SYNTHETIC", raising=False)
+    monkeypatch.setenv("CE_EXTRACTION_ALLOW_SYNTHETIC", "1")
     monkeypatch.setenv("CE_RUNTIME_ROOT", "/tmp/ce-shim-test-runtime")
     monkeypatch.setenv("WORKING_DIR", "/tmp/ce-shim-test-runtime/lightrag")
 
@@ -85,6 +86,7 @@ def test_shim_requires_explicit_synthetic_or_provider(monkeypatch: pytest.Monkey
     monkeypatch.delenv("CE_EMBEDDING_ALLOW_SYNTHETIC", raising=False)
     monkeypatch.delenv("CE_EMBEDDING_PROVIDER_KIND", raising=False)
     monkeypatch.delenv("CE_EMBEDDING_CREDENTIAL", raising=False)
+    monkeypatch.setenv("CE_EXTRACTION_ALLOW_SYNTHETIC", "1")
     monkeypatch.setenv("CE_RUNTIME_ROOT", "/tmp/ce-shim-test-runtime-2")
     monkeypatch.setenv("WORKING_DIR", "/tmp/ce-shim-test-runtime-2/lightrag")
 
@@ -118,6 +120,7 @@ def test_provider_embed_error_maps_without_leaking_credential(monkeypatch: pytes
     monkeypatch.setenv("CE_EMBEDDING_PROVIDER_KIND", "openai")
     monkeypatch.setenv("CE_EMBEDDING_CREDENTIAL", "sk-secret-do-not-leak")
     monkeypatch.delenv("CE_EMBEDDING_ALLOW_SYNTHETIC", raising=False)
+    monkeypatch.setenv("CE_EXTRACTION_ALLOW_SYNTHETIC", "1")
     monkeypatch.setenv("CE_RUNTIME_ROOT", "/tmp/ce-shim-test-runtime-3")
     monkeypatch.setenv("WORKING_DIR", "/tmp/ce-shim-test-runtime-3/lightrag")
 

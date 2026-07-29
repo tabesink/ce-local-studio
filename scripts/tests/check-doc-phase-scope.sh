@@ -357,7 +357,7 @@ fixture_fails governance-read-order 'coding-agent read order is missing'
 new_fixture
 sed -i 's/A \*\*Knowledge Domain\*\* is the isolated retrieval boundary/A **Knowledge Domain** is an optional retrieval grouping/' \
   "$fixture_root/AGENTS.md"
-sed -i '/^## Non-Negotiable Product Invariants/i - A **Knowledge Domain** is the isolated retrieval boundary. It owns one private LightRAG runtime, one immutable embedding profile, its corpus, lifecycle, and query eligibility.\n' \
+sed -i '/^## Non-Negotiable Product Invariants/i - A **Knowledge Domain** is the isolated retrieval boundary. It owns one private LightRAG runtime, one immutable embedding profile, one immutable graph-extraction-capable synthesis profile, its corpus, lifecycle, and query eligibility.\n' \
   "$fixture_root/AGENTS.md"
 fixture_fails governance-vocabulary 'canonical product vocabulary'
 

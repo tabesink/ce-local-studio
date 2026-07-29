@@ -17,7 +17,8 @@ PRIOR_REVISION = "c7d91e5a2f04"
 COMPOSER_CONSUMED_REVISION = "f1a8c3d04e92"
 HTTP_IDEMPOTENCY_REVISION = "a2c7e9f14b80"
 REGION_REVISION = "c9e4b2d17a60"
-CURRENT_HEAD_REVISION = "d4e7a1b92c80"
+PREVIEW_REVISION = "d4e7a1b92c80"
+CURRENT_HEAD_REVISION = "e5b8c1d94f20"
 
 
 def test_turn_lease_migration_revises_conversation_ownership_head() -> None:
@@ -31,7 +32,8 @@ def test_turn_lease_migration_revises_conversation_ownership_head() -> None:
     assert scripts.get_revision(COMPOSER_CONSUMED_REVISION).down_revision == TURN_LEASE_REVISION
     assert scripts.get_revision(HTTP_IDEMPOTENCY_REVISION).down_revision == COMPOSER_CONSUMED_REVISION
     assert scripts.get_revision(REGION_REVISION).down_revision == HTTP_IDEMPOTENCY_REVISION
-    assert scripts.get_revision(CURRENT_HEAD_REVISION).down_revision == REGION_REVISION
+    assert scripts.get_revision(PREVIEW_REVISION).down_revision == REGION_REVISION
+    assert scripts.get_revision(CURRENT_HEAD_REVISION).down_revision == PREVIEW_REVISION
 
 
 def test_conversation_turn_exposes_private_lease_fields() -> None:

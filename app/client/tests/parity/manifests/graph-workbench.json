@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "targetId": "graph-workbench",
+  "owner": "src/features/graph",
+  "layer": "feature",
+  "catalogState": "FACTORY_READY",
+  "disposition": "retain-and-reverify",
+  "sourceEvidence": {
+    "notes": [
+      "Canonical composition: app/client/src/features/graph/GraphPage.tsx read-only workbench.",
+      "Product data only via generated BFF graph/domain clients — no browser LightRAG or /graphs.",
+      "Synthetic labels only; URL state limited to opaque domain/node refs."
+    ]
+  },
+  "shared": {
+    "labels": {
+      "eyebrow": "Knowledge graph",
+      "title": "Graph",
+      "emptyHeading": "No eligible domain",
+      "summary": "Knowledge graph canvas."
+    },
+    "variants": [
+      "empty-domains",
+      "workbench"
+    ],
+    "states": [
+      "empty-eligible-domain",
+      "loading",
+      "ready",
+      "truncated",
+      "error"
+    ],
+    "themes": [
+      "zai-dark",
+      "zai-light"
+    ],
+    "viewports": [
+      "390x844",
+      "1280x800"
+    ],
+    "semanticTokens": [
+      "--ui-bg",
+      "--ui-fg",
+      "--ui-muted",
+      "--ui-border",
+      "--accent"
+    ]
+  },
+  "validation": {
+    "requiredTestIds": [
+      "graph-workbench"
+    ],
+    "forbiddenCopy": [
+      "Graph visualization is not available",
+      "This page makes no product-data requests"
+    ]
+  }
+}
