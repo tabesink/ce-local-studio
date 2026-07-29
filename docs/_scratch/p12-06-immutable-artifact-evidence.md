@@ -117,7 +117,6 @@ Observed: fixture manifest written. Digests are **not** release authority.
 ```
 
 Review follow-up (same branch): release `--check` compares regeneratable pins; empty `--controller-ref` fails; `--assert-release-gates` required for release profile; Syft script fails closed on version mismatch; dirty check honors `--allow-dirty-release`.
-```
 
 ## Tracker
 
